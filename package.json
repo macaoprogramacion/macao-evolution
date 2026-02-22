@@ -1,0 +1,8 @@
+{
+  "name": "macao-evolution",
+  "private": true,
+  "scripts": {
+    "build": "cd evasion-e-commerce-template && npm install && npm run build",
+    "dev": "cd evasion-e-commerce-template && npm run dev"
+  }
+}
