@@ -1,6 +1,0 @@
-{
-  "buildCommand": "cd evasion-e-commerce-template && npm install && npm run build",
-  "installCommand": "echo 'skip'",
-  "framework": "nextjs",
-  "outputDirectory": "evasion-e-commerce-template/.next"
-}
