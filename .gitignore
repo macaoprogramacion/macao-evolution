@@ -27,12 +27,13 @@ npm-debug.log*
 
 # Misc
 *.tsbuildinfo
+next-env.d.ts
+
+# Vercel
+.vercel
 
 # Large media files (GitHub 100MB limit)
 *.mp4
 *.mov
 *.avi
 *.mkv
-
-# Duplicate project copy inside evasion public
-evasion-e-commerce-template/public/images/productos/macao-project/
