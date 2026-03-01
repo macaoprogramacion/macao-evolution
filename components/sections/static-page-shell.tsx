@@ -25,7 +25,7 @@ export function StaticPageShell({
         <div className="mx-auto max-w-4xl">
           <div className="mb-6 flex items-center justify-center rounded-xl border border-border bg-secondary/40 px-4 py-5">
             <Image
-              src="/logo-macao.png"
+              src="/Logo%20PNG/MACAO%20LOGO_Mesa%20de%20trabajo%201.png"
               alt="Macao Logo"
               width={220}
               height={72}
@@ -34,17 +34,17 @@ export function StaticPageShell({
             />
           </div>
 
-          <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: "#FF6B00" }}>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: "#DC2626" }}>
             MACAO OFFROAD EXPERIENCE
           </p>
-          <h1 className="mt-2 font-[family-name:var(--font-trenches)] text-3xl leading-tight md:text-5xl">
+          <h1 className="mt-2 font-title text-3xl leading-tight md:text-5xl">
             {title}
           </h1>
           <p className="mt-4 max-w-2xl text-sm text-muted-foreground md:text-base">{subtitle}</p>
 
           {ctaHref && ctaLabel ? (
             <div className="mt-6">
-              <Button asChild className="rounded-full px-6" style={{ backgroundColor: "#FF6B00", color: "#FFFFFF" }}>
+              <Button asChild className="rounded-full px-6" style={{ backgroundColor: "#DC2626", color: "#FFFFFF" }}>
                 <Link href={ctaHref}>{ctaLabel}</Link>
               </Button>
             </div>

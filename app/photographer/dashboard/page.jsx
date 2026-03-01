@@ -275,7 +275,7 @@ function ClientViewModal({ client, onClose, photos, video, onDeletePhoto, onUplo
             >
               <GlassCard className="p-6 max-w-sm" hover={false}>
                 <h3 className="text-lg font-title text-white text-center mb-4">
-                  ¿Eliminar Cliente?
+                  Eliminar Cliente?
                 </h3>
                 <p className="text-white/70 text-center mb-6">
                   Esta acción eliminará el cliente y todas sus fotos. No se puede deshacer.
@@ -413,7 +413,7 @@ export default function PhotographerDashboard() {
       <div 
         className="fixed inset-0 z-0"
         style={{
-          backgroundImage: `url($"/photographer/branding/photos/bg-4k-ftg.png")`,
+          backgroundImage: `url("/photographer/branding/photos/bg-4k-ftg.png")`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundAttachment: 'fixed',
@@ -426,8 +426,8 @@ export default function PhotographerDashboard() {
       {/* Navbar */}
       <div className="relative z-10">
         <Navbar 
-          title="MACAO OFFROAD EXPERIENCE - Panel del Fotógrafo" 
-          mobileTitle="Panel del Fotógrafo"
+          title="MACAO OFFROAD EXPERIENCE - Panel del Fotografo" 
+          mobileTitle="Panel del Fotografo"
         />
       </div>
 
@@ -487,7 +487,7 @@ export default function PhotographerDashboard() {
           <div className="flex gap-6">
             {/* Portfolios section */}
             <div className="flex-1 min-w-0">
-              <h2 className="text-2xl font-light text-white mb-4 text-center">
+              <h2 className="text-2xl font-title text-white mb-4 text-center">
                 Portafolios Activos
               </h2>
 
@@ -514,9 +514,9 @@ export default function PhotographerDashboard() {
               {/* Billing Clients (from cashier) */}
               {billingClients.length > 0 && (
                 <div className="mt-8">
-                  <h2 className="text-2xl font-light text-white mb-4 text-center flex items-center justify-center gap-3">
+                  <h2 className="text-2xl font-title text-white mb-4 text-center flex items-center justify-center gap-3">
                     <Receipt className="w-6 h-6 text-[#DC2626]" />
-                    Clientes de Facturación
+                    Clientes de Facturacion
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
                     {billingClients.filter(bc => !bc.photosReady).map((bc, idx) => (

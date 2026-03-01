@@ -92,7 +92,7 @@ const topProducts = [
   { name: "ATV QUAD EXPERIENCE", sold: 24, revenue: 2160, percentage: 14 },
 ]
 
-const COLORS = ['#f97316', '#fb923c', '#fdba74', '#fed7aa', '#ffedd5']
+const COLORS = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fee2e2']
 
 // New users data
 const newUsers = [
@@ -106,11 +106,11 @@ const newUsers = [
 
 // Canales de venta
 const salesChannels = [
-  { name: "Macao Off Road", url: "macaooffroad.com", sales: 145, revenue: 18920, color: "#f97316" },
-  { name: "Caribe Buggy", url: "caribebuggy.com", sales: 98, revenue: 12740, color: "#fb923c" },
-  { name: "Saona Island", url: "saonaislandpuntacana.com", sales: 76, revenue: 9880, color: "#fdba74" },
-  { name: "Viator", url: "viator.com", sales: 124, revenue: 16120, color: "#fed7aa" },
-  { name: "GetYourGuide", url: "getyourguide.com", sales: 89, revenue: 11580, color: "#ffedd5" },
+  { name: "Macao Off Road", url: "macaooffroad.com", sales: 145, revenue: 18920, color: "#dc2626" },
+  { name: "Caribe Buggy", url: "caribebuggy.com", sales: 98, revenue: 12740, color: "#ef4444" },
+  { name: "Saona Island", url: "saonaislandpuntacana.com", sales: 76, revenue: 9880, color: "#f87171" },
+  { name: "Viator", url: "viator.com", sales: 124, revenue: 16120, color: "#fca5a5" },
+  { name: "GetYourGuide", url: "getyourguide.com", sales: 89, revenue: 11580, color: "#fee2e2" },
 ]
 
 // Recent sales
@@ -146,7 +146,7 @@ export default function Dashboard() {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">MOR Dashboard</h1>
+            <h1 className="text-2xl font-title text-gray-900">MACAO Dashboard</h1>
             <p className="text-gray-600 mt-1">Panel de control de ventas y gestión de experiencias</p>
           </div>
           <div className="flex items-center gap-3">
@@ -171,8 +171,8 @@ export default function Dashboard() {
           <Card key={index} className="border-gray-200">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <metric.icon className="w-5 h-5 text-orange-600" />
+                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                  <metric.icon className="w-5 h-5 text-red-600" />
                 </div>
                 <div
                   className={`flex items-center gap-1 text-sm ${metric.trend === "up" ? "text-green-600" : "text-red-600"}`}
@@ -223,16 +223,16 @@ export default function Dashboard() {
                     <Area
                       type="monotone"
                       dataKey="ventas"
-                      stroke="#f97316"
-                      fill="#f97316"
+                      stroke="#dc2626"
+                      fill="#dc2626"
                       fillOpacity={0.2}
                       strokeWidth={2}
                     />
                     <Area
                       type="monotone"
                       dataKey="visitas"
-                      stroke="#fb923c"
-                      fill="#fb923c"
+                      stroke="#ef4444"
+                      fill="#ef4444"
                       fillOpacity={0.1}
                       strokeWidth={2}
                     />
@@ -279,12 +279,12 @@ export default function Dashboard() {
                       <TableCell className="font-medium">{sale.customer}</TableCell>
                       <TableCell className="text-gray-600">{sale.tour}</TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className="bg-purple-100 text-purple-700">
+                        <Badge variant="secondary" className="bg-red-100 text-red-700">
                           <Globe className="w-3 h-3 mr-1" />
                           {sale.channel}
                         </Badge>
                       </TableCell>
-                      <TableCell className="font-semibold text-orange-600">{sale.amount}</TableCell>
+                      <TableCell className="font-semibold text-red-600">{sale.amount}</TableCell>
                       <TableCell>
                         {sale.status === "completed" && (
                           <Badge variant="secondary" className="bg-green-100 text-green-700">
@@ -354,8 +354,8 @@ export default function Dashboard() {
                     <TableRow key={index} className="hover:bg-gray-50">
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <Avatar className="w-8 h-8 bg-orange-100">
-                            <AvatarFallback className="text-orange-600">
+                          <Avatar className="w-8 h-8 bg-red-100">
+                            <AvatarFallback className="text-red-600">
                               {user.name.split(" ").map((n) => n[0]).join("")}
                             </AvatarFallback>
                           </Avatar>
@@ -375,7 +375,7 @@ export default function Dashboard() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className="bg-orange-100 text-orange-700">
+                        <Badge variant="secondary" className="bg-red-100 text-red-700">
                           {user.tours} {user.tours === 1 ? "tour" : "tours"}
                         </Badge>
                       </TableCell>
@@ -416,7 +416,7 @@ export default function Dashboard() {
                   <div key={index} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-900">{product.name}</span>
-                      <span className="text-sm font-semibold text-orange-600">{product.sold} vendidos</span>
+                      <span className="text-sm font-semibold text-red-600">{product.sold} vendidos</span>
                     </div>
                     <Progress value={product.percentage} className="h-2" />
                     <div className="flex items-center justify-between text-xs text-gray-600">
@@ -492,7 +492,7 @@ export default function Dashboard() {
                             </Badge>
                           </div>
                         ) : (
-                          <span className="font-semibold text-orange-600">${tour.price}</span>
+                          <span className="font-semibold text-red-600">${tour.price}</span>
                         )}
                       </div>
                     </div>
@@ -511,8 +511,8 @@ export default function Dashboard() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                      <Eye className="w-5 h-5 text-orange-600" />
+                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                      <Eye className="w-5 h-5 text-red-600" />
                     </div>
                     <div>
                       <div className="text-sm text-gray-600">Visitantes Hoy</div>
@@ -523,8 +523,8 @@ export default function Dashboard() {
                 </div>
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                      <Smartphone className="w-5 h-5 text-orange-600" />
+                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                      <Smartphone className="w-5 h-5 text-red-600" />
                     </div>
                     <div>
                       <div className="text-sm text-gray-600">Dispositivos Activos</div>
@@ -535,8 +535,8 @@ export default function Dashboard() {
                 </div>
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                      <ShoppingCart className="w-5 h-5 text-orange-600" />
+                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                      <ShoppingCart className="w-5 h-5 text-red-600" />
                     </div>
                     <div>
                       <div className="text-sm text-gray-600">Ventas Hoy</div>
@@ -564,7 +564,7 @@ export default function Dashboard() {
                         <span className="text-sm font-medium text-gray-900">{channel.name}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-orange-600">{channel.sales}</span>
+                        <span className="text-sm font-semibold text-red-600">{channel.sales}</span>
                         <ExternalLink className="w-3 h-3 text-gray-400" />
                       </div>
                     </div>
@@ -619,7 +619,7 @@ export default function Dashboard() {
                       boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                     }}
                   />
-                  <Bar dataKey="sales" fill="#f97316" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="sales" fill="#dc2626" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -633,7 +633,7 @@ export default function Dashboard() {
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Fotografía — Ventas en Tienda</h2>
+            <h2 className="text-lg font-title text-gray-900">Fotografia — Ventas en Tienda</h2>
             <p className="text-gray-500 text-sm">Resumen de facturación presencial y ventas de fotos en línea</p>
           </div>
         </div>

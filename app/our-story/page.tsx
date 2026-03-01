@@ -6,7 +6,7 @@ export default function OurStoryPage() {
       title="Nuestra Historia"
       subtitle="MACAO nació para ofrecer una experiencia offroad auténtica en Punta Cana, combinando aventura, seguridad y un servicio cercano para cada visitante."
       ctaHref="/contact"
-      ctaLabel="Contáctanos"
+      ctaLabel="Contactanos"
     >
       <div className="space-y-6 text-sm leading-7 text-foreground/90 md:text-base">
         <p>

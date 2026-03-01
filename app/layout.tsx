@@ -8,6 +8,19 @@ import './globals.css'
 
 const inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
 
+const montserrat = localFont({
+  src: [
+    { path: '../public/font/montserrat/Montserrat-Regular.ttf', weight: '400', style: 'normal' },
+    { path: '../public/font/montserrat/Montserrat-Medium.ttf', weight: '500', style: 'normal' },
+    { path: '../public/font/montserrat/Montserrat-SemiBold.ttf', weight: '600', style: 'normal' },
+    { path: '../public/font/montserrat/Montserrat-Bold.ttf', weight: '700', style: 'normal' },
+    { path: '../public/font/montserrat/Montserrat-ExtraBold.ttf', weight: '800', style: 'normal' },
+    { path: '../public/font/montserrat/Montserrat-Italic.ttf', weight: '400', style: 'italic' },
+  ],
+  variable: '--font-montserrat',
+  display: 'swap',
+});
+
 const trenches = localFont({
   src: '../public/font/trenches/Trenches Demo.otf',
   variable: '--font-trenches',
@@ -44,7 +57,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${trenches.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} ${montserrat.variable} ${trenches.variable} font-sans antialiased`}>
         <Providers>
           {children}
         </Providers>

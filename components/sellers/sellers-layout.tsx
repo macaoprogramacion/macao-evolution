@@ -2,8 +2,9 @@
 
 import type React from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { Handshake, LayoutDashboard, Plus, ClipboardList, LogOut, User } from "lucide-react"
+import { LayoutDashboard, Plus, ClipboardList, LogOut, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
@@ -34,10 +35,14 @@ export function SellersLayout({ children, repName = "Representante", repInitials
       <header className="h-16 border-b border-gray-200 bg-white px-6 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-4">
           <Link href="/sellers/dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
-              <Handshake className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-semibold text-gray-900 hidden sm:inline">MACAO Sellers</span>
+            <Image
+              src="/Logo%20PNG/MACAO%20LOGO_Mesa%20de%20trabajo%201.png"
+              alt="MACAO Logo"
+              width={160}
+              height={48}
+              className="h-10 w-auto"
+            />
+            <span className="font-title text-gray-900 hidden sm:inline">Sellers</span>
           </Link>
 
           {/* Nav */}
@@ -50,7 +55,7 @@ export function SellersLayout({ children, repName = "Representante", repInitials
                   href={item.href}
                   className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     isActive
-                      ? "bg-orange-50 text-orange-700"
+                      ? "bg-red-50 text-red-700"
                       : "text-gray-600 hover:bg-gray-100"
                   }`}
                 >
@@ -65,7 +70,7 @@ export function SellersLayout({ children, repName = "Representante", repInitials
         <div className="flex items-center gap-3">
           <div className="hidden sm:flex items-center gap-2 text-sm text-gray-600">
             <Avatar className="w-7 h-7">
-              <AvatarFallback className="text-xs bg-orange-100 text-orange-700">{repInitials}</AvatarFallback>
+              <AvatarFallback className="text-xs bg-red-100 text-red-700">{repInitials}</AvatarFallback>
             </Avatar>
             <span className="font-medium">{repName}</span>
           </div>

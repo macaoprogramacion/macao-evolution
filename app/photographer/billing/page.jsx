@@ -265,7 +265,7 @@ function UsuarioPanel() {
               <User className="w-12 h-12 text-[#DC2626]" />
             </div>
             <div>
-              <h2 className="text-white text-2xl font-semibold">Carlos Méndez</h2>
+              <h2 className="text-white text-2xl font-title">Carlos Mendez</h2>
               <p className="text-white/70">Fotógrafo Senior</p>
               <p className="text-white/50 text-sm mt-1">carlos.mendez@macao.com</p>
             </div>
@@ -1358,7 +1358,7 @@ export default function BillingPage() {
             {/* Header with Search */}
             <div className="mb-6">
               <h1 className="font-title text-3xl lg:text-4xl text-white mb-4">
-                Facturación
+                Facturacion
               </h1>
               
               {/* Search Bar */}

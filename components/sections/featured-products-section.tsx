@@ -24,7 +24,7 @@ export function FeaturedProductsSection() {
     // Check if a service is selected first
     if (!hasServiceSelected) {
       // Scroll to service section
-      const serviceSection = document.getElementById("products");
+      const serviceSection = document.getElementById("services");
       if (serviceSection) {
         serviceSection.scrollIntoView({ behavior: "smooth" });
       }
@@ -53,10 +53,10 @@ export function FeaturedProductsSection() {
   };
 
   return (
-    <section id="technology" className="bg-background">
+    <section id="products" className="bg-background">
       {/* Section Title */}
       <div className="px-6 py-20 text-center md:px-12 md:py-28 lg:px-20 lg:py-32 lg:pb-20">
-        <h2 className="text-3xl font-medium tracking-tight text-foreground md:text-4xl lg:text-5xl font-[family-name:var(--font-trenches)]">
+        <h2 className="text-3xl font-medium tracking-tight text-foreground md:text-4xl lg:text-5xl font-title">
           Choose Your Experience
         </h2>
         <p className="mx-auto mt-6 max-w-md text-sm text-muted-foreground">

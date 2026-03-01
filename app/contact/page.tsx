@@ -8,7 +8,7 @@ export default function ContactPage() {
       subtitle="Estamos listos para ayudarte con reservas, dudas sobre tours y recomendaciones para tu próxima aventura en Macao."
     >
       <InfoForm
-        formTitle="Envíanos un mensaje"
+        formTitle="Envianos un mensaje"
         submitLabel="Enviar mensaje"
         successMessage="¡Mensaje enviado! Te responderemos pronto."
       />

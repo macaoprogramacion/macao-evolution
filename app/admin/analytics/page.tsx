@@ -54,10 +54,10 @@ const monthlyData = [
 
 // Distribución de tours por categoría
 const tourDistribution = [
-  { name: "Elite Tours", value: 35, color: "#f97316" },
-  { name: "Predator Tours", value: 28, color: "#fb923c" },
-  { name: "Flintstone Tours", value: 22, color: "#fdba74" },
-  { name: "ATV Tours", value: 15, color: "#fed7aa" },
+  { name: "Elite Tours", value: 35, color: "#dc2626" },
+  { name: "Predator Tours", value: 28, color: "#ef4444" },
+  { name: "Flintstone Tours", value: 22, color: "#f87171" },
+  { name: "ATV Tours", value: 15, color: "#fca5a5" },
 ]
 
 // Análisis de fuentes de tráfico
@@ -119,9 +119,9 @@ const kpiData = [
 
 // Análisis por dispositivo
 const deviceData = [
-  { name: "Móvil", value: 58, color: "#f97316" },
-  { name: "Desktop", value: 32, color: "#fb923c" },
-  { name: "Tablet", value: 10, color: "#fdba74" },
+  { name: "Móvil", value: 58, color: "#dc2626" },
+  { name: "Desktop", value: 32, color: "#ef4444" },
+  { name: "Tablet", value: 10, color: "#f87171" },
 ]
 
 // Top páginas visitadas
@@ -133,7 +133,7 @@ const topPages = [
   { page: "/tours/combined", visitas: 1980, conversiones: 67, tasa: "3.4%" },
 ]
 
-const COLORS = ['#f97316', '#fb923c', '#fdba74', '#fed7aa']
+const COLORS = ['#dc2626', '#ef4444', '#f87171', '#fca5a5']
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState<"daily" | "weekly" | "monthly">("daily")
@@ -157,8 +157,8 @@ export default function AnalyticsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Analytics</h1>
-            <p className="text-gray-600 mt-1">Análisis detallado de ventas, tráfico y conversiones</p>
+            <h1 className="text-2xl font-title text-gray-900">Analytics</h1>
+            <p className="text-gray-600 mt-1">Analisis detallado de ventas, trafico y conversiones</p>
           </div>
           <div className="flex items-center gap-3">
             <Select value={timeRange} onValueChange={(value) => setTimeRange(value as "daily" | "weekly" | "monthly")}>
@@ -184,8 +184,8 @@ export default function AnalyticsPage() {
             <Card key={index} className="border-gray-200">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                    <kpi.icon className="w-5 h-5 text-orange-600" />
+                  <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                    <kpi.icon className="w-5 h-5 text-red-600" />
                   </div>
                   <div
                     className={`flex items-center gap-1 text-sm ${kpi.trend === "up" ? "text-green-600" : "text-red-600"}`}
@@ -233,8 +233,8 @@ export default function AnalyticsPage() {
                       <Area
                         type="monotone"
                         dataKey="ventas"
-                        stroke="#f97316"
-                        fill="#f97316"
+                        stroke="#dc2626"
+                        fill="#dc2626"
                         fillOpacity={0.2}
                         strokeWidth={2}
                       />
@@ -257,8 +257,8 @@ export default function AnalyticsPage() {
                       <Area
                         type="monotone"
                         dataKey="visitas"
-                        stroke="#fb923c"
-                        fill="#fb923c"
+                        stroke="#ef4444"
+                        fill="#ef4444"
                         fillOpacity={0.2}
                         strokeWidth={2}
                       />
@@ -278,7 +278,7 @@ export default function AnalyticsPage() {
                           borderRadius: "8px",
                         }}
                       />
-                      <Bar dataKey="ingresos" fill="#f97316" radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="ingresos" fill="#dc2626" radius={[8, 8, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </TabsContent>
@@ -295,7 +295,7 @@ export default function AnalyticsPage() {
                           borderRadius: "8px",
                         }}
                       />
-                      <Line type="monotone" dataKey="conversiones" stroke="#f97316" strokeWidth={2} />
+                      <Line type="monotone" dataKey="conversiones" stroke="#dc2626" strokeWidth={2} />
                     </LineChart>
                   </ResponsiveContainer>
                 </TabsContent>
@@ -391,7 +391,7 @@ export default function AnalyticsPage() {
                       <div className="flex items-center justify-between">
                         <div className="w-full bg-gray-200 rounded-full h-2 mr-4">
                           <div
-                            className="bg-orange-500 h-2 rounded-full"
+                            className="bg-red-500 h-2 rounded-full"
                             style={{ width: `${source.percentage}%` }}
                           ></div>
                         </div>
@@ -418,7 +418,7 @@ export default function AnalyticsPage() {
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-medium text-gray-900 text-sm">{page.page}</span>
-                        <Badge variant="secondary" className="bg-orange-100 text-orange-700">
+                        <Badge variant="secondary" className="bg-red-100 text-red-700">
                           {page.tasa}
                         </Badge>
                       </div>
@@ -455,8 +455,8 @@ export default function AnalyticsPage() {
                       borderRadius: "8px",
                     }}
                   />
-                  <Bar dataKey="ventas" fill="#f97316" radius={[8, 8, 0, 0]} />
-                  <Bar dataKey="visitas" fill="#fb923c" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="ventas" fill="#dc2626" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="visitas" fill="#ef4444" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

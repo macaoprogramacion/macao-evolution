@@ -172,7 +172,7 @@ export function TransportSection() {
   };
 
   return (
-    <section className="relative bg-neutral-950 py-20 md:py-28 overflow-hidden">
+    <section id="transport" className="relative bg-neutral-950 py-20 md:py-28 overflow-hidden">
       {/* Decorative background elements */}
       <div className="absolute inset-0 opacity-[0.03]">
         <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-white via-transparent to-transparent" />
@@ -186,7 +186,7 @@ export function TransportSection() {
             <Bus className="h-3.5 w-3.5" />
             <span>Door-to-Door Service</span>
           </div>
-          <h2 className="font-[family-name:var(--font-trenches)] text-4xl md:text-5xl lg:text-6xl text-white mb-10">
+          <h2 className="font-title text-4xl md:text-5xl lg:text-6xl text-white mb-10">
             Private Transport
           </h2>
           <p className="text-white/50 text-base md:text-lg max-w-2xl mx-auto mt-4">

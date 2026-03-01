@@ -200,7 +200,7 @@ export function CheckoutModal({
           {/* ===== STEP 1: Registration ===== */}
           {step === 1 && (
             <div className="px-8 pb-8 pt-4">
-              <h2 className="text-xl font-bold text-foreground mb-1">
+              <h2 className="text-xl font-title text-foreground mb-1">
                 Crear tu cuenta
               </h2>
               <p className="text-sm text-muted-foreground mb-6">
@@ -317,8 +317,8 @@ export function CheckoutModal({
                 Volver al registro
               </button>
 
-              <h2 className="text-xl font-bold text-foreground mb-1">
-                Método de pago
+              <h2 className="text-xl font-title text-foreground mb-1">
+                Metodo de pago
               </h2>
               <p className="text-sm text-muted-foreground mb-6">
                 Elige cómo deseas pagar tu reserva
@@ -662,8 +662,8 @@ export function CheckoutModal({
               <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
                 <Check size={32} className="text-green-500" />
               </div>
-              <h2 className="text-2xl font-bold text-foreground mb-2">
-                ¡Reserva confirmada!
+              <h2 className="text-2xl font-title text-foreground mb-2">
+                Reserva confirmada!
               </h2>
               <p className="text-sm text-muted-foreground mb-2">
                 Hemos enviado los detalles de tu reserva a{" "}

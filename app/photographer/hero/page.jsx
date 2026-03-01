@@ -480,7 +480,7 @@ export default function HeroLanding() {
             className="absolute inset-0 flex items-center justify-center pointer-events-none"
             style={{ opacity: textOpacity }}
           >
-            <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-semibold text-gray-800 tracking-tight whitespace-nowrap">
+            <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-title text-gray-800 tracking-tight whitespace-nowrap">
               Privado o Colectivo.
             </h2>
           </motion.div>

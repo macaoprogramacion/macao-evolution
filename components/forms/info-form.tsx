@@ -42,7 +42,7 @@ export function InfoForm({
 
   return (
     <form onSubmit={handleSubmit} className="rounded-xl border border-border bg-card p-5 shadow-sm md:p-8">
-      <h2 className="text-xl font-semibold md:text-2xl">{formTitle}</h2>
+      <h2 className="text-xl font-title md:text-2xl">{formTitle}</h2>
       <p className="mt-2 text-sm text-muted-foreground">
         Completa el formulario y nuestro equipo te contactará lo antes posible.
       </p>

@@ -154,7 +154,7 @@ export function TechnologySection() {
   const grayscaleAmount = Math.round((1 - textProgress) * 100);
 
   return (
-    <section ref={sectionRef} className="relative bg-foreground">
+    <section id="products" ref={sectionRef} className="relative bg-foreground">
       {/* Sticky container for scroll animation */}
       <div className="sticky top-0 h-screen overflow-hidden">
         <div className="flex h-full w-full items-center justify-center">
@@ -215,7 +215,7 @@ export function TechnologySection() {
               <div 
                 className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center"
               >
-                <h2 className="max-w-3xl font-medium leading-tight tracking-tight text-white md:text-5xl lg:text-7xl text-5xl font-[family-name:var(--font-trenches)]">
+                <h2 className="max-w-3xl font-medium leading-tight tracking-tight text-white md:text-5xl lg:text-7xl text-5xl font-title">
                   {["Four", "Stops."].map((word, index) => {
                     // Each word fades out sequentially based on scrollProgress
                     const wordFadeStart = index * 0.07;
@@ -288,7 +288,7 @@ export function TechnologySection() {
         <div className="relative z-10 mx-auto max-w-5xl">
           {/* Section Header */}
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-medium tracking-tight text-foreground md:text-4xl lg:text-5xl font-[family-name:var(--font-trenches)]">
+            <h2 className="text-3xl font-medium tracking-tight text-foreground md:text-4xl lg:text-5xl font-title">
               Tour Itinerary
             </h2>
             <div className="flex items-center justify-center gap-6 mt-6">

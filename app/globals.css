@@ -2,7 +2,12 @@
 @import 'tw-animate-css';
 
 @theme {
-  --font-trenches: var(--font-trenches);
+  --font-montserrat: var(--font-montserrat);
+}
+
+/* Corporate font utility — maps to Trenches Demo display font */
+.font-title {
+  font-family: var(--font-trenches), serif !important;
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -82,6 +87,7 @@
   --font-sans: 'Inter', 'Inter Fallback', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
   --font-display: 'PP Editorial New', 'Times New Roman', serif;
+  --font-title: var(--font-trenches), serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

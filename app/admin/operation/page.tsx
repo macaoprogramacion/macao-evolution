@@ -57,7 +57,7 @@ const reservations = [
     experience: "Elite Couple",
     channel: "Macao Off Road",
     channelUrl: "macaooffroad.com",
-    channelColor: "#f97316",
+    channelColor: "#dc2626",
     date: "2026-02-15",
     status: "confirmed",
   },
@@ -147,7 +147,7 @@ const reservations = [
     experience: "Predator Family",
     channel: "Macao Off Road",
     channelUrl: "macaooffroad.com",
-    channelColor: "#f97316",
+    channelColor: "#dc2626",
     date: "2026-02-16",
     status: "confirmed",
   },
@@ -325,10 +325,10 @@ export default function OperationPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Operation</h1>
+            <h1 className="text-3xl font-title text-gray-900">Operation</h1>
             <p className="text-gray-600 mt-1">Gestión de reservas de todas las plataformas</p>
           </div>
-          <Button className="bg-orange-600 hover:bg-orange-700 text-white">
+          <Button className="bg-red-600 hover:bg-red-700 text-white">
             <Download className="w-4 h-4 mr-2" />
             Exportar Reservas
           </Button>
@@ -343,8 +343,8 @@ export default function OperationPage() {
                   <p className="text-sm text-gray-600">Total Reservas</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
                 </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <Calendar className="w-6 h-6 text-orange-600" />
+                <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                  <Calendar className="w-6 h-6 text-red-600" />
                 </div>
               </div>
             </CardContent>
@@ -385,8 +385,8 @@ export default function OperationPage() {
                   <p className="text-sm text-gray-600">Total Personas</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.totalGuests}</p>
                 </div>
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Users className="w-6 h-6 text-blue-600" />
+                <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                  <Users className="w-6 h-6 text-gray-800" />
                 </div>
               </div>
             </CardContent>
@@ -561,7 +561,7 @@ export default function OperationPage() {
                         <Badge
                           className={
                             reservation.transportType === "Privado"
-                              ? "bg-blue-100 text-blue-700 hover:bg-blue-100"
+                              ? "bg-gray-200 text-gray-900 hover:bg-gray-200"
                               : "bg-gray-100 text-gray-700 hover:bg-gray-100"
                           }
                         >

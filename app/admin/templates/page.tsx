@@ -137,7 +137,7 @@ export default function TemplatesPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Templates</h1>
+            <h1 className="text-2xl font-title text-gray-900">Templates</h1>
             <p className="text-gray-600 mt-1">Discover and use pre-built workflow templates</p>
           </div>
           <div className="flex items-center gap-3">
@@ -145,7 +145,7 @@ export default function TemplatesPage() {
               <Filter className="w-4 h-4" />
               Filter
             </Button>
-            <Button className="bg-purple-600 hover:bg-purple-700 gap-2">
+            <Button className="bg-red-600 hover:bg-red-700 gap-2">
               <Plus className="w-4 h-4" />
               Create Template
             </Button>
@@ -171,7 +171,7 @@ export default function TemplatesPage() {
                 variant={selectedCategory === category.name ? "default" : "outline"}
                 size="sm"
                 onClick={() => setSelectedCategory(category.name)}
-                className={selectedCategory === category.name ? "bg-purple-600 hover:bg-purple-700" : ""}
+                className={selectedCategory === category.name ? "bg-red-600 hover:bg-red-700" : ""}
               >
                 {category.name} ({category.count})
               </Button>
@@ -194,8 +194,8 @@ export default function TemplatesPage() {
                   <CardHeader className="pb-4">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                          <template.icon className="w-5 h-5 text-purple-600" />
+                        <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                          <template.icon className="w-5 h-5 text-red-600" />
                         </div>
                         <div>
                           <CardTitle className="text-lg">{template.name}</CardTitle>
@@ -264,7 +264,7 @@ export default function TemplatesPage() {
 
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-500">by {template.author}</span>
-                      <Button size="sm" className="bg-purple-600 hover:bg-purple-700">
+                      <Button size="sm" className="bg-red-600 hover:bg-red-700">
                         <Zap className="w-3 h-3 mr-1" />
                         Use Template
                       </Button>
@@ -292,8 +292,8 @@ export default function TemplatesPage() {
                   <CardHeader className="pb-4">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                          <template.icon className="w-5 h-5 text-purple-600" />
+                        <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                          <template.icon className="w-5 h-5 text-red-600" />
                         </div>
                         <div>
                           <CardTitle className="text-lg">{template.name}</CardTitle>
@@ -324,7 +324,7 @@ export default function TemplatesPage() {
                       </div>
                     </div>
 
-                    <Button className="w-full bg-purple-600 hover:bg-purple-700">
+                    <Button className="w-full bg-red-600 hover:bg-red-700">
                       <Zap className="w-4 h-4 mr-2" />
                       Use Template
                     </Button>
@@ -341,7 +341,7 @@ export default function TemplatesPage() {
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">No Custom Templates</h3>
               <p className="text-gray-600 mb-4">Create your first custom template to reuse your workflows.</p>
-              <Button className="bg-purple-600 hover:bg-purple-700">
+              <Button className="bg-red-600 hover:bg-red-700">
                 <Plus className="w-4 h-4 mr-2" />
                 Create Template
               </Button>

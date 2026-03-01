@@ -101,7 +101,7 @@ export default function BookingsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Mis Reservas</h1>
+            <h1 className="text-2xl font-title text-gray-900">Mis Reservas</h1>
             <p className="text-gray-500 mt-1">Todas tus reservas registradas</p>
           </div>
           <div className="flex items-center gap-2">

@@ -1,15 +1,25 @@
 import { motion } from 'framer-motion';
 import { User, Bell, LogOut } from 'lucide-react';
+import Image from 'next/image';
 
 export default function Navbar({ title = 'MACAO OFFROAD EXPERIENCE', mobileTitle = 'Panel del Fotógrafo' }) {
   return (
     <header className="bg-black/30 backdrop-blur-xl border-b border-white/20">
       <div className="px-6 py-4 flex items-center justify-between">
-        {/* Title - different for mobile and desktop */}
-        <h1 className="font-title text-xl tracking-wide text-white">
-          <span className="hidden md:inline">{title}</span>
-          <span className="md:hidden">{mobileTitle}</span>
-        </h1>
+        {/* Logo + Title */}
+        <div className="flex items-center gap-3">
+          <Image
+            src="/Logo%20PNG/MACAO%20LOGO-04.png"
+            alt="MACAO Logo"
+            width={120}
+            height={40}
+            className="h-9 w-auto"
+          />
+          <h1 className="font-title text-xl tracking-wide text-white">
+            <span className="hidden md:inline">{title}</span>
+            <span className="md:hidden">{mobileTitle}</span>
+          </h1>
+        </div>
 
         {/* Actions */}
         <div className="flex items-center gap-4">

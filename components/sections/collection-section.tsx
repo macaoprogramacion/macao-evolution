@@ -3,13 +3,13 @@
 const videos = [
   {
     id: 1,
-    src: "/images/videos/lateral-izquierdo.mp4",
+    src: "/images/videos/0211(1).mp4",
     name: "Macao Beach",
     description: "Vive la experiencia en los caminos de Macao",
   },
   {
     id: 2,
-    src: "/images/videos/0211.mp4",
+    src: "/images/videos/0211(2).mp4",
     name: "Horseback Riding",
     description: "Descubre los mejores paisajes en buggy",
   },
@@ -20,7 +20,7 @@ export function CollectionSection() {
     <section id="accessories" className="bg-background">
       {/* Section Title */}
       <div className="px-6 py-20 md:px-12 lg:px-20 md:py-10">
-        <h2 className="text-3xl font-medium tracking-tight text-foreground md:text-4xl font-[family-name:var(--font-trenches)]">
+        <h2 className="text-3xl font-medium tracking-tight text-foreground md:text-4xl font-title">
           Discover Our Landscapes
         </h2>
       </div>

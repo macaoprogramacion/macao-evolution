@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Mail, Lock, User, Phone, Eye, EyeOff, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { X, Mail, Lock, User, Phone, Eye, EyeOff, ChevronRight, Briefcase, Users, Building2 } from "lucide-react";
+
+type UserRole = "cliente" | "representante";
 
 type AuthTab = "login" | "register";
 
@@ -11,6 +14,7 @@ interface AuthModalProps {
 }
 
 export function AuthModal({ isOpen, onClose }: AuthModalProps) {
+  const router = useRouter();
   const [tab, setTab] = useState<AuthTab>("login");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -19,6 +23,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   // Login fields
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [loginRole, setLoginRole] = useState<UserRole>("cliente");
 
   // Register fields
   const [regName, setRegName] = useState("");
@@ -26,6 +31,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regConfirmPassword, setRegConfirmPassword] = useState("");
+  const [regRole, setRegRole] = useState<UserRole>("cliente");
 
   // Close on Escape
   useEffect(() => {
@@ -80,9 +86,53 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
-      // TODO: Implement real login
-      console.log("Login:", { email: loginEmail });
-      onClose();
+
+      // If representative, find their account and redirect to sellers panel
+      if (loginRole === "representante") {
+        // Check mock representatives
+        const mockRepEmails: Record<string, string> = {
+          "carlos.mendez@excursionespca na.com": "REP-001",
+          "ana.rodriguez@viajesdominicanos.com": "REP-002",
+          "miguel.torres@barcelo.com": "REP-003",
+          "laura.pena@gmail.com": "REP-004",
+          "f.rosario@dreamsresort.com": "REP-005",
+        };
+
+        // Check registered reps from localStorage
+        const registeredReps = JSON.parse(localStorage.getItem("macao-registered-reps") || "[]");
+        const registeredRep = registeredReps.find((r: any) => r.email === loginEmail);
+        const mockRepId = mockRepEmails[loginEmail.toLowerCase()];
+
+        if (registeredRep) {
+          localStorage.setItem("sellers-rep-id", registeredRep.id);
+          localStorage.setItem("macao-user", JSON.stringify({
+            email: loginEmail,
+            role: loginRole,
+            loggedInAt: new Date().toISOString(),
+          }));
+          onClose();
+          router.push("/sellers/dashboard");
+        } else if (mockRepId) {
+          localStorage.setItem("sellers-rep-id", mockRepId);
+          localStorage.setItem("macao-user", JSON.stringify({
+            email: loginEmail,
+            role: loginRole,
+            loggedInAt: new Date().toISOString(),
+          }));
+          onClose();
+          router.push("/sellers/dashboard");
+        } else {
+          setErrors({ loginEmail: "No se encontró una cuenta de representante con este correo. Regístrate primero." });
+        }
+      } else {
+        // Client login
+        localStorage.setItem("macao-user", JSON.stringify({
+          email: loginEmail,
+          role: loginRole,
+          loggedInAt: new Date().toISOString(),
+        }));
+        onClose();
+      }
     }, 1500);
   }
 
@@ -91,9 +141,48 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
-      // TODO: Implement real register
-      console.log("Register:", { name: regName, phone: regPhone, email: regEmail });
-      onClose();
+
+      // Store user session
+      const userData = {
+        name: regName,
+        phone: regPhone,
+        email: regEmail,
+        role: regRole,
+        registeredAt: new Date().toISOString(),
+      };
+      localStorage.setItem("macao-user", JSON.stringify(userData));
+
+      // If representative, register and redirect to sellers panel
+      if (regRole === "representante") {
+        const initials = regName
+          .split(" ")
+          .map((w: string) => w[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2);
+
+        const newRep = {
+          id: `REP-${Date.now()}`,
+          name: regName,
+          phone: regPhone,
+          email: regEmail,
+          company: "Independiente",
+          type: "local_seller",
+          commissionPercent: 15,
+          initials,
+        };
+
+        // Save to registered reps list
+        const registeredReps = JSON.parse(localStorage.getItem("macao-registered-reps") || "[]");
+        registeredReps.push(newRep);
+        localStorage.setItem("macao-registered-reps", JSON.stringify(registeredReps));
+        localStorage.setItem("sellers-rep-id", newRep.id);
+
+        onClose();
+        router.push("/sellers/dashboard");
+      } else {
+        onClose();
+      }
     }, 1500);
   }
 
@@ -152,7 +241,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           {/* ===== LOGIN ===== */}
           {tab === "login" && (
             <div className="px-8 py-8">
-              <h2 className="text-xl font-bold text-foreground mb-1">
+              <h2 className="text-xl font-title text-foreground mb-1">
                 Bienvenido de vuelta
               </h2>
               <p className="text-sm text-muted-foreground mb-6">
@@ -160,6 +249,39 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               </p>
 
               <div className="space-y-4">
+                {/* Role selector */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-foreground">
+                    Tipo de cuenta
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setLoginRole("cliente")}
+                      className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition-all ${
+                        loginRole === "cliente"
+                          ? "border-foreground bg-foreground text-background shadow-sm"
+                          : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                      }`}
+                    >
+                      <User size={16} />
+                      Cliente
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLoginRole("representante")}
+                      className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition-all ${
+                        loginRole === "representante"
+                          ? "border-foreground bg-foreground text-background shadow-sm"
+                          : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                      }`}
+                    >
+                      <Briefcase size={16} />
+                      Representante
+                    </button>
+                  </div>
+                </div>
+
                 {/* Email */}
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-foreground">
@@ -256,7 +378,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           {/* ===== REGISTER ===== */}
           {tab === "register" && (
             <div className="px-8 py-6">
-              <h2 className="text-xl font-bold text-foreground mb-1">
+              <h2 className="text-xl font-title text-foreground mb-1">
                 Crear cuenta
               </h2>
               <p className="text-sm text-muted-foreground mb-4">
@@ -264,10 +386,43 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               </p>
 
               <div className="space-y-3">
+                {/* Role selector */}
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-foreground">
+                    Tipo de cuenta
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRegRole("cliente")}
+                      className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition-all ${
+                        regRole === "cliente"
+                          ? "border-foreground bg-foreground text-background shadow-sm"
+                          : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                      }`}
+                    >
+                      <User size={16} />
+                      Cliente
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRegRole("representante")}
+                      className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition-all ${
+                        regRole === "representante"
+                          ? "border-foreground bg-foreground text-background shadow-sm"
+                          : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                      }`}
+                    >
+                      <Briefcase size={16} />
+                      Representante
+                    </button>
+                  </div>
+                </div>
+
                 {/* Name */}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-foreground">
-                    Nombre completo
+                    {regRole === "representante" ? "Nombre del representante" : "Nombre completo"}
                   </label>
                   <div className="relative">
                     <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />

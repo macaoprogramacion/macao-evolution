@@ -101,13 +101,13 @@ export default function DashboardPage() {
         {/* Welcome Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">¡Hola, {rep.name.split(" ")[0]}!</h1>
+            <h1 className="text-2xl font-title text-gray-900">Hola, {rep.name.split(" ")[0]}!</h1>
             <p className="text-gray-500 mt-1">
               {rep.company} &middot; Comisión: {rep.commissionPercent}%
             </p>
           </div>
           <Link href="/dashboard/new-booking">
-            <Button className="bg-orange-600 hover:bg-orange-700 text-white">
+            <Button className="bg-red-600 hover:bg-red-700 text-white">
               <Plus className="w-4 h-4 mr-2" />
               Nueva Reserva
             </Button>
@@ -123,8 +123,8 @@ export default function DashboardPage() {
                   <p className="text-sm text-gray-500">Total Reservas</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
                 </div>
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <Calendar className="w-5 h-5 text-orange-600" />
+                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-red-600" />
                 </div>
               </div>
             </CardContent>
@@ -203,15 +203,15 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-gray-200 bg-gradient-to-br from-orange-50 to-white">
+          <Card className="border-gray-200 bg-gradient-to-br from-red-50 to-white">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-orange-600" />
+                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                  <DollarSign className="w-5 h-5 text-red-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-orange-700">Tu Comisión ({rep.commissionPercent}%)</p>
-                  <p className="text-xl font-bold text-orange-700">
+                  <p className="text-sm text-red-700">Tu Comisión ({rep.commissionPercent}%)</p>
+                  <p className="text-xl font-bold text-red-700">
                     ${Math.round(stats.revenue * rep.commissionPercent / 100).toLocaleString()}
                   </p>
                 </div>
@@ -242,7 +242,7 @@ export default function DashboardPage() {
                 <p className="font-medium">Sin reservas aún</p>
                 <p className="text-sm mt-1">Crea tu primera reserva para empezar</p>
                 <Link href="/dashboard/new-booking" className="mt-4 inline-block">
-                  <Button className="bg-orange-600 hover:bg-orange-700 text-white" size="sm">
+                  <Button className="bg-red-600 hover:bg-red-700 text-white" size="sm">
                     <Plus className="w-4 h-4 mr-1" />
                     Nueva Reserva
                   </Button>

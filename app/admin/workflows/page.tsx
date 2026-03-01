@@ -209,8 +209,8 @@ export default function WorkflowsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Automatizaciones</h1>
-            <p className="text-gray-600 mt-1">Gestiona y personaliza tus workflows automáticos</p>
+            <h1 className="text-2xl font-title text-gray-900">Automatizaciones</h1>
+            <p className="text-gray-600 mt-1">Gestiona y personaliza tus workflows automaticos</p>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="outline" className="gap-2 bg-white">
@@ -219,7 +219,7 @@ export default function WorkflowsPage() {
             </Button>
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-orange-600 hover:bg-orange-700 gap-2">
+                <Button className="bg-red-600 hover:bg-red-700 gap-2">
                   <Plus className="w-4 h-4" />
                   Nuevo Workflow
                 </Button>
@@ -288,7 +288,7 @@ export default function WorkflowsPage() {
                   <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                     Cancelar
                   </Button>
-                  <Button onClick={handleCreateWorkflow} className="bg-orange-600 hover:bg-orange-700">
+                  <Button onClick={handleCreateWorkflow} className="bg-red-600 hover:bg-red-700">
                     Crear Workflow
                   </Button>
                 </DialogFooter>
@@ -351,7 +351,7 @@ export default function WorkflowsPage() {
                         {workflow.status === "active" ? "Activo" : workflow.status === "paused" ? "Pausado" : "Error"}
                       </Badge>
                       {workflow.notifications && (
-                        <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                        <Badge variant="secondary" className="bg-gray-200 text-gray-900">
                           <Bell className="w-3 h-3 mr-1" />
                           Notificaciones
                         </Badge>
@@ -384,11 +384,11 @@ export default function WorkflowsPage() {
 
                     <div className="flex items-center gap-4 text-sm">
                       <div className="flex items-center gap-2 text-gray-600">
-                        <Clock className="w-4 h-4 text-orange-500" />
+                        <Clock className="w-4 h-4 text-red-500" />
                         <span className="font-medium">Disparador:</span> {workflow.trigger}
                       </div>
                       <div className="flex items-center gap-2 text-gray-600">
-                        <Zap className="w-4 h-4 text-orange-500" />
+                        <Zap className="w-4 h-4 text-red-500" />
                         <span className="font-medium">Acciones:</span> {workflow.actions.join(", ")}
                       </div>
                     </div>
@@ -468,10 +468,10 @@ export default function WorkflowsPage() {
         )}
 
         {/* Info Card */}
-        <Card className="border-orange-200 bg-orange-50">
+        <Card className="border-red-200 bg-red-50">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
-              <Zap className="w-5 h-5 text-orange-600" />
+              <Zap className="w-5 h-5 text-red-600" />
               Automatiza tu Negocio
             </CardTitle>
           </CardHeader>
@@ -482,19 +482,19 @@ export default function WorkflowsPage() {
             </p>
             <ul className="space-y-2 text-gray-700">
               <li className="flex items-start gap-2">
-                <Mail className="w-4 h-4 text-orange-600 mt-1" />
+                <Mail className="w-4 h-4 text-red-600 mt-1" />
                 <span>Enviar confirmaciones y recordatorios automáticos</span>
               </li>
               <li className="flex items-start gap-2">
-                <MessageSquare className="w-4 h-4 text-orange-600 mt-1" />
+                <MessageSquare className="w-4 h-4 text-red-600 mt-1" />
                 <span>Solicitar feedback y reseñas después de cada tour</span>
               </li>
               <li className="flex items-start gap-2">
-                <Calendar className="w-4 h-4 text-orange-600 mt-1" />
+                <Calendar className="w-4 h-4 text-red-600 mt-1" />
                 <span>Actualizar disponibilidad en tiempo real</span>
               </li>
               <li className="flex items-start gap-2">
-                <Bell className="w-4 h-4 text-orange-600 mt-1" />
+                <Bell className="w-4 h-4 text-red-600 mt-1" />
                 <span>Recibir notificaciones de eventos importantes</span>
               </li>
             </ul>

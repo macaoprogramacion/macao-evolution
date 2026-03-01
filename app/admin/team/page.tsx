@@ -62,11 +62,11 @@ const positions = [
 
 // Colores para badges de posiciones
 const positionColors: { [key: string]: string } = {
-  "atencion-cliente": "bg-blue-100 text-blue-700",
+  "atencion-cliente": "bg-gray-200 text-gray-900",
   "ventas": "bg-green-100 text-green-700",
-  "fotografo": "bg-purple-100 text-purple-700",
+  "fotografo": "bg-red-100 text-red-700",
   "cajero-fotografia": "bg-yellow-100 text-yellow-700",
-  "operaciones-online": "bg-orange-100 text-orange-700",
+  "operaciones-online": "bg-red-100 text-red-700",
   "reserva-operaciones": "bg-red-100 text-red-700",
 }
 
@@ -252,12 +252,12 @@ export default function TeamPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Equipo</h1>
+            <h1 className="text-3xl font-title text-gray-900">Equipo</h1>
             <p className="text-gray-600 mt-1">Gestión de usuarios y miembros del equipo</p>
           </div>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-orange-600 hover:bg-orange-700 text-white">
+              <Button className="bg-red-600 hover:bg-red-700 text-white">
                 <UserPlus className="w-4 h-4 mr-2" />
                 Crear Usuario
               </Button>
@@ -308,7 +308,7 @@ export default function TeamPage() {
                 <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button className="bg-orange-600 hover:bg-orange-700 text-white" onClick={handleCreateUser}>
+                <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleCreateUser}>
                   Crear Usuario
                 </Button>
               </DialogFooter>
@@ -404,7 +404,7 @@ export default function TeamPage() {
                         <div className="flex items-center gap-3">
                           <Avatar className="w-10 h-10">
                             <AvatarImage src={member.avatar} />
-                            <AvatarFallback className="bg-orange-100 text-orange-600 font-semibold">
+                            <AvatarFallback className="bg-red-100 text-red-600 font-semibold">
                               {getInitials(member.name)}
                             </AvatarFallback>
                           </Avatar>
@@ -536,7 +536,7 @@ export default function TeamPage() {
               <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button className="bg-orange-600 hover:bg-orange-700 text-white" onClick={handleEditUser}>
+              <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleEditUser}>
                 Guardar Cambios
               </Button>
             </DialogFooter>

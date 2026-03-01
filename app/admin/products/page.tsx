@@ -49,7 +49,7 @@ import { DashboardLayout } from "@/components/admin/dashboard-layout"
 
 // Webs disponibles (sin Viator ni GetYourGuide)
 const websites = [
-  { value: "macaooffroad", label: "Macao Off Road", url: "macaooffroad.com", color: "#f97316" },
+  { value: "macaooffroad", label: "Macao Off Road", url: "macaooffroad.com", color: "#dc2626" },
   { value: "caribebuggy", label: "Caribe Buggy", url: "caribebuggy.com", color: "#3b82f6" },
   { value: "saonaisland", label: "Saona Island", url: "saonaislandpuntacana.com", color: "#10b981" },
 ]
@@ -77,7 +77,7 @@ export default function ProductsPage() {
       name: "Elite Couple",
       website: "macaooffroad",
       websiteLabel: "Macao Off Road",
-      websiteColor: "#f97316",
+      websiteColor: "#dc2626",
       price: 160,
       originalPrice: null,
       hasDiscount: false,
@@ -92,7 +92,7 @@ export default function ProductsPage() {
       name: "Elite Family",
       website: "macaooffroad",
       websiteLabel: "Macao Off Road",
-      websiteColor: "#f97316",
+      websiteColor: "#dc2626",
       price: 200,
       originalPrice: null,
       hasDiscount: false,
@@ -167,7 +167,7 @@ export default function ProductsPage() {
       name: "ATV QUAD",
       website: "macaooffroad",
       websiteLabel: "Macao Off Road",
-      websiteColor: "#f97316",
+      websiteColor: "#dc2626",
       price: 90,
       originalPrice: 110,
       hasDiscount: true,
@@ -295,7 +295,7 @@ export default function ProductsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Gestión de Productos</h1>
+            <h1 className="text-3xl font-title text-gray-900">Gestion de Productos</h1>
             <p className="text-gray-600 mt-1">
               Administra precios, ofertas y fotos de tus experiencias
             </p>
@@ -311,8 +311,8 @@ export default function ProductsPage() {
                   <p className="text-sm text-gray-600">Total Productos</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
                 </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <ImageIcon className="w-6 h-6 text-orange-600" />
+                <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                  <ImageIcon className="w-6 h-6 text-red-600" />
                 </div>
               </div>
             </CardContent>
@@ -337,10 +337,10 @@ export default function ProductsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Con Oferta</p>
-                  <p className="text-2xl font-bold text-orange-600">{stats.withDiscount}</p>
+                  <p className="text-2xl font-bold text-red-600">{stats.withDiscount}</p>
                 </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <Percent className="w-6 h-6 text-orange-600" />
+                <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                  <Percent className="w-6 h-6 text-red-600" />
                 </div>
               </div>
             </CardContent>
@@ -353,8 +353,8 @@ export default function ProductsPage() {
                   <p className="text-sm text-gray-600">Valor Total</p>
                   <p className="text-2xl font-bold text-gray-900">${stats.totalRevenue}</p>
                 </div>
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <DollarSign className="w-6 h-6 text-blue-600" />
+                <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                  <DollarSign className="w-6 h-6 text-gray-800" />
                 </div>
               </div>
             </CardContent>
@@ -617,8 +617,8 @@ export default function ProductsPage() {
                 </div>
 
                 {formData.hasDiscount && formData.originalPrice > formData.price && (
-                  <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                    <div className="flex items-center gap-2 text-orange-800">
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-red-800">
                       <Percent className="w-5 h-5" />
                       <span className="font-semibold">
                         Descuento:{" "}
@@ -628,7 +628,7 @@ export default function ProductsPage() {
                         % OFF
                       </span>
                     </div>
-                    <p className="text-sm text-orange-700 mt-1">
+                    <p className="text-sm text-red-700 mt-1">
                       Ahorro: ${formData.originalPrice - formData.price}
                     </p>
                   </div>
@@ -676,7 +676,7 @@ export default function ProductsPage() {
                 Cancelar
               </Button>
               <Button
-                className="bg-orange-600 hover:bg-orange-700 text-white"
+                className="bg-red-600 hover:bg-red-700 text-white"
                 onClick={handleSaveProduct}
               >
                 <Save className="w-4 h-4 mr-2" />

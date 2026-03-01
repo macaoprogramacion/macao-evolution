@@ -84,8 +84,8 @@ export default function GallerySection({ isVisible = true }) {
         animate={isVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
         transition={{ duration: 0.7, ease: 'easeOut' }}
       >
-        <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
-          Nuestra Galería
+        <h2 className="text-3xl md:text-5xl lg:text-6xl font-title text-white mb-4 tracking-tight">
+          Nuestra Galeria
         </h2>
         <p className="text-white/60 text-base md:text-lg max-w-xl mx-auto">
           Momentos capturados en la aventura

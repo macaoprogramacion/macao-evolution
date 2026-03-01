@@ -255,7 +255,7 @@ function ClientViewModal({ client, onClose, photos, onDeletePhoto, onUploadPhoto
             >
               <GlassCard className="p-6 max-w-sm" hover={false}>
                 <h3 className="text-lg font-title text-white text-center mb-4">
-                  ¿Eliminar Cliente?
+                  Eliminar Cliente?
                 </h3>
                 <p className="text-white/70 text-center mb-6">
                   Esta acción eliminará el cliente y todas sus fotos. No se puede deshacer.
@@ -389,7 +389,7 @@ export default function ClientesPage() {
       <div 
         className="fixed inset-0 z-0"
         style={{
-          backgroundImage: `url($"/photographer/branding/photos/bg-4k-ftg.png")`,
+          backgroundImage: `url("/photographer/branding/photos/bg-4k-ftg.png")`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundAttachment: 'fixed',

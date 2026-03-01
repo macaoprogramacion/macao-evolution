@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Handshake, LogIn, User, Building2, Phone } from "lucide-react"
+import Image from "next/image"
+import { LogIn, User, Building2, Phone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -80,22 +81,29 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-2xl">
         {/* Logo Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl mb-4">
-            <Handshake className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center mb-4">
+            <Image
+              src="/Logo%20PNG/MACAO%20LOGO_Mesa%20de%20trabajo%201.png"
+              alt="MACAO Logo"
+              width={260}
+              height={80}
+              className="h-20 w-auto"
+              priority
+            />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">MACAO Sellers Portal</h1>
-          <p className="text-gray-500 mt-2">Portal de ventas para representantes</p>
+          <h1 className="text-3xl font-title text-gray-900">Sellers Portal</h1>
+          <p className="text-gray-500 mt-2 font-[family-name:var(--font-montserrat)]">Portal de ventas para representantes</p>
         </div>
 
         {/* Select Representative */}
         <Card className="border-gray-200 shadow-lg">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
-              <LogIn className="w-5 h-5 text-orange-600" />
+              <LogIn className="w-5 h-5 text-red-600" />
               Selecciona tu perfil
             </CardTitle>
             <CardDescription>
@@ -120,14 +128,14 @@ export default function LoginPage() {
                 <button
                   key={rep.id}
                   onClick={() => selectRep(rep.id)}
-                  className="w-full flex items-center gap-4 p-4 rounded-lg border border-gray-200 hover:border-orange-300 hover:bg-orange-50/50 transition-all text-left group"
+                  className="w-full flex items-center gap-4 p-4 rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50/50 transition-all text-left group"
                 >
                   <Avatar className="w-12 h-12">
                     <AvatarFallback className={rep.color}>{rep.initials}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-gray-900 group-hover:text-orange-700 transition-colors">
+                      <span className="font-semibold text-gray-900 group-hover:text-red-700 transition-colors">
                         {rep.name}
                       </span>
                       <Badge variant="secondary" className="text-[10px]">
@@ -150,7 +158,7 @@ export default function LoginPage() {
                       </div>
                     )}
                   </div>
-                  <div className="text-orange-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
                     <LogIn className="w-5 h-5" />
                   </div>
                 </button>

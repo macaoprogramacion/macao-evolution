@@ -84,7 +84,7 @@ export function PhilosophySection() {
   }, [updateTransforms]);
 
   return (
-    <section id="products" className="bg-background">
+    <section id="services" className="bg-background">
       {/* Scroll-Animated Product Grid */}
       <div ref={sectionRef} className="relative" style={{ height: "200vh" }}>
         <div className="sticky top-0 h-screen flex items-center justify-center">
@@ -94,8 +94,8 @@ export function PhilosophySection() {
               className="absolute inset-0 flex items-center justify-center pointer-events-none z-0"
               style={{ opacity: titleOpacity }}
             >
-              <h2 className="text-[7vw] font-medium leading-[0.95] tracking-tighter text-foreground md:text-[6vw] lg:text-[5vw] text-center px-6 font-[family-name:var(--font-trenches)] whitespace-nowrap">
-                Colective or Private.
+              <h2 className="text-[7vw] font-medium leading-[0.95] tracking-tighter text-foreground md:text-[6vw] lg:text-[5vw] text-center px-6 font-title whitespace-nowrap">
+                Choose One.
               </h2>
             </div>
 

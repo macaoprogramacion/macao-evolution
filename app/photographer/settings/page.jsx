@@ -305,7 +305,7 @@ export default function AjustesPage() {
       <div 
         className="fixed inset-0 z-0"
         style={{
-          backgroundImage: `url($"/photographer/branding/photos/bg-4k-ftg.png")`,
+          backgroundImage: `url("/photographer/branding/photos/bg-4k-ftg.png")`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundAttachment: 'fixed',
@@ -329,7 +329,7 @@ export default function AjustesPage() {
         {/* Main content */}
         <main className="flex-1 p-4 lg:p-6 pb-24 lg:pb-6 overflow-auto">
           <div className="max-w-5xl mx-auto">
-            <h1 className="text-2xl font-title text-white mb-6">Configuración</h1>
+            <h1 className="text-2xl font-title text-white mb-6">Configuracion</h1>
 
             <div className="flex flex-col lg:flex-row gap-6">
               {/* Settings menu */}

@@ -88,7 +88,7 @@ export function CartPanel() {
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div className="flex items-center gap-3">
             <ShoppingCart size={20} className="text-foreground" />
-            <h2 className="text-lg font-semibold text-foreground">
+            <h2 className="text-lg font-title text-foreground">
               Carrito ({totalItems})
             </h2>
           </div>

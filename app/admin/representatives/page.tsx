@@ -48,7 +48,7 @@ const representatives = [
     company: "Excursiones Punta Cana",
     type: "Tour Operador",
     initials: "CM",
-    color: "bg-blue-100 text-blue-700",
+    color: "bg-gray-200 text-gray-900",
     totalBookings: 87,
     totalRevenue: 12480,
     avgTicket: 143,
@@ -63,7 +63,7 @@ const representatives = [
     company: "Viajes Dominicanos",
     type: "Agencia",
     initials: "AR",
-    color: "bg-emerald-100 text-emerald-700",
+    color: "bg-green-100 text-green-700",
     totalBookings: 54,
     totalRevenue: 8750,
     avgTicket: 162,
@@ -78,7 +78,7 @@ const representatives = [
     company: "Barceló Concierge",
     type: "Concierge",
     initials: "MT",
-    color: "bg-purple-100 text-purple-700",
+    color: "bg-red-100 text-red-700",
     totalBookings: 42,
     totalRevenue: 6320,
     avgTicket: 150,
@@ -93,7 +93,7 @@ const representatives = [
     company: "Independiente",
     type: "Vendedor Local",
     initials: "LP",
-    color: "bg-amber-100 text-amber-700",
+    color: "bg-red-100 text-red-700",
     totalBookings: 23,
     totalRevenue: 3150,
     avgTicket: 137,
@@ -108,7 +108,7 @@ const representatives = [
     company: "Dreams Concierge",
     type: "Concierge",
     initials: "FR",
-    color: "bg-rose-100 text-rose-700",
+    color: "bg-red-100 text-red-700",
     totalBookings: 15,
     totalRevenue: 2100,
     avgTicket: 140,
@@ -157,7 +157,7 @@ const monthlyTrend = [
   { month: "Feb", bookings: 58, revenue: 8650 },
 ]
 
-const COLORS = ["#f97316", "#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899", "#6b7280"]
+const COLORS = ["#dc2626", "#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899", "#6b7280"]
 
 export default function RepresentativesAnalyticsPage() {
   const totals = useMemo(() => {
@@ -173,14 +173,14 @@ export default function RepresentativesAnalyticsPage() {
       <div className="p-6 space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Representantes — Analytics</h1>
+          <h1 className="text-3xl font-title text-gray-900">Representantes — Analytics</h1>
           <p className="text-gray-600 mt-1">
             Rendimiento de ventas por representantes. Gestión de reservas en{" "}
             <a
               href="http://localhost:3002"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-orange-600 underline hover:text-orange-700"
+              className="text-red-600 underline hover:text-red-700"
             >
               Sellers Portal
             </a>
@@ -196,8 +196,8 @@ export default function RepresentativesAnalyticsPage() {
                   <p className="text-sm text-gray-600">Total Reservas (Reps)</p>
                   <p className="text-2xl font-bold text-gray-900">{totals.totalBookings}</p>
                 </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <Handshake className="w-6 h-6 text-orange-600" />
+                <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                  <Handshake className="w-6 h-6 text-red-600" />
                 </div>
               </div>
             </CardContent>
@@ -222,10 +222,10 @@ export default function RepresentativesAnalyticsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Saldo Pendiente</p>
-                  <p className="text-2xl font-bold text-amber-600">${totals.totalPending.toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-red-600">${totals.totalPending.toLocaleString()}</p>
                 </div>
-                <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="w-6 h-6 text-amber-600" />
+                <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                  <TrendingUp className="w-6 h-6 text-red-600" />
                 </div>
               </div>
             </CardContent>
@@ -238,8 +238,8 @@ export default function RepresentativesAnalyticsPage() {
                   <p className="text-sm text-gray-600">Representantes</p>
                   <p className="text-2xl font-bold text-gray-900">{totals.activeReps}</p>
                 </div>
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Users className="w-6 h-6 text-blue-600" />
+                <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                  <Users className="w-6 h-6 text-gray-800" />
                 </div>
               </div>
             </CardContent>
@@ -271,9 +271,9 @@ export default function RepresentativesAnalyticsPage() {
                       yAxisId="left"
                       type="monotone"
                       dataKey="bookings"
-                      stroke="#f97316"
+                      stroke="#dc2626"
                       strokeWidth={2}
-                      dot={{ fill: "#f97316", r: 4 }}
+                      dot={{ fill: "#dc2626", r: 4 }}
                       name="bookings"
                     />
                     <Line
@@ -337,7 +337,7 @@ export default function RepresentativesAnalyticsPage() {
           <Card className="border-gray-200 lg:col-span-2">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Crown className="w-4 h-4 text-orange-500" />
+                <Crown className="w-4 h-4 text-red-500" />
                 Ranking de Representantes
               </CardTitle>
               <CardDescription>Ordenado por ingresos generados</CardDescription>
@@ -413,7 +413,7 @@ export default function RepresentativesAnalyticsPage() {
           <Card className="border-gray-200">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Hotel className="w-4 h-4 text-blue-500" />
+                <Hotel className="w-4 h-4 text-gray-900" />
                 Hoteles Top (Reps)
               </CardTitle>
               <CardDescription>Hoteles con más reservas de reps</CardDescription>
@@ -435,7 +435,7 @@ export default function RepresentativesAnalyticsPage() {
                       </div>
                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-orange-400 to-orange-600 rounded-full transition-all"
+                          className="h-full bg-gradient-to-r from-red-500 to-red-600 rounded-full transition-all"
                           style={{ width: `${widthPercent}%` }}
                         />
                       </div>
@@ -451,7 +451,7 @@ export default function RepresentativesAnalyticsPage() {
         <Card className="border-gray-200">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-orange-500" />
+              <Sparkles className="w-4 h-4 text-red-500" />
               Ingresos por Experiencia (Canal Representantes)
             </CardTitle>
             <CardDescription>Comparación de ingresos generados por cada experiencia a través de representantes</CardDescription>
@@ -464,7 +464,7 @@ export default function RepresentativesAnalyticsPage() {
                   <XAxis type="number" fontSize={12} tickFormatter={(v) => `$${v}`} />
                   <YAxis type="category" dataKey="name" width={120} fontSize={11} />
                   <Tooltip formatter={(value: number) => [`$${value}`, "Ingresos"]} />
-                  <Bar dataKey="revenue" fill="#f97316" radius={[0, 4, 4, 0]} barSize={18} />
+                  <Bar dataKey="revenue" fill="#dc2626" radius={[0, 4, 4, 0]} barSize={18} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

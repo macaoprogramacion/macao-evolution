@@ -225,7 +225,7 @@ function ProductDetailContent({
             </p>
 
             {/* Title */}
-            <h1 className="text-2xl md:text-3xl lg:text-4xl font-medium tracking-tight text-foreground leading-[1.1] font-[family-name:var(--font-trenches)]">
+            <h1 className="text-2xl md:text-3xl lg:text-4xl font-medium tracking-tight text-foreground leading-[1.1] font-title">
               {product.title}
             </h1>
 
@@ -350,7 +350,7 @@ function ProductDetailContent({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-20">
               {/* Left: Itinerary */}
               <div>
-                <h2 className="text-2xl md:text-3xl font-medium tracking-tight text-foreground font-[family-name:var(--font-trenches)]">
+                <h2 className="text-2xl md:text-3xl font-medium tracking-tight text-foreground font-title">
                   Your Itinerary
                 </h2>
                 <p className="mt-3 text-sm text-muted-foreground">
@@ -403,7 +403,7 @@ function ProductDetailContent({
 
               {/* Right: General Information */}
               <div>
-                <h2 className="text-2xl md:text-3xl font-medium tracking-tight text-foreground font-[family-name:var(--font-trenches)]">
+                <h2 className="text-2xl md:text-3xl font-medium tracking-tight text-foreground font-title">
                   General Information
                 </h2>
 

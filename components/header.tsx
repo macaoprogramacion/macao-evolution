@@ -34,43 +34,40 @@ export function Header() {
           <Image
             src="/Logo%20PNG/MACAO%20LOGO_Mesa%20de%20trabajo%201.png"
             alt="Macao Logo"
-            width={120}
-            height={40}
-            className={`h-8 w-auto transition-all duration-300 ${isScrolled ? "" : "brightness-0 invert"}`}
+            width={160}
+            height={48}
+            className={`h-10 w-auto transition-all duration-300 ${isScrolled ? "" : "brightness-0 invert"}`}
           />
         </Link>
 
         {/* Desktop Navigation */}
         <nav className="hidden items-center gap-6 md:flex">
-          <Link
-            href="/our-story"
+          <button
+            type="button"
+            onClick={() => { document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' }); }}
             className={`text-sm transition-colors ${isScrolled ? "text-muted-foreground hover:text-foreground" : "text-white/70 hover:text-white"}`}
           >
-            Our Story
-          </Link>
-          <Link
-            href="/careers"
+            Services
+          </button>
+          <button
+            type="button"
+            onClick={() => { document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }); }}
             className={`text-sm transition-colors ${isScrolled ? "text-muted-foreground hover:text-foreground" : "text-white/70 hover:text-white"}`}
           >
-            Careers
-          </Link>
-          <Link
-            href="/contact"
+            Products
+          </button>
+          <button
+            type="button"
+            onClick={() => { document.getElementById('transport')?.scrollIntoView({ behavior: 'smooth' }); }}
             className={`text-sm transition-colors ${isScrolled ? "text-muted-foreground hover:text-foreground" : "text-white/70 hover:text-white"}`}
           >
-            Contact
-          </Link>
+            Private Transportation
+          </button>
           <Link
-            href="/faq"
+            href="/photographer"
             className={`text-sm transition-colors ${isScrolled ? "text-muted-foreground hover:text-foreground" : "text-white/70 hover:text-white"}`}
           >
-            FAQ
-          </Link>
-          <Link
-            href="/cancelaciones"
-            className={`text-sm transition-colors ${isScrolled ? "text-muted-foreground hover:text-foreground" : "text-white/70 hover:text-white"}`}
-          >
-            Cancelaciones
+            Get my photos
           </Link>
         </nav>
 
@@ -100,40 +97,33 @@ export function Header() {
       {isMenuOpen && (
         <div className="border-t border-border bg-background px-6 py-8 md:hidden rounded-b-2xl">
           <nav className="flex flex-col gap-6">
+            <button
+              type="button"
+              className="text-lg text-foreground text-left"
+              onClick={() => { setIsMenuOpen(false); document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' }); }}
+            >
+              Services
+            </button>
+            <button
+              type="button"
+              className="text-lg text-foreground text-left"
+              onClick={() => { setIsMenuOpen(false); document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }); }}
+            >
+              Products
+            </button>
+            <button
+              type="button"
+              className="text-lg text-foreground text-left"
+              onClick={() => { setIsMenuOpen(false); document.getElementById('transport')?.scrollIntoView({ behavior: 'smooth' }); }}
+            >
+              Private Transportation
+            </button>
             <Link
-              href="/our-story"
+              href="/photographer"
               className="text-lg text-foreground"
               onClick={() => setIsMenuOpen(false)}
             >
-              Our Story
-            </Link>
-            <Link
-              href="/careers"
-              className="text-lg text-foreground"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Careers
-            </Link>
-            <Link
-              href="/contact"
-              className="text-lg text-foreground"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Contact
-            </Link>
-            <Link
-              href="/faq"
-              className="text-lg text-foreground"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              FAQ
-            </Link>
-            <Link
-              href="/cancelaciones"
-              className="text-lg text-foreground"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Cancelaciones
+              Get my photos
             </Link>
             <button
               type="button"
