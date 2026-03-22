@@ -32,17 +32,18 @@ const navigation = [
 
 // Role-based page access control
 // admin and both have access to everything
+// DO NOT add "/admin" here — it matches all subpaths via startsWith
 const rolePageAccess: Record<string, string[]> = {
-  operaciones: ["/admin", "/admin/operation"],
-  chofer: ["/admin", "/admin/operation"],
-  contabilidad: ["/admin", "/admin/analytics", "/admin/products"],
+  operaciones: ["/admin/operation"],
+  chofer: ["/admin/operation"],
+  contabilidad: ["/admin/analytics", "/admin/products"],
 }
 
 function hasAccess(role: string, href: string): boolean {
   if (role === "admin" || role === "both") return true
   const allowed = rolePageAccess[role]
   if (!allowed) return false
-  return allowed.some((path) => href === path || (href !== "/admin" && href.startsWith(path + "/")))
+  return allowed.some((path) => href === path || href.startsWith(path + "/"))
 }
 
 function getSessionRole(): { role: string; name: string } | null {
@@ -185,19 +186,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   : pathname.startsWith(item.href)
                 const allowed = hasAccess(userRole, item.href)
                 
-                if (!allowed) {
-                  return (
-                    <div
-                      key={item.name}
-                      className="flex items-center w-full justify-start px-3 py-2 rounded-md text-sm font-medium text-gray-300 cursor-not-allowed"
-                      title="No tienes acceso a esta sección"
-                    >
-                      <item.icon className="w-4 h-4 mr-3" />
-                      {item.name}
-                      <Lock className="w-3 h-3 ml-auto" />
-                    </div>
-                  )
-                }
+                // Hide pages the user cannot access
+                if (!allowed) return null
 
                 return (
                   <Link
