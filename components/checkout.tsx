@@ -10,7 +10,6 @@ import {
   Phone,
   Mail,
   Lock,
-  Calendar,
   ChevronRight,
   ChevronLeft,
   Check,
@@ -24,6 +23,7 @@ import {
   Clock,
   CalendarDays,
 } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
 
 const PickupMap = dynamic(() => import("@/components/pickup-map"), {
   ssr: false,
@@ -71,14 +71,23 @@ function getBlockedTimeSlots(selectedDate: string): number[] {
   return blocked;
 }
 
-function getMinDate(): string {
-  return new Date().toISOString().split("T")[0];
+function isTodayBlocked(): boolean {
+  const now = new Date();
+  return now.getHours() >= 14;
 }
 
-function getMaxDate(): string {
+function getMinDate(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  if (isTodayBlocked()) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function getMaxDate(): Date {
   const d = new Date();
   d.setDate(d.getDate() + 60);
-  return d.toISOString().split("T")[0];
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 function formatDateDisplay(iso: string): string {
@@ -630,31 +639,41 @@ export function CheckoutModal({
               {(pickupHotel || pickupCustom) && (
                 <div className="mb-4 animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="h-px bg-border mb-4" />
-                  <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <label className="mb-3 flex items-center gap-1.5 text-sm font-medium text-foreground">
                     <CalendarDays size={14} />
                     ¿Qué día deseas realizar el tour?
                   </label>
-                  <input
-                    type="date"
-                    value={pickupDate}
-                    min={getMinDate()}
-                    max={getMaxDate()}
-                    onChange={(e) => {
-                      setPickupDate(e.target.value);
-                      setPickupTimeSlot(null);
-                      setErrors({});
-                    }}
-                    className={`w-full rounded-xl border bg-background py-3 px-4 text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
-                      errors.pickupDate ? "border-red-500" : "border-border"
-                    }`}
-                  />
+                  <div className={`flex justify-center rounded-xl border p-2 transition-colors ${
+                    errors.pickupDate ? "border-red-500" : "border-border"
+                  }`}>
+                    <Calendar
+                      mode="single"
+                      selected={pickupDate ? new Date(pickupDate + "T12:00:00") : undefined}
+                      onSelect={(date: Date | undefined) => {
+                        if (date) {
+                          const iso = date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
+                          setPickupDate(iso);
+                        } else {
+                          setPickupDate("");
+                        }
+                        setPickupTimeSlot(null);
+                        setErrors({});
+                      }}
+                      disabled={[
+                        { before: getMinDate() },
+                        { after: getMaxDate() },
+                      ]}
+                      defaultMonth={getMinDate()}
+                      className="w-full"
+                    />
+                  </div>
                   {pickupDate && (
-                    <p className="mt-1.5 text-xs text-muted-foreground capitalize">
+                    <p className="mt-2 text-xs text-muted-foreground capitalize text-center">
                       {formatDateDisplay(pickupDate)}
                     </p>
                   )}
                   {errors.pickupDate && (
-                    <p className="mt-1 text-xs text-red-500">{errors.pickupDate}</p>
+                    <p className="mt-1 text-xs text-red-500 text-center">{errors.pickupDate}</p>
                   )}
                 </div>
               )}
