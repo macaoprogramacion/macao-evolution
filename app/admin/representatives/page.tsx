@@ -170,11 +170,11 @@ export default function RepresentativesAnalyticsPage() {
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-title text-gray-900">Representantes — Analytics</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-2xl md:text-3xl font-title text-gray-900">Representantes — Analytics</h1>
+          <p className="text-sm md:text-base text-gray-600 mt-1">
             Rendimiento de ventas por representantes. Gestión de reservas en{" "}
             <a
               href="http://localhost:3002"
@@ -255,7 +255,7 @@ export default function RepresentativesAnalyticsPage() {
               <CardDescription>Evolución de reservas y ventas de representantes</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[280px]">
+              <div className="h-48 sm:h-56 lg:h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={monthlyTrend}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -298,7 +298,7 @@ export default function RepresentativesAnalyticsPage() {
               <CardDescription>Distribución de reservas por experiencia (canal reps)</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[280px]">
+              <div className="h-48 sm:h-56 lg:h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -343,6 +343,7 @@ export default function RepresentativesAnalyticsPage() {
               <CardDescription>Ordenado por ingresos generados</CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -406,6 +407,7 @@ export default function RepresentativesAnalyticsPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
 
@@ -457,7 +459,7 @@ export default function RepresentativesAnalyticsPage() {
             <CardDescription>Comparación de ingresos generados por cada experiencia a través de representantes</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px]">
+            <div className="h-52 sm:h-64 lg:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={experiencesByReps} layout="vertical" margin={{ left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />

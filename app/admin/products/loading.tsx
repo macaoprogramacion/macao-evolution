@@ -5,17 +5,17 @@ import { DashboardLayout } from "@/components/admin/dashboard-layout"
 export default function ProductsLoading() {
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Header Skeleton */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-2">
-            <Skeleton className="h-9 w-64" />
-            <Skeleton className="h-5 w-96" />
+            <Skeleton className="h-9 w-48 sm:w-64" />
+            <Skeleton className="h-5 w-64 sm:w-96" />
           </div>
         </div>
 
         {/* Stats Cards Skeleton */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i} className="border-gray-200">
               <CardContent className="pt-6">

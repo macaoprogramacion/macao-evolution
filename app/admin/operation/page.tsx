@@ -321,21 +321,21 @@ export default function OperationPage() {
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-title text-gray-900">Operation</h1>
-            <p className="text-gray-600 mt-1">Gestión de reservas de todas las plataformas</p>
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900">Operation</h1>
+            <p className="text-sm md:text-base text-gray-600 mt-1">Gestión de reservas de todas las plataformas</p>
           </div>
-          <Button className="bg-red-600 hover:bg-red-700 text-white">
+          <Button className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto">
             <Download className="w-4 h-4 mr-2" />
             Exportar Reservas
           </Button>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-gray-200">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
@@ -399,7 +399,7 @@ export default function OperationPage() {
             <CardTitle className="text-lg">Filtros</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input

@@ -143,13 +143,13 @@ export default function Dashboard() {
   return (
     <DashboardLayout>
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 md:mb-8">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-title text-gray-900">MACAO Dashboard</h1>
-            <p className="text-gray-600 mt-1">Panel de control de ventas y gestión de experiencias</p>
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900">MACAO Dashboard</h1>
+            <p className="text-sm md:text-base text-gray-600 mt-1">Panel de control de ventas y gestión de experiencias</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <Tabs value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value as "daily" | "weekly" | "monthly")}>
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="daily">Diario</TabsTrigger>
@@ -157,7 +157,7 @@ export default function Dashboard() {
                 <TabsTrigger value="monthly">Mensual</TabsTrigger>
               </TabsList>
             </Tabs>
-            <Button variant="outline" className="bg-white">
+            <Button variant="outline" className="bg-white w-full sm:w-auto">
               <Download className="w-4 h-4 mr-2" />
               Exportar
             </Button>
@@ -206,7 +206,7 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="h-80">
+              <div className="h-52 sm:h-64 lg:h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={getSalesData()}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
@@ -435,7 +435,7 @@ export default function Dashboard() {
               <CardTitle className="text-lg font-semibold">Distribución de Ventas</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-64">
+              <div className="h-48 sm:h-56 lg:h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -605,7 +605,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="h-80">
+            <div className="h-52 sm:h-64 lg:h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={salesChannels}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />

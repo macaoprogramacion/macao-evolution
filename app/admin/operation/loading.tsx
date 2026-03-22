@@ -5,18 +5,18 @@ import { DashboardLayout } from "@/components/admin/dashboard-layout"
 export default function OperationLoading() {
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Header Skeleton */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-2">
             <Skeleton className="h-9 w-48" />
-            <Skeleton className="h-5 w-96" />
+            <Skeleton className="h-5 w-64 sm:w-96" />
           </div>
-          <Skeleton className="h-10 w-48" />
+          <Skeleton className="h-10 w-full sm:w-48" />
         </div>
 
         {/* Stats Cards Skeleton */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
             <Card key={i} className="border-gray-200">
               <CardContent className="pt-6">
@@ -38,7 +38,7 @@ export default function OperationLoading() {
             <Skeleton className="h-6 w-20" />
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               {[...Array(5)].map((_, i) => (
                 <Skeleton key={i} className="h-10 w-full" />
               ))}

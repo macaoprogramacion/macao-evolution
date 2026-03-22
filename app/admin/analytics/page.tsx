@@ -217,7 +217,7 @@ export default function AnalyticsPage() {
                   <TabsTrigger value="ingresos">Ingresos</TabsTrigger>
                   <TabsTrigger value="conversiones">Conversiones</TabsTrigger>
                 </TabsList>
-                <TabsContent value="ventas" className="h-80">
+                <TabsContent value="ventas" className="h-52 sm:h-64 lg:h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={getDataByRange()}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
@@ -241,7 +241,7 @@ export default function AnalyticsPage() {
                     </AreaChart>
                   </ResponsiveContainer>
                 </TabsContent>
-                <TabsContent value="visitas" className="h-80">
+                <TabsContent value="visitas" className="h-52 sm:h-64 lg:h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={getDataByRange()}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
@@ -265,7 +265,7 @@ export default function AnalyticsPage() {
                     </AreaChart>
                   </ResponsiveContainer>
                 </TabsContent>
-                <TabsContent value="ingresos" className="h-80">
+                <TabsContent value="ingresos" className="h-52 sm:h-64 lg:h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={getDataByRange()}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
@@ -282,7 +282,7 @@ export default function AnalyticsPage() {
                     </BarChart>
                   </ResponsiveContainer>
                 </TabsContent>
-                <TabsContent value="conversiones" className="h-80">
+                <TabsContent value="conversiones" className="h-52 sm:h-64 lg:h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={getDataByRange()}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
@@ -310,7 +310,7 @@ export default function AnalyticsPage() {
                 <CardTitle>Distribución por Tours</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-64">
+                <div className="h-48 sm:h-56 lg:h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <RechartsPieChart>
                       <Pie
@@ -442,7 +442,7 @@ export default function AnalyticsPage() {
             <CardDescription>Análisis de actividad durante el día</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-80">
+            <div className="h-52 sm:h-64 lg:h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hourlyData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />

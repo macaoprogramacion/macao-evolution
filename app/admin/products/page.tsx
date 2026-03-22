@@ -291,19 +291,19 @@ export default function ProductsPage() {
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-title text-gray-900">Gestion de Productos</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900">Gestion de Productos</h1>
+            <p className="text-sm md:text-base text-gray-600 mt-1">
               Administra precios, ofertas y fotos de tus experiencias
             </p>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-gray-200">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">

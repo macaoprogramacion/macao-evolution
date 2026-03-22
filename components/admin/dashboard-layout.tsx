@@ -1,11 +1,11 @@
 "use client"
 
 import type React from "react"
-
+import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog } from "lucide-react"
+import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -36,37 +36,47 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="h-16 border-b border-gray-200 bg-white px-6 flex items-center justify-between sticky top-0 z-30">
-        <div className="flex items-center gap-4">
-          <Link href="/admin" className="flex items-center gap-2">
+      <header className="h-16 border-b border-gray-200 bg-white px-3 md:px-6 flex items-center justify-between sticky top-0 z-30">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
+          {/* Mobile menu button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden shrink-0"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+          >
+            {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </Button>
+          <Link href="/admin" className="flex items-center gap-2 shrink-0">
             <Image
               src="/Logo%20PNG/MACAO%20LOGO_Mesa%20de%20trabajo%201.png"
               alt="MACAO Logo"
               width={160}
               height={48}
-              className="h-10 w-auto"
+              className="h-8 md:h-10 w-auto"
             />
-            <span className="font-title text-gray-900">Dashboard</span>
+            <span className="font-title text-gray-900 hidden sm:inline">Dashboard</span>
           </Link>
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-gray-500 hidden md:block">
             <span>Dashboard</span> <span className="mx-1">/</span>
             <span className="capitalize">{pathname === "/admin" ? "Overview" : pathname.replace("/admin/", "")}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="relative">
+        <div className="flex items-center gap-2 md:gap-4">
+          <div className="relative hidden sm:block">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
               placeholder="Search workflows, logs..."
-              className="pl-10 w-80 bg-gray-50 border-gray-200 focus:bg-white"
+              className="pl-10 w-48 md:w-64 lg:w-80 bg-gray-50 border-gray-200 focus:bg-white"
             />
           </div>
-          <Button variant="ghost" size="icon" className="relative">
+          <Button variant="ghost" size="icon" className="relative shrink-0">
             <Bell className="w-4 h-4" />
             <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
           </Button>
@@ -92,9 +102,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
       </header>
 
-      <div className="flex">
+      <div className="flex relative">
+        {/* Mobile sidebar overlay */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-20 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         {/* Sidebar */}
-        <aside className="w-60 shrink-0 border-r border-gray-200 bg-white h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto">
+        <aside className={`${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        } lg:translate-x-0 fixed lg:sticky top-16 left-0 z-20 w-60 shrink-0 border-r border-gray-200 bg-white h-[calc(100vh-4rem)] overflow-y-auto transition-transform duration-200 ease-in-out`}>
           <div className="p-4">
             <div className="relative mb-6">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -117,6 +137,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   <Link
                     key={item.name}
                     href={item.href}
+                    onClick={() => setSidebarOpen(false)}
                     className={`flex items-center w-full justify-start px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive ? "bg-red-50 text-red-700 hover:bg-red-100" : "text-gray-600 hover:bg-gray-50"
                     }`}
@@ -131,7 +152,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-w-0 p-8 bg-gray-50 overflow-x-auto">{children}</main>
+        <main className="flex-1 min-w-0 p-4 md:p-6 lg:p-8 bg-gray-50 overflow-x-auto">{children}</main>
       </div>
     </div>
   )

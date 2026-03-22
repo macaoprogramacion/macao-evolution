@@ -240,9 +240,9 @@ export default function UsersPage() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Page Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Gestión de Usuarios</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Gestión de Usuarios</h1>
             <p className="text-sm text-gray-500 mt-1">
               Administra los usuarios con acceso a Billing y Photographer Dashboard
             </p>
@@ -252,7 +252,7 @@ export default function UsersPage() {
               resetForm()
               setShowCreateDialog(true)
             }}
-            className="bg-red-600 hover:bg-red-700 text-white"
+            className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto"
           >
             <UserPlus className="w-4 h-4 mr-2" />
             Nuevo Usuario
@@ -260,7 +260,7 @@ export default function UsersPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
