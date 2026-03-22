@@ -51,21 +51,146 @@ interface CardInfo {
   cvc: string;
 }
 
-const PICKUP_TIMES = [
-  { id: 0, label: "Mañana", time: "8:00 AM", hour: 8 },
-  { id: 1, label: "Media mañana", time: "11:00 AM", hour: 11 },
-  { id: 2, label: "Tarde", time: "2:00 PM", hour: 14 },
+const DEFAULT_TIMES = [
+  { id: 0, label: "Mañana", time: "8:00 AM", hour: 8, minute: 0 },
+  { id: 1, label: "Media mañana", time: "11:00 AM", hour: 11, minute: 0 },
+  { id: 2, label: "Tarde", time: "2:00 PM", hour: 14, minute: 0 },
 ];
 
-function getBlockedTimeSlots(selectedDate: string): number[] {
+interface HotelSchedule {
+  turns: { id: number; label: string; time: string; hour: number; minute: number }[];
+  pickup: string;
+}
+
+function makeSchedule(t1: string, t2: string, t3: string, pickup: string): HotelSchedule {
+  function parse(t: string) {
+    const [h, m] = t.split(":").map(Number);
+    const ampm = h >= 12 ? "PM" : "AM";
+    const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
+    return { hour: h, minute: m, time: `${h12}:${String(m).padStart(2, "0")} ${ampm}` };
+  }
+  const p1 = parse(t1), p2 = parse(t2), p3 = parse(t3);
+  return {
+    turns: [
+      { id: 0, label: "Turno 1", ...p1 },
+      { id: 1, label: "Turno 2", ...p2 },
+      { id: 2, label: "Turno 3", ...p3 },
+    ],
+    pickup,
+  };
+}
+
+const HOTEL_SCHEDULES: Record<string, HotelSchedule> = {
+  // Uvero Alto
+  "PLAYA PALMERA": makeSchedule("08:30", "11:30", "14:30", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "FINEST PUNTA CANA": makeSchedule("08:30", "11:30", "14:30", "LOBBY PRINCIPAL"),
+  "EXCELLENCE EL CARMEN": makeSchedule("08:30", "11:30", "14:30", "LOBBY PRINCIPAL"),
+  "BREATHLESS": makeSchedule("08:30", "11:30", "14:30", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "DREAMS ONYX": makeSchedule("08:30", "11:30", "14:30", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "LIVE AQUA": makeSchedule("08:30", "11:30", "14:30", "LOBBY PRINCIPAL"),
+  "NICKELODEON": makeSchedule("08:30", "11:30", "14:30", "LOBBY PRINCIPAL"),
+  "ROYALTON CHIC PUNTA CANA": makeSchedule("08:30", "11:30", "14:30", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "OCEAN EL FARO": makeSchedule("08:30", "11:30", "14:30", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "WYNDHAM ALLTRA PUNTA CANA": makeSchedule("08:30", "11:30", "14:30", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  // Arena Gorda - Bávaro
+  "TROPICAL DELUXE PRINCESS": makeSchedule("08:15", "11:15", "14:15", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "WHALA URBAN": makeSchedule("07:20", "10:20", "13:20", "LOBBY PRINCIPAL"),
+  "PARADISUS PUNTA CANA": makeSchedule("08:15", "11:15", "14:15", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "KARIBO PUNTA CANA": makeSchedule("07:20", "10:20", "13:20", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "PUNTA CANA PRINCESS": makeSchedule("07:25", "10:25", "13:25", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "VIK ARENA": makeSchedule("07:20", "10:20", "13:20", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "OCEAN BLUE & SANDS": makeSchedule("07:25", "10:25", "13:25", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "IBEROSTAR": makeSchedule("07:35", "10:35", "13:35", "PUERTA DE EMPLEADOS 2"),
+  "COMPLEJO IBEROSTAR": makeSchedule("07:35", "10:35", "13:35", "PUERTA DE EMPLEADOS 2"),
+  "RIU PALACE PUNTA CANA": makeSchedule("07:45", "10:45", "13:45", "LOBBY PRINCIPAL"),
+  "COMPLEJO RIU": makeSchedule("07:50", "10:50", "13:50", "LOBBY PRINCIPAL"),
+  "COMPLEJO BAHIA": makeSchedule("08:00", "11:00", "14:00", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "ROYALTON SPLASH": makeSchedule("08:05", "11:05", "14:05", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "ROYALTON PUNTA CANA": makeSchedule("08:05", "11:05", "14:05", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "OCCIDENTAL CARIBE": makeSchedule("08:05", "11:05", "14:05", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "RIU REPUBLICA": makeSchedule("08:10", "11:10", "14:10", "LOBBY PRINCIPAL"),
+  "COMPLEJO MAJESTIC": makeSchedule("08:05", "11:05", "14:05", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "ROYALTON BAVARO": makeSchedule("08:05", "11:05", "14:05", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "CANA ROCK": makeSchedule("08:25", "11:10", "14:10", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "HARD ROCK": makeSchedule("08:25", "11:25", "14:25", "ESTATUA DE GUITARRA"),
+  "DREAMS MACAO": makeSchedule("08:30", "11:30", "14:30", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "ZIVORY": makeSchedule("08:20", "11:20", "14:20", "LOBBY PRINCIPAL"),
+  "ZOETRY": makeSchedule("08:20", "11:20", "14:20", "LOBBY PRINCIPAL"),
+  "EXCELLENCE PUNTA CANA": makeSchedule("08:30", "11:30", "14:30", "LOBBY PRINCIPAL"),
+  "SECRETS TIDES": makeSchedule("08:30", "11:30", "14:30", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "SIRENIS": makeSchedule("08:30", "11:30", "14:30", "FARMACIA DEL HOTEL - PUNTO DE ENCUENTRO"),
+  // Bávaro - El Cortecito - Los Corales
+  "LOPESAN": makeSchedule("07:30", "10:30", "13:30", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "MELIA": makeSchedule("07:35", "10:35", "13:35", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "PARADISUS CANA Y PALMA REAL": makeSchedule("07:35", "10:35", "13:35", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "DREAMS & SECRETS ROYAL BEACH": makeSchedule("07:35", "10:35", "13:35", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "PLAZA TURQUESA": makeSchedule("07:40", "10:40", "13:40", "ÁREA DE PARQUEO"),
+  "LOS CORALES": makeSchedule("07:40", "10:40", "13:40", "PLAZA TURQUESA (BAM MARKET)"),
+  "SOL CARIBE": makeSchedule("07:45", "09:45", "12:45", "PLAZA TURQUESA (BAM MARKET)"),
+  "DUCASSI": makeSchedule("07:45", "10:45", "13:45", "PLAZA TURQUESA (BAM MARKET)"),
+  "TROPICANA": makeSchedule("07:45", "10:45", "13:45", "PLAZA TURQUESA (BAM MARKET)"),
+  "WHALA BAVARO": makeSchedule("07:45", "10:45", "13:45", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "HM BÁVARO": makeSchedule("07:45", "10:45", "13:45", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "IMPRESSIVE PUNTA CANA": makeSchedule("07:50", "10:50", "13:50", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "ART VILLA DOMINICANA": makeSchedule("07:50", "10:50", "13:50", "BAM MARKET"),
+  "GREEN COAST AVENUE": makeSchedule("07:50", "10:50", "13:50", "LOBBY PRINCIPAL"),
+  "GREEN COAST BEACH": makeSchedule("07:50", "10:50", "13:50", "LOBBY PRINCIPAL"),
+  "VISTA SOL": makeSchedule("07:55", "10:55", "13:55", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "HOTEL 365": makeSchedule("07:55", "10:55", "13:55", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "COMPLEJO PALLADIUM": makeSchedule("08:00", "11:00", "14:00", "CASINO KVIAR"),
+  "PALLADIUM BAVARO": makeSchedule("08:00", "11:00", "14:00", "PUNTO DE ENCUENTRO"),
+  "OCCIDENTAL PUNTA CANA": makeSchedule("08:05", "11:05", "14:05", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "BAVARO PRINCESS": makeSchedule("08:10", "11:10", "14:10", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "FLAMBOYAN": makeSchedule("08:10", "11:10", "14:10", "LOBBY PRINCIPAL"),
+  "G-44": makeSchedule("08:10", "11:10", "14:10", "ENTRADA"),
+  "CARIBE DELUXE PRINCESS": makeSchedule("08:15", "11:15", "14:15", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  // Cap Cana y Verón
+  "TORTUGA BAY": makeSchedule("06:50", "09:50", "12:50", "ESTACIÓN DE GASOLINA UNITED PETROLEUM"),
+  "WESTIN PUNTA CANA": makeSchedule("06:50", "09:50", "12:50", "ESTACIÓN DE GASOLINA UNITED PETROLEUM"),
+  "CLUB MED": makeSchedule("06:50", "09:50", "12:50", "ESTACIÓN DE GASOLINA UNITED PETROLEUM"),
+  "SANCTUARY CAP CANA": makeSchedule("06:50", "09:50", "12:50", "ESTACIÓN DE GASOLINA UNITED PETROLEUM"),
+  "DREAMS CAP CANA": makeSchedule("06:50", "09:50", "12:50", "ESTACIÓN DE GASOLINA UNITED PETROLEUM"),
+  "ANCORA": makeSchedule("06:50", "09:50", "12:50", "ESTACIÓN DE GASOLINA UNITED PETROLEUM"),
+  "FISHING LODGE": makeSchedule("06:50", "09:50", "12:50", "ESTACIÓN DE GASOLINA UNITED PETROLEUM"),
+  "BAKOUR": makeSchedule("06:55", "09:55", "12:55", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "TRS CAP CANA": makeSchedule("06:50", "09:50", "12:50", "ESTACIÓN DE GASOLINA UNITED PETROLEUM"),
+  "HYATT ZILARA & ZIVA": makeSchedule("06:50", "09:50", "12:50", "ESTACIÓN DE GASOLINA UNITED PETROLEUM"),
+  "SECRET CAP CANA": makeSchedule("06:50", "09:50", "12:50", "ESTACIÓN DE GASOLINA UNITED PETROLEUM"),
+  "FOUR POINTS BY SHERATON": makeSchedule("06:50", "09:50", "12:50", "ESTACIÓN DE GASOLINA UNITED PETROLEUM"),
+  "DREAMS FLORA (NATURA PARK)": makeSchedule("06:55", "09:55", "12:55", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "JEWEL PALM BEACH (DREAMS P.B.)": makeSchedule("06:55", "09:55", "12:55", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "SUNSCAPE COCO": makeSchedule("07:00", "10:00", "13:00", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "RADISSON BLU": makeSchedule("07:00", "10:00", "13:00", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "SERENADE": makeSchedule("07:00", "10:00", "13:00", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "CATALONIA": makeSchedule("07:00", "10:00", "13:00", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "BOMBA TOTAL ENERGY DE COCO BONGO": makeSchedule("07:15", "10:15", "13:15", "ÁREA DE PARQUEO"),
+  "VERON": makeSchedule("07:15", "10:15", "13:15", "ÁREA DE PARQUEO"),
+  "AC BY MARRIOT": makeSchedule("07:20", "10:20", "13:20", "LOBBY PRINCIPAL"),
+  "BARCELO BAVARO PALACE": makeSchedule("07:25", "10:25", "13:25", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "BARCELO BAVARO BEACH": makeSchedule("07:25", "10:25", "13:25", "AFUERA DEL RESORT - PUERTA PRINCIPAL"),
+  "MARGARITA VILLE": makeSchedule("08:00", "11:00", "14:00", "LOBBY PRINCIPAL"),
+};
+
+const PICKUP_HOTELS = Object.keys(HOTEL_SCHEDULES).sort();
+
+function getHotelTimes(hotel: string) {
+  const schedule = HOTEL_SCHEDULES[hotel];
+  return schedule ? schedule.turns : DEFAULT_TIMES;
+}
+
+function getHotelPickupPoint(hotel: string): string | null {
+  return HOTEL_SCHEDULES[hotel]?.pickup ?? null;
+}
+
+function getBlockedTimeSlots(selectedDate: string, times: typeof DEFAULT_TIMES): number[] {
   const now = new Date();
   const today = now.toISOString().split("T")[0];
-  // Only block time slots if the selected date is today
   if (selectedDate !== today) return [];
   const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
   const blocked: number[] = [];
-  for (const slot of PICKUP_TIMES) {
-    if (currentHour >= slot.hour) {
+  for (const slot of times) {
+    if (currentHour > slot.hour || (currentHour === slot.hour && currentMinute >= slot.minute)) {
       blocked.push(slot.id);
     }
   }
@@ -95,31 +220,6 @@ function formatDateDisplay(iso: string): string {
   const d = new Date(iso + "T12:00:00");
   return d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
-
-const PICKUP_HOTELS = [
-  "SANCTUARY CAP CANA", "MARGARITA VILLE", "ANCORA", "FISHING LODGE",
-  "TRS CAP CANA", "HYATT ZILARA & ZIVA", "SECRET CAP CANA",
-  "FOUR POINTS BY SHERATON", "DREAMS FLORA (NATURA PARK)",
-  "TORTUGA BAY", "WESTIN PUNTA CANA", "CLUB MED",
-  "JEWEL PALM BEACH (DREAMS P.B.)", "SUNSCAPE COCO", "RADISSON BLU",
-  "SERENADE", "CATALONIA", "WHALA URBAN",
-  "AC BY MARRIOT", "KARIBO PUNTA CANA", "VIK ARENA",
-  "BARCELO BAVARO PALACE", "BARCELO BAVARO BEACH",
-  "OCEAN BLUE & SANDS", "LOPESAN", "MELIA",
-  "PARADISUS CANA Y PALMA REAL", "DREAMS & SECRETS ROYAL BEACH",
-  "COMPLEJO IBEROSTAR", "LOS CORALES", "DUCASSI", "TROPICANA",
-  "WHALA BAVARO", "RIU PALACE PUNTA CANA", "IMPRESSIVE PUNTA CANA",
-  "COMPLEJO RIU", "VISTA SOL", "COMPLEJO PALLADIUM",
-  "PALLADIUM BAVARO", "COMPLEJO BAHIA", "OCCIDENTAL PUNTA CANA",
-  "ROYALTON PUNTA CANA", "OCCIDENTAL CARIBE", "COMPLEJO MAJESTIC",
-  "ROYALTON BAVARO", "BAVARO PRINCESS", "RIU REPUBLICA",
-  "CARIBE DELUXE PRINCESS", "TROPICAL DELUXE PRINCESS",
-  "PARADISUS PUNTA CANA", "PUNTA CANA PRINCESS",
-  "HARD ROCK", "DREAMS MACAO", "EXCELLENCE PUNTA CANA",
-  "SIRENIS", "FINEST PUNTA CANA", "EXCELLENCE EL CARMEN",
-  "BREATHLESS", "DREAMS ONYX", "LIVE AQUA",
-  "NICKELODEON", "ROYALTON CHIC PUNTA CANA", "OCEAN EL FARO",
-];
 
 export function CheckoutModal({
   isOpen,
@@ -159,16 +259,20 @@ export function CheckoutModal({
 
   const hasPrivateTransport = items.some((item) => item.id === "private-transport");
 
-  // Recalculate blocked time slots when date changes
+  const activeTimes = pickupHotel ? getHotelTimes(pickupHotel) : DEFAULT_TIMES;
+  const activePickupPoint = pickupHotel ? getHotelPickupPoint(pickupHotel) : null;
+
+  // Recalculate blocked time slots when date or hotel changes
   useEffect(() => {
     if (pickupDate) {
-      const blocked = getBlockedTimeSlots(pickupDate);
+      const times = pickupHotel ? getHotelTimes(pickupHotel) : DEFAULT_TIMES;
+      const blocked = getBlockedTimeSlots(pickupDate, times);
       setBlockedSlots(blocked);
       if (pickupTimeSlot !== null && blocked.includes(pickupTimeSlot)) {
         setPickupTimeSlot(null);
       }
     }
-  }, [pickupDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pickupDate, pickupHotel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredPickupHotels = useMemo(() => {
     if (!pickupSearch.trim()) return PICKUP_HOTELS;
@@ -590,6 +694,7 @@ export function CheckoutModal({
                               setPickupHotel(hotel);
                               setPickupSearch(hotel);
                               setIsPickupDropdownOpen(false);
+                              setPickupTimeSlot(null);
                               setErrors({});
                             }}
                             className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors hover:bg-secondary ${
@@ -609,6 +714,15 @@ export function CheckoutModal({
                     <div className="mt-3 flex items-center gap-2 rounded-lg border border-foreground/20 bg-foreground/5 px-3 py-2">
                       <Check size={14} className="text-green-500" />
                       <span className="text-sm text-foreground font-medium">{pickupHotel}</span>
+                    </div>
+                  )}
+                  {pickupHotel && activePickupPoint && (
+                    <div className="mt-2 flex items-start gap-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2">
+                      <Navigation size={13} className="text-blue-500 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-[11px] font-medium text-blue-600 dark:text-blue-400">Punto de recogida</p>
+                        <p className="text-xs text-blue-700 dark:text-blue-300">{activePickupPoint}</p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -688,7 +802,7 @@ export function CheckoutModal({
                     Horario de recogida
                   </label>
                   <div className="grid grid-cols-3 gap-2">
-                    {PICKUP_TIMES.map((slot) => {
+                    {activeTimes.map((slot) => {
                       const isBlocked = blockedSlots.includes(slot.id);
                       const isSelected = pickupTimeSlot === slot.id;
                       return (
@@ -1171,7 +1285,15 @@ export function CheckoutModal({
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Horario</span>
                           <span className="text-foreground">
-                            {PICKUP_TIMES[pickupTimeSlot].time} ({PICKUP_TIMES[pickupTimeSlot].label})
+                            {activeTimes[pickupTimeSlot].time} ({activeTimes[pickupTimeSlot].label})
+                          </span>
+                        </div>
+                      )}
+                      {activePickupPoint && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Punto</span>
+                          <span className="text-foreground text-right max-w-[60%] text-xs">
+                            {activePickupPoint}
                           </span>
                         </div>
                       )}
