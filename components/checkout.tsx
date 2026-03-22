@@ -22,6 +22,7 @@ import {
   Navigation,
   Clock,
   CalendarDays,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 
@@ -953,7 +954,7 @@ export function CheckoutModal({
                         Expiración
                       </label>
                       <div className="relative">
-                        <Calendar
+                        <CalendarIcon
                           size={16}
                           className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                         />
