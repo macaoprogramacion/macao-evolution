@@ -42,6 +42,16 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
         if (roles.includes(session.role) || session.role === 'both' || session.role === 'admin') {
           setAuthed(true)
           setUserName(session.name)
+          // Redirect restricted roles to their allowed page on initial load
+          const roleDefaultPage = {
+            operaciones: '/admin/operation',
+            chofer: '/admin/operation',
+            contabilidad: '/admin/analytics',
+          }
+          const defaultPage = roleDefaultPage[session.role]
+          if (defaultPage && window.location.pathname === '/admin') {
+            router.replace(defaultPage)
+          }
         }
       }
     } catch {}
@@ -109,6 +119,16 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
     setAuthed(true)
     setUserName(user.name)
     sessionStorage.setItem('macao_auth_session', JSON.stringify({ id: user.id, name: user.name, role: user.role, active: true }))
+    // Redirect restricted roles to their specific page after login
+    const roleDefaultPage = {
+      operaciones: '/admin/operation',
+      chofer: '/admin/operation',
+      contabilidad: '/admin/analytics',
+    }
+    const defaultPage = roleDefaultPage[user.role]
+    if (defaultPage) {
+      router.replace(defaultPage)
+    }
     } catch {
       setError('Error de conexión. Intenta de nuevo.')
     }

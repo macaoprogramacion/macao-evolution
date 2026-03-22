@@ -63,7 +63,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [userRole, setUserRole] = useState<string>("admin")
+  const [userRole, setUserRole] = useState<string | null>(null)
   const [userName, setUserName] = useState<string>("")
 
   useEffect(() => {
@@ -71,8 +71,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (session) {
       setUserRole(session.role)
       setUserName(session.name)
+    } else {
+      setUserRole("admin") // fallback if no session (bypass mode)
     }
   }, [])
+
+  // Don't render until we know the role
+  if (userRole === null) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-gray-300 border-t-red-600 rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   // Check if current page is accessible
   const currentPageAllowed = hasAccess(userRole, pathname)
