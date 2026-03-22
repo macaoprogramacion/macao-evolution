@@ -116,10 +116,10 @@ export function FeaturedProductsSection() {
               </h3>
               <Link
                 href={`/product/${feature.slug}`}
-                className="inline-flex items-center gap-1.5 mt-3 text-xs uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors group/link"
+                className="inline-flex items-center gap-1.5 mt-3 text-xs uppercase tracking-[0.15em] text-red-600 hover:text-red-700 transition-colors group/link"
               >
                 View Details
-                <ArrowRight className="h-3 w-3 transition-transform group-hover/link:translate-x-0.5" />
+                <ArrowRight className="h-3 w-3 text-red-600 transition-transform group-hover/link:translate-x-0.5" />
               </Link>
             </div>
           </div>

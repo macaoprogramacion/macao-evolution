@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useCart } from "@/context/cart-context";
 import {
   X,
@@ -15,6 +15,11 @@ import {
   Check,
   Shield,
   CircleDollarSign,
+  MapPin,
+  Search,
+  Hotel,
+  PenLine,
+  Navigation,
 } from "lucide-react";
 
 type PaymentOption = "full" | "partial";
@@ -33,6 +38,31 @@ interface CardInfo {
   cvc: string;
 }
 
+const PICKUP_HOTELS = [
+  "SANCTUARY CAP CANA", "MARGARITA VILLE", "ANCORA", "FISHING LODGE",
+  "TRS CAP CANA", "HYATT ZILARA & ZIVA", "SECRET CAP CANA",
+  "FOUR POINTS BY SHERATON", "DREAMS FLORA (NATURA PARK)",
+  "TORTUGA BAY", "WESTIN PUNTA CANA", "CLUB MED",
+  "JEWEL PALM BEACH (DREAMS P.B.)", "SUNSCAPE COCO", "RADISSON BLU",
+  "SERENADE", "CATALONIA", "WHALA URBAN",
+  "AC BY MARRIOT", "KARIBO PUNTA CANA", "VIK ARENA",
+  "BARCELO BAVARO PALACE", "BARCELO BAVARO BEACH",
+  "OCEAN BLUE & SANDS", "LOPESAN", "MELIA",
+  "PARADISUS CANA Y PALMA REAL", "DREAMS & SECRETS ROYAL BEACH",
+  "COMPLEJO IBEROSTAR", "LOS CORALES", "DUCASSI", "TROPICANA",
+  "WHALA BAVARO", "RIU PALACE PUNTA CANA", "IMPRESSIVE PUNTA CANA",
+  "COMPLEJO RIU", "VISTA SOL", "COMPLEJO PALLADIUM",
+  "PALLADIUM BAVARO", "COMPLEJO BAHIA", "OCCIDENTAL PUNTA CANA",
+  "ROYALTON PUNTA CANA", "OCCIDENTAL CARIBE", "COMPLEJO MAJESTIC",
+  "ROYALTON BAVARO", "BAVARO PRINCESS", "RIU REPUBLICA",
+  "CARIBE DELUXE PRINCESS", "TROPICAL DELUXE PRINCESS",
+  "PARADISUS PUNTA CANA", "PUNTA CANA PRINCESS",
+  "HARD ROCK", "DREAMS MACAO", "EXCELLENCE PUNTA CANA",
+  "SIRENIS", "FINEST PUNTA CANA", "EXCELLENCE EL CARMEN",
+  "BREATHLESS", "DREAMS ONYX", "LIVE AQUA",
+  "NICKELODEON", "ROYALTON CHIC PUNTA CANA", "OCEAN EL FARO",
+];
+
 export function CheckoutModal({
   isOpen,
   onClose,
@@ -41,7 +71,7 @@ export function CheckoutModal({
   onClose: () => void;
 }) {
   const { items, totalPrice, clearCart } = useCart();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [customer, setCustomer] = useState<CustomerInfo>({
     name: "",
     phone: "",
@@ -57,6 +87,32 @@ export function CheckoutModal({
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Pickup location state
+  const [pickupMode, setPickupMode] = useState<"hotel" | "custom">("hotel");
+  const [pickupHotel, setPickupHotel] = useState("");
+  const [pickupCustom, setPickupCustom] = useState("");
+  const [pickupSearch, setPickupSearch] = useState("");
+  const [isPickupDropdownOpen, setIsPickupDropdownOpen] = useState(false);
+  const pickupDropdownRef = useRef<HTMLDivElement>(null);
+
+  const hasPrivateTransport = items.some((item) => item.id === "private-transport");
+
+  const filteredPickupHotels = useMemo(() => {
+    if (!pickupSearch.trim()) return PICKUP_HOTELS;
+    const q = pickupSearch.toLowerCase();
+    return PICKUP_HOTELS.filter((h) => h.toLowerCase().includes(q));
+  }, [pickupSearch]);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (pickupDropdownRef.current && !pickupDropdownRef.current.contains(e.target as Node)) {
+        setIsPickupDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   const depositAmount = totalPrice * 0.2;
   const remainingAmount = totalPrice * 0.8;
@@ -108,7 +164,12 @@ export function CheckoutModal({
     // Simulate payment processing
     setTimeout(() => {
       setIsProcessing(false);
-      setStep(3);
+      // Skip pickup step if private transport is already in cart
+      if (hasPrivateTransport) {
+        setStep(4);
+      } else {
+        setStep(3);
+      }
     }, 2000);
   }
 
@@ -119,8 +180,26 @@ export function CheckoutModal({
     setCard({ number: "", name: "", expiry: "", cvc: "" });
     setPaymentOption("full");
     setPaymentMethod("card");
+    setPickupMode("hotel");
+    setPickupHotel("");
+    setPickupCustom("");
+    setPickupSearch("");
     setErrors({});
     onClose();
+  }
+
+  function handlePickupConfirm() {
+    const newErrors: Record<string, string> = {};
+    if (pickupMode === "hotel" && !pickupHotel) {
+      newErrors.pickup = "Selecciona tu hotel";
+    }
+    if (pickupMode === "custom" && !pickupCustom.trim()) {
+      newErrors.pickup = "Escribe tu ubicación de recogida";
+    }
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length === 0) {
+      setStep(4);
+    }
   }
 
   // Format card number with spaces
@@ -163,7 +242,7 @@ export function CheckoutModal({
           </button>
 
           {/* Step indicator */}
-          {step < 3 && (
+          {step < 4 && (
             <div className="px-8 pt-8 pb-2">
               <div className="flex items-center gap-2 mb-1">
                 <div
@@ -187,12 +266,31 @@ export function CheckoutModal({
                       : "bg-secondary text-muted-foreground"
                   }`}
                 >
-                  2
+                  {step > 2 ? <Check size={14} /> : "2"}
                 </div>
+                {!hasPrivateTransport && (
+                  <>
+                    <div
+                      className={`h-0.5 flex-1 rounded transition-colors ${
+                        step >= 3 ? "bg-foreground" : "bg-secondary"
+                      }`}
+                    />
+                    <div
+                      className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                        step >= 3
+                          ? "bg-foreground text-background"
+                          : "bg-secondary text-muted-foreground"
+                      }`}
+                    >
+                      3
+                    </div>
+                  </>
+                )}
               </div>
               <div className="flex justify-between text-[11px] text-muted-foreground px-1">
                 <span>Registro</span>
                 <span>Pago</span>
+                {!hasPrivateTransport && <span>Recogida</span>}
               </div>
             </div>
           )}
@@ -656,8 +754,181 @@ export function CheckoutModal({
             </div>
           )}
 
-          {/* ===== STEP 3: Confirmation ===== */}
-          {step === 3 && (
+          {/* ===== STEP 3: Pickup Location (skipped if private-transport in cart) ===== */}
+          {step === 3 && !hasPrivateTransport && (
+            <div className="px-8 pb-8 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setStep(2);
+                  setErrors({});
+                }}
+                className="mb-4 flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ChevronLeft size={14} />
+                Volver al pago
+              </button>
+
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-foreground/10">
+                <MapPin size={24} className="text-foreground" />
+              </div>
+              <h2 className="text-xl font-title text-foreground mb-1 text-center">
+                ¿Dónde te recogemos?
+              </h2>
+              <p className="text-sm text-muted-foreground mb-6 text-center">
+                Indica el lugar donde deseas que te recojamos para la aventura
+              </p>
+
+              {/* Toggle hotel / custom */}
+              <div className="flex gap-2 mb-5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPickupMode("hotel");
+                    setPickupCustom("");
+                    setErrors({});
+                  }}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium transition-colors ${
+                    pickupMode === "hotel"
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border text-foreground hover:bg-secondary"
+                  }`}
+                >
+                  <Hotel size={16} />
+                  Mi hotel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPickupMode("custom");
+                    setPickupHotel("");
+                    setPickupSearch("");
+                    setErrors({});
+                  }}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium transition-colors ${
+                    pickupMode === "custom"
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border text-foreground hover:bg-secondary"
+                  }`}
+                >
+                  <PenLine size={16} />
+                  Otra ubicación
+                </button>
+              </div>
+
+              {/* Hotel search */}
+              {pickupMode === "hotel" && (
+                <div className="mb-5" ref={pickupDropdownRef}>
+                  <label className="mb-1.5 block text-sm font-medium text-foreground">
+                    Busca tu hotel
+                  </label>
+                  <div className="relative">
+                    <Search
+                      size={16}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    />
+                    <input
+                      type="text"
+                      value={pickupSearch}
+                      onChange={(e) => {
+                        setPickupSearch(e.target.value);
+                        setIsPickupDropdownOpen(true);
+                        setPickupHotel("");
+                      }}
+                      onFocus={() => setIsPickupDropdownOpen(true)}
+                      placeholder="Ej: Barceló, Hard Rock, RIU..."
+                      className={`w-full rounded-xl border bg-background py-3 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
+                        errors.pickup ? "border-red-500" : "border-border"
+                      }`}
+                    />
+                  </div>
+                  {isPickupDropdownOpen && (
+                    <div className="mt-1 max-h-48 overflow-y-auto rounded-xl border border-border bg-background shadow-lg">
+                      {filteredPickupHotels.length === 0 ? (
+                        <p className="p-3 text-sm text-muted-foreground text-center">
+                          No se encontró el hotel
+                        </p>
+                      ) : (
+                        filteredPickupHotels.map((hotel) => (
+                          <button
+                            key={hotel}
+                            type="button"
+                            onClick={() => {
+                              setPickupHotel(hotel);
+                              setPickupSearch(hotel);
+                              setIsPickupDropdownOpen(false);
+                              setErrors({});
+                            }}
+                            className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors hover:bg-secondary ${
+                              pickupHotel === hotel
+                                ? "bg-foreground/5 font-medium text-foreground"
+                                : "text-foreground"
+                            }`}
+                          >
+                            <Hotel size={14} className="text-muted-foreground shrink-0" />
+                            {hotel}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                  {pickupHotel && (
+                    <div className="mt-3 flex items-center gap-2 rounded-lg border border-foreground/20 bg-foreground/5 px-3 py-2">
+                      <Check size={14} className="text-green-500" />
+                      <span className="text-sm text-foreground font-medium">{pickupHotel}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Custom location */}
+              {pickupMode === "custom" && (
+                <div className="mb-5">
+                  <label className="mb-1.5 block text-sm font-medium text-foreground">
+                    Escribe tu ubicación
+                  </label>
+                  <div className="relative">
+                    <Navigation
+                      size={16}
+                      className="absolute left-3 top-3 text-muted-foreground"
+                    />
+                    <textarea
+                      value={pickupCustom}
+                      onChange={(e) => {
+                        setPickupCustom(e.target.value);
+                        setErrors({});
+                      }}
+                      placeholder="Ej: Airbnb en Los Corales, calle principal frente al supermercado..."
+                      rows={3}
+                      className={`w-full rounded-xl border bg-background py-3 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 resize-none ${
+                        errors.pickup ? "border-red-500" : "border-border"
+                      }`}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Sé lo más específico posible para que podamos encontrarte fácilmente
+                  </p>
+                </div>
+              )}
+
+              {errors.pickup && (
+                <p className="mb-4 text-xs text-red-500 text-center">{errors.pickup}</p>
+              )}
+
+              {/* Confirm button */}
+              <button
+                type="button"
+                onClick={handlePickupConfirm}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-foreground py-3.5 text-sm font-semibold text-background transition-opacity hover:opacity-80"
+              >
+                Confirmar ubicación
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* ===== STEP 4: Confirmation ===== */}
+          {step === 4 && (
             <div className="px-8 py-12 text-center">
               <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
                 <Check size={32} className="text-green-500" />
@@ -705,6 +976,14 @@ export function CheckoutModal({
                     <span className="text-muted-foreground">Artículos</span>
                     <span className="text-foreground">{items.length}</span>
                   </div>
+                  {!hasPrivateTransport && (pickupHotel || pickupCustom) && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Recogida</span>
+                      <span className="text-foreground text-right max-w-[60%]">
+                        {pickupHotel || pickupCustom}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
               <button
