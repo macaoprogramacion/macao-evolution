@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useCart } from "@/context/cart-context";
 import {
   X,
@@ -20,7 +21,17 @@ import {
   Hotel,
   PenLine,
   Navigation,
+  Clock,
 } from "lucide-react";
+
+const PickupMap = dynamic(() => import("@/components/pickup-map"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-[220px] rounded-xl border border-border bg-secondary/50 flex items-center justify-center">
+      <div className="h-5 w-5 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
+    </div>
+  ),
+});
 
 type PaymentOption = "full" | "partial";
 type PaymentMethod = "card" | "paypal";
@@ -36,6 +47,25 @@ interface CardInfo {
   name: string;
   expiry: string;
   cvc: string;
+}
+
+const PICKUP_TIMES = [
+  { id: 0, label: "Mañana", time: "8:00 AM", hour: 8 },
+  { id: 1, label: "Media mañana", time: "11:00 AM", hour: 11 },
+  { id: 2, label: "Tarde", time: "2:00 PM", hour: 14 },
+];
+
+function getBlockedTimeSlots(): number[] {
+  const now = new Date();
+  const currentHour = now.getHours();
+  const blocked: number[] = [];
+  for (const slot of PICKUP_TIMES) {
+    // Block slots whose pickup hour has already passed (need at least 1h margin)
+    if (currentHour >= slot.hour) {
+      blocked.push(slot.id);
+    }
+  }
+  return blocked;
 }
 
 const PICKUP_HOTELS = [
@@ -94,9 +124,23 @@ export function CheckoutModal({
   const [pickupCustom, setPickupCustom] = useState("");
   const [pickupSearch, setPickupSearch] = useState("");
   const [isPickupDropdownOpen, setIsPickupDropdownOpen] = useState(false);
+  const [pickupTimeSlot, setPickupTimeSlot] = useState<number | null>(null);
+  const [blockedSlots, setBlockedSlots] = useState<number[]>([]);
   const pickupDropdownRef = useRef<HTMLDivElement>(null);
 
   const hasPrivateTransport = items.some((item) => item.id === "private-transport");
+
+  // Recalculate blocked time slots when entering step 3
+  useEffect(() => {
+    if (step === 3) {
+      const blocked = getBlockedTimeSlots();
+      setBlockedSlots(blocked);
+      // If previously selected slot is now blocked, clear it
+      if (pickupTimeSlot !== null && blocked.includes(pickupTimeSlot)) {
+        setPickupTimeSlot(null);
+      }
+    }
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredPickupHotels = useMemo(() => {
     if (!pickupSearch.trim()) return PICKUP_HOTELS;
@@ -184,6 +228,7 @@ export function CheckoutModal({
     setPickupHotel("");
     setPickupCustom("");
     setPickupSearch("");
+    setPickupTimeSlot(null);
     setErrors({});
     onClose();
   }
@@ -194,7 +239,10 @@ export function CheckoutModal({
       newErrors.pickup = "Selecciona tu hotel";
     }
     if (pickupMode === "custom" && !pickupCustom.trim()) {
-      newErrors.pickup = "Escribe tu ubicación de recogida";
+      newErrors.pickup = "Selecciona tu ubicación en el mapa";
+    }
+    if (pickupTimeSlot === null) {
+      newErrors.pickupTime = "Selecciona un horario de recogida";
     }
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
@@ -881,38 +929,76 @@ export function CheckoutModal({
                 </div>
               )}
 
-              {/* Custom location */}
+              {/* Custom location with map */}
               {pickupMode === "custom" && (
                 <div className="mb-5">
                   <label className="mb-1.5 block text-sm font-medium text-foreground">
-                    Escribe tu ubicación
+                    Selecciona tu ubicación en el mapa
                   </label>
-                  <div className="relative">
-                    <Navigation
-                      size={16}
-                      className="absolute left-3 top-3 text-muted-foreground"
-                    />
-                    <textarea
-                      value={pickupCustom}
-                      onChange={(e) => {
-                        setPickupCustom(e.target.value);
-                        setErrors({});
-                      }}
-                      placeholder="Ej: Airbnb en Los Corales, calle principal frente al supermercado..."
-                      rows={3}
-                      className={`w-full rounded-xl border bg-background py-3 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 resize-none ${
-                        errors.pickup ? "border-red-500" : "border-border"
-                      }`}
-                    />
-                  </div>
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    Sé lo más específico posible para que podamos encontrarte fácilmente
-                  </p>
+                  <PickupMap
+                    onLocationSelect={(_lat, _lng, address) => {
+                      setPickupCustom(address);
+                      setErrors({});
+                    }}
+                    selectedAddress={pickupCustom}
+                  />
                 </div>
               )}
 
               {errors.pickup && (
                 <p className="mb-4 text-xs text-red-500 text-center">{errors.pickup}</p>
+              )}
+
+              {/* Time slot selection */}
+              {(pickupHotel || pickupCustom) && (
+                <div className="mb-5">
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    <Clock size={14} className="inline mr-1.5 -mt-0.5" />
+                    Horario de recogida
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {PICKUP_TIMES.map((slot) => {
+                      const isBlocked = blockedSlots.includes(slot.id);
+                      const isSelected = pickupTimeSlot === slot.id;
+                      return (
+                        <button
+                          key={slot.id}
+                          type="button"
+                          disabled={isBlocked}
+                          onClick={() => {
+                            setPickupTimeSlot(slot.id);
+                            setErrors({});
+                          }}
+                          className={`relative rounded-xl border py-3 px-2 text-center transition-colors ${
+                            isBlocked
+                              ? "border-border bg-secondary/50 text-muted-foreground/40 cursor-not-allowed line-through"
+                              : isSelected
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-border text-foreground hover:bg-secondary"
+                          }`}
+                        >
+                          <p className="text-sm font-semibold">{slot.time}</p>
+                          <p className={`text-[10px] mt-0.5 ${
+                            isBlocked ? "text-muted-foreground/30" : isSelected ? "text-background/70" : "text-muted-foreground"
+                          }`}>{slot.label}</p>
+                          {isBlocked && (
+                            <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                              ✕
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {blockedSlots.length > 0 && (
+                    <p className="mt-2 text-[11px] text-muted-foreground text-center">
+                      Los horarios que ya pasaron no están disponibles
+                    </p>
+                  )}
+                  {errors.pickupTime && (
+                    <p className="mt-2 text-xs text-red-500 text-center">{errors.pickupTime}</p>
+                  )}
+                </div>
               )}
 
               {/* Confirm button */}
@@ -921,7 +1007,7 @@ export function CheckoutModal({
                 onClick={handlePickupConfirm}
                 className="flex w-full items-center justify-center gap-2 rounded-full bg-foreground py-3.5 text-sm font-semibold text-background transition-opacity hover:opacity-80"
               >
-                Confirmar ubicación
+                Confirmar recogida
                 <ChevronRight size={16} />
               </button>
             </div>
@@ -977,12 +1063,22 @@ export function CheckoutModal({
                     <span className="text-foreground">{items.length}</span>
                   </div>
                   {!hasPrivateTransport && (pickupHotel || pickupCustom) && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Recogida</span>
-                      <span className="text-foreground text-right max-w-[60%]">
-                        {pickupHotel || pickupCustom}
-                      </span>
-                    </div>
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Recogida</span>
+                        <span className="text-foreground text-right max-w-[60%]">
+                          {pickupHotel || pickupCustom}
+                        </span>
+                      </div>
+                      {pickupTimeSlot !== null && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Horario</span>
+                          <span className="text-foreground">
+                            {PICKUP_TIMES[pickupTimeSlot].time} ({PICKUP_TIMES[pickupTimeSlot].label})
+                          </span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
