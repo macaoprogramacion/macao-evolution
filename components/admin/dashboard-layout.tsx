@@ -1,11 +1,11 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { usePathname } from "next/navigation"
-import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X } from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -30,13 +30,52 @@ const navigation = [
   { name: "Templates", href: "/admin/templates", icon: FileText },
 ]
 
+// Role-based page access control
+// admin and both have access to everything
+const rolePageAccess: Record<string, string[]> = {
+  operaciones: ["/admin", "/admin/operation"],
+  chofer: ["/admin", "/admin/operation"],
+  contabilidad: ["/admin", "/admin/analytics", "/admin/products"],
+}
+
+function hasAccess(role: string, href: string): boolean {
+  if (role === "admin" || role === "both") return true
+  const allowed = rolePageAccess[role]
+  if (!allowed) return false
+  return allowed.some((path) => href === path || (href !== "/admin" && href.startsWith(path + "/")))
+}
+
+function getSessionRole(): { role: string; name: string } | null {
+  try {
+    const session = JSON.parse(sessionStorage.getItem("macao_auth_session") || "null")
+    if (session && session.active) {
+      return { role: session.role, name: session.name }
+    }
+  } catch {}
+  return null
+}
+
 interface DashboardLayoutProps {
   children: React.ReactNode
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [userRole, setUserRole] = useState<string>("admin")
+  const [userName, setUserName] = useState<string>("")
+
+  useEffect(() => {
+    const session = getSessionRole()
+    if (session) {
+      setUserRole(session.role)
+      setUserName(session.name)
+    }
+  }, [])
+
+  // Check if current page is accessible
+  const currentPageAllowed = hasAccess(userRole, pathname)
 
   return (
     <div className="min-h-screen bg-white">
@@ -90,7 +129,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Admin MOR</DropdownMenuLabel>
+              <DropdownMenuLabel>{userName || "Admin MOR"}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem>Profile</DropdownMenuItem>
               <DropdownMenuItem>Settings</DropdownMenuItem>
@@ -133,6 +172,22 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 const isActive = item.href === "/admin" 
                   ? pathname === "/admin" 
                   : pathname.startsWith(item.href)
+                const allowed = hasAccess(userRole, item.href)
+                
+                if (!allowed) {
+                  return (
+                    <div
+                      key={item.name}
+                      className="flex items-center w-full justify-start px-3 py-2 rounded-md text-sm font-medium text-gray-300 cursor-not-allowed"
+                      title="No tienes acceso a esta sección"
+                    >
+                      <item.icon className="w-4 h-4 mr-3" />
+                      {item.name}
+                      <Lock className="w-3 h-3 ml-auto" />
+                    </div>
+                  )
+                }
+
                 return (
                   <Link
                     key={item.name}
@@ -152,7 +207,22 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-w-0 p-4 md:p-6 lg:p-8 bg-gray-50 overflow-x-auto">{children}</main>
+        <main className="flex-1 min-w-0 p-4 md:p-6 lg:p-8 bg-gray-50 overflow-x-auto">
+          {currentPageAllowed ? children : (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <Lock className="w-8 h-8 text-gray-400" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Acceso restringido</h2>
+              <p className="text-gray-500 max-w-sm mb-6">
+                Tu rol de <span className="font-medium capitalize">{userRole}</span> no tiene permiso para acceder a esta sección.
+              </p>
+              <Button onClick={() => router.push("/admin")} variant="outline">
+                Volver al inicio
+              </Button>
+            </div>
+          )}
+        </main>
       </div>
     </div>
   )
