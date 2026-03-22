@@ -24,11 +24,18 @@ export default function PickupMap({ onLocationSelect, selectedAddress }: PickupM
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
+    // Inject Leaflet CSS via link tag
+    if (!document.querySelector('link[href*="leaflet"]')) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+    }
+
     let cancelled = false;
 
     async function initMap() {
       const L = (await import("leaflet")).default;
-      await import("leaflet/dist/leaflet.css");
 
       if (cancelled || !mapContainerRef.current) return;
 
