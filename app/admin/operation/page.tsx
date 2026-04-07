@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Search,
   Filter,
@@ -19,6 +19,8 @@ import {
   CheckCircle2,
   AlertCircle,
   XCircle,
+  Send,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -39,10 +41,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
+import { supabase } from "@/lib/supabase"
 
-// Data de reservas
-const reservations = [
+// Data de reservas (mock — todas inician como pendientes)
+const initialReservations = [
   {
     id: "RES-001",
     customerName: "John Smith",
@@ -59,7 +70,7 @@ const reservations = [
     channelUrl: "macaooffroad.com",
     channelColor: "#dc2626",
     date: "2026-02-15",
-    status: "confirmed",
+    status: "pending" as const,
   },
   {
     id: "RES-002",
@@ -77,7 +88,7 @@ const reservations = [
     channelUrl: "viator.com",
     channelColor: "#ef4444",
     date: "2026-02-15",
-    status: "confirmed",
+    status: "pending" as const,
   },
   {
     id: "RES-003",
@@ -95,7 +106,7 @@ const reservations = [
     channelUrl: "caribebuggy.com",
     channelColor: "#3b82f6",
     date: "2026-02-15",
-    status: "confirmed",
+    status: "pending" as const,
   },
   {
     id: "RES-004",
@@ -113,7 +124,7 @@ const reservations = [
     channelUrl: "getyourguide.com",
     channelColor: "#8b5cf6",
     date: "2026-02-16",
-    status: "pending",
+    status: "pending" as const,
   },
   {
     id: "RES-005",
@@ -131,7 +142,7 @@ const reservations = [
     channelUrl: "saonaislandpuntacana.com",
     channelColor: "#10b981",
     date: "2026-02-16",
-    status: "confirmed",
+    status: "pending" as const,
   },
   {
     id: "RES-006",
@@ -149,7 +160,7 @@ const reservations = [
     channelUrl: "macaooffroad.com",
     channelColor: "#dc2626",
     date: "2026-02-16",
-    status: "confirmed",
+    status: "pending" as const,
   },
   {
     id: "RES-007",
@@ -167,7 +178,7 @@ const reservations = [
     channelUrl: "viator.com",
     channelColor: "#ef4444",
     date: "2026-02-17",
-    status: "confirmed",
+    status: "pending" as const,
   },
   {
     id: "RES-008",
@@ -185,7 +196,7 @@ const reservations = [
     channelUrl: "caribebuggy.com",
     channelColor: "#3b82f6",
     date: "2026-02-17",
-    status: "pending",
+    status: "pending" as const,
   },
   // ── Reservas de Representantes (Sellers Portal) ──────────────────
   {
@@ -204,7 +215,7 @@ const reservations = [
     channelUrl: "Carlos Méndez — Excursiones PC",
     channelColor: "#d97706",
     date: "2026-02-15",
-    status: "confirmed",
+    status: "pending" as const,
   },
   {
     id: "REP-BK-002",
@@ -222,7 +233,7 @@ const reservations = [
     channelUrl: "Miguel Torres — Barceló Concierge",
     channelColor: "#d97706",
     date: "2026-02-15",
-    status: "pending",
+    status: "pending" as const,
   },
   {
     id: "REP-BK-003",
@@ -240,7 +251,7 @@ const reservations = [
     channelUrl: "Laura Peña — Independiente",
     channelColor: "#d97706",
     date: "2026-02-16",
-    status: "pending",
+    status: "pending" as const,
   },
   {
     id: "REP-BK-004",
@@ -258,16 +269,94 @@ const reservations = [
     channelUrl: "Ana Rodríguez — Viajes Dominicanos",
     channelColor: "#d97706",
     date: "2026-02-17",
-    status: "pending",
+    status: "pending" as const,
   },
 ]
 
+type Reservation = typeof initialReservations[number] & {
+  assignedChofer?: string
+}
+
+type Chofer = {
+  id: string
+  name: string
+  phone: string
+}
+
 export default function OperationPage() {
+  const [reservations, setReservations] = useState<Reservation[]>(
+    initialReservations.map((r) => ({ ...r }))
+  )
   const [searchQuery, setSearchQuery] = useState("")
   const [channelFilter, setChannelFilter] = useState("all")
   const [timeslotFilter, setTimeslotFilter] = useState("all")
   const [transportFilter, setTransportFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+
+  // Modal enviar a chofer
+  const [sendDialogOpen, setSendDialogOpen] = useState(false)
+  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null)
+  const [selectedChofer, setSelectedChofer] = useState<string>("")
+  const [choferes, setChoferes] = useState<Chofer[]>([])
+  const [loadingChoferes, setLoadingChoferes] = useState(false)
+  const [sending, setSending] = useState(false)
+
+  // Cargar choferes desde Supabase
+  const fetchChoferes = async () => {
+    setLoadingChoferes(true)
+    try {
+      const { data, error } = await supabase
+        .from("dashboard_users")
+        .select("id, name, phone")
+        .eq("role", "chofer")
+        .eq("active", true)
+      if (!error && data) {
+        setChoferes(data)
+      }
+    } catch (e) {
+      console.error("Error fetching choferes:", e)
+    } finally {
+      setLoadingChoferes(false)
+    }
+  }
+
+  // Abrir modal de enviar a chofer
+  const openSendDialog = (reservation: Reservation) => {
+    setSelectedReservation(reservation)
+    setSelectedChofer("")
+    setSendDialogOpen(true)
+    fetchChoferes()
+  }
+
+  // Confirmar envío a chofer
+  const confirmSendToChofer = async () => {
+    if (!selectedReservation || !selectedChofer) return
+    setSending(true)
+    // Simular envío (cuando haya backend real, aquí va el update en Supabase)
+    await new Promise((r) => setTimeout(r, 600))
+    setReservations((prev) =>
+      prev.map((r) =>
+        r.id === selectedReservation.id
+          ? { ...r, assignedChofer: selectedChofer }
+          : r
+      )
+    )
+    setSending(false)
+    setSendDialogOpen(false)
+    setSelectedReservation(null)
+    setSelectedChofer("")
+  }
+
+  // Cambiar estado de reserva
+  const toggleStatus = (id: string) => {
+    setReservations((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? { ...r, status: r.status === "pending" ? "confirmed" : r.status }
+          : r
+      )
+    )
+  }
 
   // Filtrar reservas
   const filteredReservations = reservations.filter((reservation) => {
@@ -306,17 +395,26 @@ export default function OperationPage() {
     }
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "confirmed":
-        return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Confirmada</Badge>
-      case "pending":
-        return <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">Pendiente</Badge>
-      case "cancelled":
-        return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Cancelada</Badge>
-      default:
-        return null
+  const getStatusButton = (reservation: Reservation) => {
+    if (reservation.status === "confirmed") {
+      return (
+        <Badge className="bg-green-100 text-green-700 hover:bg-green-100 cursor-default">
+          <CheckCircle2 className="w-3 h-3 mr-1" />
+          Confirmada
+        </Badge>
+      )
     }
+    return (
+      <Button
+        size="sm"
+        variant="outline"
+        className="border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-green-100 hover:text-green-700 hover:border-green-300"
+        onClick={() => toggleStatus(reservation.id)}
+      >
+        <AlertCircle className="w-3 h-3 mr-1" />
+        Pendiente
+      </Button>
+    )
   }
 
   return (
@@ -498,6 +596,7 @@ export default function OperationPage() {
                     <TableHead>Experiencia</TableHead>
                     <TableHead>Canal</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -591,7 +690,27 @@ export default function OperationPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">{getStatusBadge(reservation.status)}</div>
+                        <div className="flex items-center gap-2">{getStatusButton(reservation)}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {reservation.assignedChofer ? (
+                            <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                              <Send className="w-3 h-3 mr-1" />
+                              Enviada
+                            </Badge>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                              onClick={() => openSendDialog(reservation)}
+                            >
+                              <Send className="w-3 h-3 mr-1" />
+                              Enviar a Chofer
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -610,6 +729,94 @@ export default function OperationPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal: Enviar reserva a chofer */}
+      <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enviar Reserva a Chofer</DialogTitle>
+            <DialogDescription>
+              ¿Estás seguro de enviar esta reserva? Selecciona el chofer al que deseas asignarla.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedReservation && (
+            <div className="rounded-lg border p-3 bg-gray-50 space-y-1 text-sm">
+              <p className="font-medium text-gray-900">{selectedReservation.customerName}</p>
+              <p className="text-gray-600">{selectedReservation.hotel} — {selectedReservation.location}</p>
+              <p className="text-gray-600">{selectedReservation.date} · {selectedReservation.timeslot} · Recogida {selectedReservation.pickupTime}</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Seleccionar Chofer</label>
+            {loadingChoferes ? (
+              <div className="flex items-center gap-2 py-4 justify-center text-gray-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Cargando choferes...
+              </div>
+            ) : choferes.length === 0 ? (
+              <div className="text-sm text-gray-500 py-4 text-center">
+                No hay choferes registrados. Agrega choferes desde el panel de usuarios.
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {choferes.map((chofer) => (
+                  <button
+                    key={chofer.id}
+                    onClick={() => setSelectedChofer(chofer.id)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-colors ${
+                      selectedChofer === chofer.id
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                      selectedChofer === chofer.id
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 text-gray-700"
+                    }`}>
+                      {chofer.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900 text-sm">{chofer.name}</p>
+                      {chofer.phone && (
+                        <p className="text-xs text-gray-500">{chofer.phone}</p>
+                      )}
+                    </div>
+                    {selectedChofer === chofer.id && (
+                      <CheckCircle2 className="w-5 h-5 text-blue-600 ml-auto" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSendDialogOpen(false)} disabled={sending}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={confirmSendToChofer}
+              disabled={!selectedChofer || sending}
+            >
+              {sending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  Confirmar Envío
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   )
 }
