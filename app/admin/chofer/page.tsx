@@ -14,6 +14,9 @@ import {
   DoorOpen,
   PackageCheck,
   UserCheck,
+  MapPinned,
+  X,
+  ExternalLink,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -46,6 +49,8 @@ const confirmedReservations = [
     pickupPoint: "lobby" as const,
     experience: "Elite Couple",
     date: "2026-02-15",
+    lat: 18.6823,
+    lng: -68.4074,
   },
   {
     id: "RES-002",
@@ -60,6 +65,8 @@ const confirmedReservations = [
     pickupPoint: "lobby" as const,
     experience: "Elite Family",
     date: "2026-02-15",
+    lat: 18.6920,
+    lng: -68.4345,
   },
   {
     id: "RES-003",
@@ -74,6 +81,8 @@ const confirmedReservations = [
     pickupPoint: "barrera" as const,
     experience: "Apex Predator",
     date: "2026-02-15",
+    lat: 18.7575,
+    lng: -68.4550,
   },
   {
     id: "RES-005",
@@ -88,6 +97,8 @@ const confirmedReservations = [
     pickupPoint: "lobby" as const,
     experience: "ATV QUAD",
     date: "2026-02-16",
+    lat: 18.5120,
+    lng: -68.3725,
   },
   {
     id: "RES-006",
@@ -102,6 +113,8 @@ const confirmedReservations = [
     pickupPoint: "barrera" as const,
     experience: "Predator Family",
     date: "2026-02-16",
+    lat: 18.6700,
+    lng: -68.4095,
   },
   {
     id: "RES-007",
@@ -116,6 +129,8 @@ const confirmedReservations = [
     pickupPoint: "lobby" as const,
     experience: "THE COMBINED",
     date: "2026-02-17",
+    lat: 18.6580,
+    lng: -68.3850,
   },
   {
     id: "REP-BK-001",
@@ -130,6 +145,8 @@ const confirmedReservations = [
     pickupPoint: "lobby" as const,
     experience: "Elite Couple Experience",
     date: "2026-02-15",
+    lat: 18.6823,
+    lng: -68.4074,
   },
   {
     id: "REP-BK-004",
@@ -144,6 +161,8 @@ const confirmedReservations = [
     pickupPoint: "barrera" as const,
     experience: "Apex Predator",
     date: "2026-02-17",
+    lat: 18.6750,
+    lng: -68.4030,
   },
 ]
 
@@ -153,7 +172,7 @@ export default function ChoferDashboard() {
   const [selectedDate, setSelectedDate] = useState<string>("all")
   const [selectedTimeslot, setSelectedTimeslot] = useState<string>("all")
   const [cardStatus, setCardStatus] = useState<Record<string, "none" | "recibida" | "confirmada">>({})
-
+  const [mapOpen, setMapOpen] = useState<string | null>(null)
   const uniqueDates = useMemo(
     () => [...new Set(confirmedReservations.map((r) => r.date))].sort(),
     []
@@ -245,95 +264,123 @@ export default function ChoferDashboard() {
             <p className="text-sm mt-1">Ajusta los filtros o espera a que operaciones confirme nuevas reservas.</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {filtered.map((r) => {
               const status = cardStatus[r.id] || "none"
+              const isMapOpen = mapOpen === r.id
               return (
               <Card key={r.id} className={`border-l-4 shadow-sm ${
                 status === "confirmada" ? "border-l-blue-500 bg-blue-50/50" :
                 status === "recibida" ? "border-l-yellow-500 bg-yellow-50/50" :
                 "border-l-green-500"
               }`}>
-                <CardContent className="p-4 space-y-3">
-                  {/* Row 1: Pickup time + name (grande) */}
+                <CardContent className="p-5 space-y-4">
+                  {/* Row 1: Pickup time BIG on top, then name */}
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-red-600 text-white rounded-lg px-3 py-1.5 text-lg font-bold leading-none">
+                    <div>
+                      <div className="bg-red-600 text-white rounded-lg px-4 py-2 text-2xl font-bold leading-none inline-block mb-2">
                         {r.pickupTime}
                       </div>
-                      <div>
-                        <p className="font-bold text-xl leading-tight">{r.customerName}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{r.id}</p>
-                      </div>
+                      <p className="font-bold text-2xl leading-tight">{r.customerName}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{r.id}</p>
                     </div>
-                    <Badge variant="outline" className="shrink-0 text-xs">
-                      <Users className="h-3 w-3 mr-1" />
+                    <Badge variant="outline" className="shrink-0 text-sm px-2.5 py-1">
+                      <Users className="h-3.5 w-3.5 mr-1" />
                       {r.guests}
                     </Badge>
                   </div>
 
                   {/* Row 2: Hotel + location */}
-                  <div className="flex items-start gap-2 text-sm">
-                    <MapPin className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                  <div className="flex items-start gap-2">
+                    <MapPin className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
                     <div>
-                      <p className="font-medium">{r.hotel}</p>
-                      <p className="text-muted-foreground text-xs">{r.location}</p>
+                      <p className="font-semibold text-base">{r.hotel}</p>
+                      <p className="text-muted-foreground text-sm">{r.location}</p>
                     </div>
                   </div>
 
-                  {/* Row 3: Details chips */}
-                  <div className="flex flex-wrap gap-1.5">
+                  {/* Row 3: Big badges — lobby/barrera + turno + adultos + niños */}
+                  <div className="flex flex-wrap gap-2">
                     <Badge
                       variant="secondary"
-                      className={`text-xs gap-1 ${
+                      className={`text-sm gap-1.5 px-3 py-1.5 ${
                         r.pickupPoint === "lobby"
                           ? "bg-emerald-100 text-emerald-700"
                           : "bg-orange-100 text-orange-700"
                       }`}
                     >
-                      <DoorOpen className="h-3 w-3" />
+                      <DoorOpen className="h-4 w-4" />
                       {r.pickupPoint === "lobby" ? "Lobby" : "Barrera"}
                     </Badge>
-                    <Badge variant="secondary" className="text-xs gap-1">
-                      <Clock className="h-3 w-3" />
+                    <Badge variant="secondary" className="text-sm gap-1.5 px-3 py-1.5">
+                      <Clock className="h-4 w-4" />
                       {r.timeslot}
                     </Badge>
-                    <Badge variant="secondary" className="text-xs">
-                      {r.experience}
-                    </Badge>
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge variant="secondary" className="text-sm px-3 py-1.5">
                       {formatDate(r.date)}
                     </Badge>
-                    <Badge variant="secondary" className="text-xs gap-1 bg-blue-100 text-blue-700">
-                      <Users className="h-3 w-3" />
+                    <Badge variant="secondary" className="text-sm gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-700">
+                      <Users className="h-4 w-4" />
                       {r.guests - r.children} adulto{(r.guests - r.children) !== 1 ? "s" : ""}
                     </Badge>
                     {r.children > 0 && (
-                      <Badge variant="secondary" className="text-xs gap-1 bg-pink-100 text-pink-700">
-                        <Baby className="h-3 w-3" />
+                      <Badge variant="secondary" className="text-sm gap-1.5 px-3 py-1.5 bg-pink-100 text-pink-700">
+                        <Baby className="h-4 w-4" />
                         {r.children} niño{r.children > 1 ? "s" : ""}
                       </Badge>
                     )}
                   </div>
 
-                  {/* Row 4: Phone — big tap target */}
+                  {/* Row 4: Phone */}
                   {r.phone !== "—" && (
                     <a
                       href={`tel:${r.phone.replace(/\s/g, "")}`}
-                      className="flex items-center gap-2 text-sm text-blue-600 font-medium py-1"
+                      className="flex items-center gap-2 text-base text-blue-600 font-medium py-1"
                     >
-                      <Phone className="h-4 w-4" />
+                      <Phone className="h-5 w-5" />
                       {r.phone}
                     </a>
                   )}
 
-                  {/* Row 5: Action buttons */}
+                  {/* Row 5: Ubicación Exacta */}
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2 h-11 text-sm font-semibold"
+                    onClick={() => setMapOpen(isMapOpen ? null : r.id)}
+                  >
+                    <MapPinned className="h-4 w-4 text-red-500" />
+                    {isMapOpen ? "Cerrar Mapa" : "Ubicación Exacta"}
+                  </Button>
+
+                  {isMapOpen && (
+                    <div className="space-y-0 rounded-lg overflow-hidden border border-gray-200">
+                      <iframe
+                        className="w-full h-56 rounded-t-lg"
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                        src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${r.lat},${r.lng}&zoom=16`}
+                        allowFullScreen
+                      />
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${r.lat},${r.lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-colors"
+                      >
+                        <Navigation className="h-4 w-4" />
+                        Cómo Llegar
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Row 6: Action buttons */}
                   <div className="flex gap-2 pt-1">
                     <Button
                       size="sm"
                       variant={status === "recibida" || status === "confirmada" ? "default" : "outline"}
                       disabled={status === "recibida" || status === "confirmada"}
-                      className={`flex-1 text-xs h-10 gap-1.5 ${
+                      className={`flex-1 text-xs h-11 gap-1.5 ${
                         status === "recibida" || status === "confirmada"
                           ? "bg-yellow-500 text-white opacity-100"
                           : ""
@@ -352,7 +399,7 @@ export default function ChoferDashboard() {
                       size="sm"
                       variant={status === "confirmada" ? "default" : "outline"}
                       disabled={status !== "recibida"}
-                      className={`flex-1 text-xs h-10 gap-1.5 ${
+                      className={`flex-1 text-xs h-11 gap-1.5 ${
                         status === "confirmada"
                           ? "bg-blue-600 text-white opacity-100"
                           : ""

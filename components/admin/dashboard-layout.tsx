@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation } from "lucide-react"
+import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -65,6 +65,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [userName, setUserName] = useState<string>("")
 
@@ -166,7 +167,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Sidebar */}
         <aside className={`${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0 fixed lg:sticky top-16 left-0 z-20 w-60 shrink-0 border-r border-gray-200 bg-white h-[calc(100vh-4rem)] overflow-y-auto transition-transform duration-200 ease-in-out`}>
+        } ${sidebarCollapsed ? "lg:-translate-x-full lg:w-0 lg:border-0" : "lg:translate-x-0 lg:w-60"} fixed lg:sticky top-16 left-0 z-20 w-60 shrink-0 border-r border-gray-200 bg-white h-[calc(100vh-4rem)] overflow-y-auto transition-all duration-200 ease-in-out`}>
           <div className="p-4">
             <div className="relative mb-6">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -210,6 +211,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
         {/* Main Content */}
         <main className="flex-1 min-w-0 p-4 md:p-6 lg:p-8 bg-gray-50 overflow-x-auto">
+          {/* Desktop sidebar toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden lg:flex mb-2 -mt-2 shrink-0"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          >
+            {sidebarCollapsed ? <PanelLeft className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+          </Button>
           {currentPageAllowed ? children : (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
