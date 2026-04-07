@@ -304,6 +304,10 @@ export default function ChoferDashboard() {
                     <Badge variant="secondary" className="text-xs">
                       {formatDate(r.date)}
                     </Badge>
+                    <Badge variant="secondary" className="text-xs gap-1 bg-blue-100 text-blue-700">
+                      <Users className="h-3 w-3" />
+                      {r.guests - r.children} adulto{(r.guests - r.children) !== 1 ? "s" : ""}
+                    </Badge>
                     {r.children > 0 && (
                       <Badge variant="secondary" className="text-xs gap-1 bg-pink-100 text-pink-700">
                         <Baby className="h-3 w-3" />
@@ -327,16 +331,17 @@ export default function ChoferDashboard() {
                   <div className="flex gap-2 pt-1">
                     <Button
                       size="sm"
-                      variant={status === "recibida" ? "default" : "outline"}
+                      variant={status === "recibida" || status === "confirmada" ? "default" : "outline"}
+                      disabled={status === "recibida" || status === "confirmada"}
                       className={`flex-1 text-xs h-10 gap-1.5 ${
-                        status === "recibida"
-                          ? "bg-yellow-500 hover:bg-yellow-600 text-white"
+                        status === "recibida" || status === "confirmada"
+                          ? "bg-yellow-500 text-white opacity-100"
                           : ""
                       }`}
                       onClick={() =>
                         setCardStatus((prev) => ({
                           ...prev,
-                          [r.id]: prev[r.id] === "recibida" ? "none" : "recibida",
+                          [r.id]: "recibida",
                         }))
                       }
                     >
@@ -346,15 +351,16 @@ export default function ChoferDashboard() {
                     <Button
                       size="sm"
                       variant={status === "confirmada" ? "default" : "outline"}
+                      disabled={status !== "recibida"}
                       className={`flex-1 text-xs h-10 gap-1.5 ${
                         status === "confirmada"
-                          ? "bg-blue-600 hover:bg-blue-700 text-white"
+                          ? "bg-blue-600 text-white opacity-100"
                           : ""
                       }`}
                       onClick={() =>
                         setCardStatus((prev) => ({
                           ...prev,
-                          [r.id]: prev[r.id] === "confirmada" ? "none" : "confirmada",
+                          [r.id]: "confirmada",
                         }))
                       }
                     >
