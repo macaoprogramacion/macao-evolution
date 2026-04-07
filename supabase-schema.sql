@@ -53,6 +53,9 @@ CREATE TYPE reservation_channel AS ENUM ('website', 'whatsapp', 'phone', 'walk_i
 -- Tipo de transporte
 CREATE TYPE transport_type AS ENUM ('included', 'self', 'hotel_shuttle');
 
+-- Punto de recogida
+CREATE TYPE pickup_point_type AS ENUM ('lobby', 'barrera');
+
 
 -- ╔══════════════════════════════════════════════════════════════════════════╗
 -- ║  2. TABLAS — USUARIOS DEL DASHBOARD                                     ║
@@ -451,29 +454,37 @@ CREATE INDEX idx_workflows_status ON workflows (status);
 -- ╚══════════════════════════════════════════════════════════════════════════╝
 
 CREATE TABLE reservations (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  customer_name   TEXT NOT NULL,
-  phone           TEXT,
-  email           TEXT,
-  hotel           TEXT,
-  location        TEXT,
-  timeslot        TEXT,                   -- "AM", "PM"
-  guests          INT NOT NULL DEFAULT 1,
-  pickup_time     TEXT,
-  transport_type  transport_type DEFAULT 'included',
-  experience      TEXT,
-  channel         reservation_channel DEFAULT 'website',
-  date            DATE NOT NULL DEFAULT CURRENT_DATE,
-  status          reservation_status NOT NULL DEFAULT 'pending',
-  notes           TEXT,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_name         TEXT NOT NULL,
+  phone                 TEXT,
+  email                 TEXT,
+  hotel                 TEXT,
+  location              TEXT,
+  timeslot              TEXT,                   -- "8 AM", "11 AM", "3 PM"
+  guests                INT NOT NULL DEFAULT 1,
+  children              INT NOT NULL DEFAULT 0,
+  pickup_time           TEXT,
+  pickup_point          pickup_point_type DEFAULT 'lobby',
+  transport_type        transport_type DEFAULT 'included',
+  experience            TEXT,
+  channel               reservation_channel DEFAULT 'website',
+  channel_url           TEXT,                   -- URL o nombre del canal (ej: "macaooffroad.com")
+  channel_color         TEXT,                   -- Color hex del canal (ej: "#dc2626")
+  date                  DATE NOT NULL DEFAULT CURRENT_DATE,
+  status                reservation_status NOT NULL DEFAULT 'pending',
+  assigned_chofer_id    UUID REFERENCES dashboard_users(id),
+  assigned_chofer_name  TEXT,
+  assigned_at           TIMESTAMPTZ,
+  notes                 TEXT,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_reservations_date ON reservations (date);
 CREATE INDEX idx_reservations_status ON reservations (status);
 CREATE INDEX idx_reservations_channel ON reservations (channel);
 CREATE INDEX idx_reservations_timeslot ON reservations (timeslot);
+CREATE INDEX idx_reservations_chofer ON reservations (assigned_chofer_id) WHERE assigned_chofer_id IS NOT NULL;
 
 
 -- ╔══════════════════════════════════════════════════════════════════════════╗
@@ -791,6 +802,144 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
+-- ── Cambiar estado de reserva (Pendiente → Confirmada) ─────────────
+-- Página: /admin/operation
+CREATE OR REPLACE FUNCTION update_reservation_status(
+  p_reservation_id UUID,
+  p_status reservation_status
+)
+RETURNS reservations AS $$
+DECLARE
+  result reservations;
+BEGIN
+  UPDATE reservations
+     SET status = p_status,
+         updated_at = NOW()
+   WHERE id = p_reservation_id
+  RETURNING * INTO result;
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- ── Asignar reserva a un chofer ────────────────────────────────────
+-- Página: /admin/operation → modal "Enviar a Chofer"
+CREATE OR REPLACE FUNCTION assign_reservation_to_chofer(
+  p_reservation_id UUID,
+  p_chofer_id UUID
+)
+RETURNS reservations AS $$
+DECLARE
+  result reservations;
+  chofer_name TEXT;
+BEGIN
+  -- Obtener nombre del chofer
+  SELECT name INTO chofer_name
+    FROM dashboard_users
+   WHERE id = p_chofer_id AND role = 'chofer' AND active = TRUE;
+
+  IF chofer_name IS NULL THEN
+    RAISE EXCEPTION 'Chofer no encontrado o inactivo';
+  END IF;
+
+  UPDATE reservations
+     SET assigned_chofer_id = p_chofer_id,
+         assigned_chofer_name = chofer_name,
+         assigned_at = NOW(),
+         updated_at = NOW()
+   WHERE id = p_reservation_id
+  RETURNING * INTO result;
+
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- ── Obtener reservas asignadas a un chofer ─────────────────────────
+-- Página: /admin/chofer
+CREATE OR REPLACE FUNCTION get_chofer_reservations(p_chofer_id UUID)
+RETURNS JSON AS $$
+DECLARE
+  result JSON;
+BEGIN
+  SELECT COALESCE(json_agg(row_to_json(t)), '[]'::JSON) INTO result
+  FROM (
+    SELECT
+      r.id,
+      r.customer_name,
+      r.phone,
+      r.email,
+      r.hotel,
+      r.location,
+      r.timeslot,
+      r.guests,
+      r.children,
+      r.pickup_time,
+      r.pickup_point,
+      r.transport_type,
+      r.experience,
+      r.channel,
+      r.date,
+      r.status,
+      r.assigned_at
+    FROM reservations r
+    WHERE r.assigned_chofer_id = p_chofer_id
+    ORDER BY r.date, r.pickup_time
+  ) t;
+
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- ── Obtener choferes activos ───────────────────────────────────────
+-- Página: /admin/operation → modal "Enviar a Chofer"
+CREATE OR REPLACE FUNCTION get_active_choferes()
+RETURNS JSON AS $$
+DECLARE
+  result JSON;
+BEGIN
+  SELECT COALESCE(json_agg(json_build_object(
+    'id', du.id,
+    'name', du.name,
+    'phone', du.phone,
+    'assigned_count', (
+      SELECT COUNT(*)
+      FROM reservations r
+      WHERE r.assigned_chofer_id = du.id
+        AND r.date = CURRENT_DATE
+    )
+  )), '[]'::JSON) INTO result
+  FROM dashboard_users du
+  WHERE du.role = 'chofer' AND du.active = TRUE
+  ORDER BY du.name;
+
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- ── Resumen de operación del día ───────────────────────────────────
+-- Página: /admin/operation (stats cards)
+CREATE OR REPLACE FUNCTION get_operation_stats(p_date DATE DEFAULT CURRENT_DATE)
+RETURNS JSON AS $$
+DECLARE
+  result JSON;
+BEGIN
+  SELECT json_build_object(
+    'total', (SELECT COUNT(*) FROM reservations WHERE date = p_date),
+    'confirmed', (SELECT COUNT(*) FROM reservations WHERE date = p_date AND status = 'confirmed'),
+    'pending', (SELECT COUNT(*) FROM reservations WHERE date = p_date AND status = 'pending'),
+    'assigned', (SELECT COUNT(*) FROM reservations WHERE date = p_date AND assigned_chofer_id IS NOT NULL),
+    'totalGuests', (SELECT COALESCE(SUM(guests), 0) FROM reservations WHERE date = p_date),
+    'totalChildren', (SELECT COALESCE(SUM(children), 0) FROM reservations WHERE date = p_date)
+  ) INTO result;
+
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
 -- ╔══════════════════════════════════════════════════════════════════════════╗
 -- ║  23. VISTAS — CONSULTAS PRECALCULADAS                                  ║
 -- ╚══════════════════════════════════════════════════════════════════════════╝
@@ -831,9 +980,42 @@ SELECT
     WHEN r.status = 'in_progress' THEN 'En Progreso'
     WHEN r.status = 'completed' THEN 'Completada'
     WHEN r.status = 'cancelled' THEN 'Cancelada'
-  END AS status_label
+  END AS status_label,
+  CASE
+    WHEN r.assigned_chofer_id IS NOT NULL THEN TRUE
+    ELSE FALSE
+  END AS is_assigned,
+  du.name AS chofer_name,
+  du.phone AS chofer_phone
 FROM reservations r
+LEFT JOIN dashboard_users du ON du.id = r.assigned_chofer_id
 ORDER BY r.date DESC, r.pickup_time;
+
+-- Vista: Reservas asignadas a un chofer (/admin/chofer)
+CREATE OR REPLACE VIEW chofer_reservations AS
+SELECT
+  r.id,
+  r.customer_name,
+  r.phone,
+  r.email,
+  r.hotel,
+  r.location,
+  r.timeslot,
+  r.guests,
+  r.children,
+  r.pickup_time,
+  r.pickup_point,
+  r.transport_type,
+  r.experience,
+  r.channel,
+  r.date,
+  r.status,
+  r.assigned_chofer_id,
+  r.assigned_chofer_name,
+  r.assigned_at
+FROM reservations r
+WHERE r.assigned_chofer_id IS NOT NULL
+ORDER BY r.date, r.pickup_time;
 
 
 -- ╔══════════════════════════════════════════════════════════════════════════╗
@@ -894,6 +1076,26 @@ INSERT INTO representatives (id, name, phone, email, company, type, hotel, commi
 -- ── Usuario maestro (admin) ──────────────────────────────────────────
 INSERT INTO dashboard_users (id, name, email, phone, pin, role, active) VALUES
   (uuid_generate_v4(), 'Admin Master', 'admin@macaoevolution.com', '+1 809-000-0000', '000000', 'admin', TRUE);
+
+-- ── Usuarios chofer (ejemplo) ──────────────────────────────────────
+INSERT INTO dashboard_users (id, name, email, phone, pin, role, active) VALUES
+  (uuid_generate_v4(), 'Juan Pérez',    'juan@macaoevolution.com',   '+1 809-555-7001', '111111', 'chofer', TRUE),
+  (uuid_generate_v4(), 'Pedro Martínez', 'pedro@macaoevolution.com', '+1 809-555-7002', '222222', 'chofer', TRUE);
+
+-- ── Usuario operaciones (ejemplo) ──────────────────────────────────
+INSERT INTO dashboard_users (id, name, email, phone, pin, role, active) VALUES
+  (uuid_generate_v4(), 'María López', 'maria@macaoevolution.com', '+1 809-555-8001', '333333', 'operaciones', TRUE);
+
+-- ── Reservas de ejemplo (/admin/operation) ──────────────────────────
+INSERT INTO reservations (customer_name, phone, email, hotel, location, timeslot, guests, children, pickup_time, pickup_point, experience, channel, channel_url, channel_color, date, status) VALUES
+  ('John Smith',          '+1 809-555-0123', 'john.smith@email.com',       'Hard Rock Hotel & Casino', 'Punta Cana', '8 AM',  2, 0, '7:30 AM',  'lobby',   'Elite Couple',         'website', 'macaooffroad.com',          '#dc2626', CURRENT_DATE, 'pending'),
+  ('María García',        '+1 829-555-0456', 'maria.garcia@email.com',     'Barceló Bávaro Palace',    'Bávaro',     '11 AM', 4, 2, '10:15 AM', 'lobby',   'Elite Family',         'ota',     'viator.com',                '#ef4444', CURRENT_DATE, 'pending'),
+  ('Robert Johnson',      '+1 849-555-0789', 'r.johnson@email.com',        'Dreams Macao Beach',       'Macao',      '3 PM',  2, 0, '2:30 PM',  'barrera', 'Apex Predator',        'website', 'caribebuggy.com',           '#3b82f6', CURRENT_DATE, 'pending'),
+  ('Sophie Laurent',      '+33 6-55-55-0123','sophie.laurent@email.fr',    'Royalton Punta Cana',      'Punta Cana', '8 AM',  3, 0, '7:45 AM',  'lobby',   'Flintstone Era',       'ota',     'getyourguide.com',          '#8b5cf6', CURRENT_DATE + 1, 'pending'),
+  ('Carlos Rodríguez',    '+1 809-555-3456', 'carlos.r@email.com',         'Secrets Cap Cana',         'Cap Cana',   '11 AM', 2, 0, '10:30 AM', 'lobby',   'ATV QUAD',             'website', 'saonaislandpuntacana.com',  '#10b981', CURRENT_DATE + 1, 'pending'),
+  ('Anna Müller',         '+49 151-555-7890','anna.mueller@email.de',      'Majestic Elegance',        'Punta Cana', '3 PM',  5, 3, '2:15 PM',  'barrera', 'Predator Family',      'website', 'macaooffroad.com',          '#dc2626', CURRENT_DATE + 1, 'pending'),
+  ('James Wilson',        '+1 829-555-9012', 'j.wilson@email.com',         'Excellence Punta Cana',    'Punta Cana', '8 AM',  2, 0, '7:30 AM',  'lobby',   'THE COMBINED',         'ota',     'viator.com',                '#ef4444', CURRENT_DATE + 2, 'pending'),
+  ('Isabella Costa',      '+55 11-555-3456', 'isabella.costa@email.com.br','Paradisus Palma Real',     'Bávaro',     '11 AM', 4, 1, '10:00 AM', 'lobby',   'Flintstone Family',    'website', 'caribebuggy.com',           '#3b82f6', CURRENT_DATE + 2, 'pending');
 
 -- ── Productos (catálogo del sitio web) ──────────────────────────────
 INSERT INTO products (slug, title, description, capacity, price, original_price, has_discount, duration, category, image, highlights, gallery, itinerary, general_info, active) VALUES
