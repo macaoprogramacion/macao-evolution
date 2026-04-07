@@ -254,7 +254,9 @@ export default function ChoferDashboard() {
               const status = cardStatus[r.id] || "none"
               const isMapOpen = mapOpen === r.id
               const hotelInfo = findHotel(r.hotel)
-              const mapQuery = encodeURIComponent(hotelInfo ? hotelInfo.name : `${r.hotel}, ${r.location}, Dominican Republic`)
+              const searchName = hotelInfo ? hotelInfo.name : r.hotel
+              const fullQuery = `${searchName}, ${r.location}, Punta Cana, Dominican Republic`
+              const mapQuery = encodeURIComponent(fullQuery)
               return (
               <Card key={r.id} className={`border-l-4 shadow-sm ${
                 status === "confirmada" ? "border-l-blue-500 bg-blue-50/50" :
@@ -345,7 +347,7 @@ export default function ChoferDashboard() {
                         className="w-full h-56 rounded-t-lg"
                         loading="lazy"
                         referrerPolicy="no-referrer-when-downgrade"
-                        src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${mapQuery}&zoom=16`}
+                        src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${mapQuery}&zoom=17`}
                         allowFullScreen
                       />
                       <a
@@ -358,7 +360,7 @@ export default function ChoferDashboard() {
                         Ver en Google Maps
                       </a>
                       <a
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${mapQuery}`}
+                        href={hotelInfo ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(hotelInfo.name + ', Punta Cana, Dominican Republic')}` : `https://www.google.com/maps/dir/?api=1&destination=${mapQuery}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-colors"
