@@ -112,7 +112,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             billing: '/photographer/billing',
             photographer: '/photographer/dashboard',
             operaciones: '/admin/operation',
-            chofer: '/admin/operation',
+            chofer: '/admin/chofer',
             contabilidad: '/admin/analytics',
           };
           router.push(roleRoutes[user.role] || '/admin');

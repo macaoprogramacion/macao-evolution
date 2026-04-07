@@ -45,7 +45,7 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
           // Redirect restricted roles to their allowed page on initial load
           const roleDefaultPage = {
             operaciones: '/admin/operation',
-            chofer: '/admin/operation',
+            chofer: '/admin/chofer',
             contabilidad: '/admin/analytics',
           }
           const defaultPage = roleDefaultPage[session.role]
@@ -108,7 +108,7 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
         billing: '/photographer/billing',
         photographer: '/photographer/dashboard',
         operaciones: '/admin/operation',
-        chofer: '/admin/operation',
+        chofer: '/admin/chofer',
         contabilidad: '/admin/analytics',
       }
       router.push(roleRoutes[user.role] || '/admin')
@@ -122,7 +122,7 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
     // Redirect restricted roles to their specific page after login
     const roleDefaultPage = {
       operaciones: '/admin/operation',
-      chofer: '/admin/operation',
+      chofer: '/admin/chofer',
       contabilidad: '/admin/analytics',
     }
     const defaultPage = roleDefaultPage[user.role]
