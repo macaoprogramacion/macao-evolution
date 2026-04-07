@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/dialog"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { supabase } from "@/lib/supabase"
+import { saveSentReservation } from "@/lib/reservation-store"
 
 // Data de reservas (mock — todas inician como pendientes)
 const initialReservations = [
@@ -332,8 +333,33 @@ export default function OperationPage() {
   const confirmSendToChofer = async () => {
     if (!selectedReservation || !selectedChofer) return
     setSending(true)
-    // Simular envío (cuando haya backend real, aquí va el update en Supabase)
-    await new Promise((r) => setTimeout(r, 600))
+
+    const choferData = choferes.find((c) => c.id === selectedChofer)
+
+    // Guardar en localStorage para que el chofer la vea
+    saveSentReservation({
+      id: selectedReservation.id,
+      customerName: selectedReservation.customerName,
+      phone: selectedReservation.phone,
+      email: selectedReservation.email,
+      hotel: selectedReservation.hotel,
+      location: selectedReservation.location,
+      timeslot: selectedReservation.timeslot,
+      guests: selectedReservation.guests,
+      children: 0,
+      pickupTime: selectedReservation.pickupTime,
+      pickupPoint: "lobby",
+      transportType: selectedReservation.transportType,
+      experience: selectedReservation.experience,
+      channel: selectedReservation.channel,
+      date: selectedReservation.date,
+      choferId: selectedChofer,
+      choferName: choferData?.name || "",
+      sentAt: new Date().toISOString(),
+    })
+
+    // Simular delay (cuando haya backend real, aquí va el update en Supabase)
+    await new Promise((r) => setTimeout(r, 400))
     setReservations((prev) =>
       prev.map((r) =>
         r.id === selectedReservation.id

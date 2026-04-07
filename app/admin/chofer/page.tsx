@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   MapPin,
   Clock,
@@ -17,6 +17,7 @@ import {
   MapPinned,
   X,
   ExternalLink,
+  Inbox,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -30,141 +31,40 @@ import {
 } from "@/components/ui/select"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { findHotel } from "@/lib/hotel-locations"
-
-/* ──────────────────────────────────────────────────────────────
-   DATOS — Solo las reservas CONFIRMADAS por operaciones llegan aquí.
-   Cuando haya backend, este array se sustituye por un fetch filtrado
-   con status = "confirmed".
-   ────────────────────────────────────────────────────────────── */
-const confirmedReservations = [
-  {
-    id: "RES-001",
-    customerName: "John Smith",
-    phone: "+1 809-555-0123",
-    hotel: "Hard Rock Hotel & Casino",
-    location: "Punta Cana",
-    timeslot: "8 AM",
-    guests: 2,
-    children: 0,
-    pickupTime: "7:30 AM",
-    pickupPoint: "lobby" as const,
-    experience: "Elite Couple",
-    date: "2026-02-15",
-  },
-  {
-    id: "RES-002",
-    customerName: "María García",
-    phone: "+1 829-555-0456",
-    hotel: "Barceló Bávaro Palace",
-    location: "Bávaro",
-    timeslot: "11 AM",
-    guests: 4,
-    children: 2,
-    pickupTime: "10:15 AM",
-    pickupPoint: "lobby" as const,
-    experience: "Elite Family",
-    date: "2026-02-15",
-  },
-  {
-    id: "RES-003",
-    customerName: "Robert Johnson",
-    phone: "+1 849-555-0789",
-    hotel: "Dreams Macao Beach",
-    location: "Macao",
-    timeslot: "3 PM",
-    guests: 2,
-    children: 0,
-    pickupTime: "2:30 PM",
-    pickupPoint: "barrera" as const,
-    experience: "Apex Predator",
-    date: "2026-02-15",
-  },
-  {
-    id: "RES-005",
-    customerName: "Carlos Rodríguez",
-    phone: "+1 809-555-3456",
-    hotel: "Secrets Cap Cana",
-    location: "Cap Cana",
-    timeslot: "11 AM",
-    guests: 2,
-    children: 0,
-    pickupTime: "10:30 AM",
-    pickupPoint: "lobby" as const,
-    experience: "ATV QUAD",
-    date: "2026-02-16",
-  },
-  {
-    id: "RES-006",
-    customerName: "Anna Müller",
-    phone: "+49 151-555-7890",
-    hotel: "Majestic Elegance",
-    location: "Punta Cana",
-    timeslot: "3 PM",
-    guests: 5,
-    children: 3,
-    pickupTime: "2:15 PM",
-    pickupPoint: "barrera" as const,
-    experience: "Predator Family",
-    date: "2026-02-16",
-  },
-  {
-    id: "RES-007",
-    customerName: "James Wilson",
-    phone: "+1 829-555-9012",
-    hotel: "Excellence Punta Cana",
-    location: "Punta Cana",
-    timeslot: "8 AM",
-    guests: 2,
-    children: 0,
-    pickupTime: "7:30 AM",
-    pickupPoint: "lobby" as const,
-    experience: "THE COMBINED",
-    date: "2026-02-17",
-  },
-  {
-    id: "REP-BK-001",
-    customerName: "James Wilson",
-    phone: "—",
-    hotel: "Hard Rock Hotel & Casino",
-    location: "Punta Cana",
-    timeslot: "8 AM",
-    guests: 2,
-    children: 0,
-    pickupTime: "7:30 AM",
-    pickupPoint: "lobby" as const,
-    experience: "Elite Couple Experience",
-    date: "2026-02-15",
-  },
-  {
-    id: "REP-BK-004",
-    customerName: "David & Sarah Brown",
-    phone: "—",
-    hotel: "Secrets Royal Beach",
-    location: "Punta Cana",
-    timeslot: "3 PM",
-    guests: 2,
-    children: 0,
-    pickupTime: "2:45 PM",
-    pickupPoint: "barrera" as const,
-    experience: "Apex Predator",
-    date: "2026-02-17",
-  },
-]
+import { getReservationsForChofer, type SentReservation } from "@/lib/reservation-store"
 
 /* ──────────────────────────────────────────────────────────────── */
 
 export default function ChoferDashboard() {
+  const [reservations, setReservations] = useState<SentReservation[]>([])
   const [selectedDate, setSelectedDate] = useState<string>("all")
   const [selectedTimeslot, setSelectedTimeslot] = useState<string>("all")
   const [cardStatus, setCardStatus] = useState<Record<string, "none" | "recibida" | "confirmada">>({})
   const [mapOpen, setMapOpen] = useState<string | null>(null)
+
+  // Leer reservas enviadas a este chofer desde localStorage
+  const loadReservations = () => {
+    try {
+      const session = JSON.parse(sessionStorage.getItem("macao_auth_session") || "null")
+      if (session?.id) {
+        setReservations(getReservationsForChofer(session.id))
+      }
+    } catch {
+      setReservations([])
+    }
+  }
+
+  useEffect(() => {
+    loadReservations()
+  }, [])
+
   const uniqueDates = useMemo(
-    () => [...new Set(confirmedReservations.map((r) => r.date))].sort(),
-    []
+    () => [...new Set(reservations.map((r) => r.date))].sort(),
+    [reservations]
   )
 
   const filtered = useMemo(() => {
-    let list = confirmedReservations
+    let list = reservations
     if (selectedDate !== "all") list = list.filter((r) => r.date === selectedDate)
     if (selectedTimeslot !== "all") list = list.filter((r) => r.timeslot === selectedTimeslot)
     return list.sort((a, b) => {
@@ -172,7 +72,7 @@ export default function ChoferDashboard() {
       if (a.date !== b.date) return a.date.localeCompare(b.date)
       return a.pickupTime.localeCompare(b.pickupTime)
     })
-  }, [selectedDate, selectedTimeslot])
+  }, [reservations, selectedDate, selectedTimeslot])
 
   const totalGuests = filtered.reduce((sum, r) => sum + r.guests, 0)
 
@@ -195,7 +95,7 @@ export default function ChoferDashboard() {
               Reservas confirmadas por operaciones
             </p>
           </div>
-          <Button variant="outline" size="icon" className="shrink-0" onClick={() => window.location.reload()}>
+          <Button variant="outline" size="icon" className="shrink-0" onClick={loadReservations}>
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
@@ -244,9 +144,9 @@ export default function ChoferDashboard() {
         {/* Reservation cards — big, easy to read */}
         {filtered.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
-            <Navigation className="h-10 w-10 mx-auto mb-3 opacity-30" />
-            <p className="font-medium">No hay recogidas</p>
-            <p className="text-sm mt-1">Ajusta los filtros o espera a que operaciones confirme nuevas reservas.</p>
+            <Inbox className="h-10 w-10 mx-auto mb-3 opacity-30" />
+            <p className="font-medium">No hay recogidas asignadas</p>
+            <p className="text-sm mt-1">Cuando operaciones te envíe una reserva, aparecerá aquí. Presiona el botón de refrescar para actualizar.</p>
           </div>
         ) : (
           <div className="space-y-4">
