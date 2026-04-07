@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
+import { findHotel } from "@/lib/hotel-locations"
 
 /* ──────────────────────────────────────────────────────────────
    DATOS — Solo las reservas CONFIRMADAS por operaciones llegan aquí.
@@ -49,8 +50,6 @@ const confirmedReservations = [
     pickupPoint: "lobby" as const,
     experience: "Elite Couple",
     date: "2026-02-15",
-    lat: 18.6823,
-    lng: -68.4074,
   },
   {
     id: "RES-002",
@@ -65,8 +64,6 @@ const confirmedReservations = [
     pickupPoint: "lobby" as const,
     experience: "Elite Family",
     date: "2026-02-15",
-    lat: 18.6920,
-    lng: -68.4345,
   },
   {
     id: "RES-003",
@@ -81,8 +78,6 @@ const confirmedReservations = [
     pickupPoint: "barrera" as const,
     experience: "Apex Predator",
     date: "2026-02-15",
-    lat: 18.7575,
-    lng: -68.4550,
   },
   {
     id: "RES-005",
@@ -97,8 +92,6 @@ const confirmedReservations = [
     pickupPoint: "lobby" as const,
     experience: "ATV QUAD",
     date: "2026-02-16",
-    lat: 18.5120,
-    lng: -68.3725,
   },
   {
     id: "RES-006",
@@ -113,8 +106,6 @@ const confirmedReservations = [
     pickupPoint: "barrera" as const,
     experience: "Predator Family",
     date: "2026-02-16",
-    lat: 18.6700,
-    lng: -68.4095,
   },
   {
     id: "RES-007",
@@ -129,8 +120,6 @@ const confirmedReservations = [
     pickupPoint: "lobby" as const,
     experience: "THE COMBINED",
     date: "2026-02-17",
-    lat: 18.6580,
-    lng: -68.3850,
   },
   {
     id: "REP-BK-001",
@@ -145,8 +134,6 @@ const confirmedReservations = [
     pickupPoint: "lobby" as const,
     experience: "Elite Couple Experience",
     date: "2026-02-15",
-    lat: 18.6823,
-    lng: -68.4074,
   },
   {
     id: "REP-BK-004",
@@ -161,8 +148,6 @@ const confirmedReservations = [
     pickupPoint: "barrera" as const,
     experience: "Apex Predator",
     date: "2026-02-17",
-    lat: 18.6750,
-    lng: -68.4030,
   },
 ]
 
@@ -268,6 +253,8 @@ export default function ChoferDashboard() {
             {filtered.map((r) => {
               const status = cardStatus[r.id] || "none"
               const isMapOpen = mapOpen === r.id
+              const hotelInfo = findHotel(r.hotel)
+              const mapQuery = encodeURIComponent(hotelInfo ? hotelInfo.name : `${r.hotel}, ${r.location}, Dominican Republic`)
               return (
               <Card key={r.id} className={`border-l-4 shadow-sm ${
                 status === "confirmada" ? "border-l-blue-500 bg-blue-50/50" :
@@ -358,11 +345,20 @@ export default function ChoferDashboard() {
                         className="w-full h-56 rounded-t-lg"
                         loading="lazy"
                         referrerPolicy="no-referrer-when-downgrade"
-                        src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${r.lat},${r.lng}&zoom=16`}
+                        src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${mapQuery}&zoom=16`}
                         allowFullScreen
                       />
                       <a
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${r.lat},${r.lng}`}
+                        href={hotelInfo ? hotelInfo.mapUrl : `https://www.google.com/maps/search/?api=1&query=${mapQuery}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 w-full py-2 border-b border-gray-200 bg-gray-50 text-gray-700 font-medium text-sm hover:bg-gray-100 transition-colors"
+                      >
+                        <MapPinned className="h-4 w-4 text-red-500" />
+                        Ver en Google Maps
+                      </a>
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${mapQuery}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-colors"
