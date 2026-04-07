@@ -5,13 +5,15 @@ import {
   MapPin,
   Clock,
   Users,
-  Car,
   Phone,
-  ChevronDown,
   CheckCircle2,
   Navigation,
   CalendarDays,
   RefreshCw,
+  Baby,
+  DoorOpen,
+  PackageCheck,
+  UserCheck,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -39,8 +41,9 @@ const confirmedReservations = [
     location: "Punta Cana",
     timeslot: "8 AM",
     guests: 2,
+    children: 0,
     pickupTime: "7:30 AM",
-    transportType: "Privado",
+    pickupPoint: "lobby" as const,
     experience: "Elite Couple",
     date: "2026-02-15",
   },
@@ -52,8 +55,9 @@ const confirmedReservations = [
     location: "Bávaro",
     timeslot: "11 AM",
     guests: 4,
+    children: 2,
     pickupTime: "10:15 AM",
-    transportType: "Colectivo",
+    pickupPoint: "lobby" as const,
     experience: "Elite Family",
     date: "2026-02-15",
   },
@@ -65,8 +69,9 @@ const confirmedReservations = [
     location: "Macao",
     timeslot: "3 PM",
     guests: 2,
+    children: 0,
     pickupTime: "2:30 PM",
-    transportType: "Privado",
+    pickupPoint: "barrera" as const,
     experience: "Apex Predator",
     date: "2026-02-15",
   },
@@ -78,8 +83,9 @@ const confirmedReservations = [
     location: "Cap Cana",
     timeslot: "11 AM",
     guests: 2,
+    children: 0,
     pickupTime: "10:30 AM",
-    transportType: "Privado",
+    pickupPoint: "lobby" as const,
     experience: "ATV QUAD",
     date: "2026-02-16",
   },
@@ -91,8 +97,9 @@ const confirmedReservations = [
     location: "Punta Cana",
     timeslot: "3 PM",
     guests: 5,
+    children: 3,
     pickupTime: "2:15 PM",
-    transportType: "Privado",
+    pickupPoint: "barrera" as const,
     experience: "Predator Family",
     date: "2026-02-16",
   },
@@ -104,8 +111,9 @@ const confirmedReservations = [
     location: "Punta Cana",
     timeslot: "8 AM",
     guests: 2,
+    children: 0,
     pickupTime: "7:30 AM",
-    transportType: "Colectivo",
+    pickupPoint: "lobby" as const,
     experience: "THE COMBINED",
     date: "2026-02-17",
   },
@@ -117,8 +125,9 @@ const confirmedReservations = [
     location: "Punta Cana",
     timeslot: "8 AM",
     guests: 2,
+    children: 0,
     pickupTime: "7:30 AM",
-    transportType: "Privado",
+    pickupPoint: "lobby" as const,
     experience: "Elite Couple Experience",
     date: "2026-02-15",
   },
@@ -130,8 +139,9 @@ const confirmedReservations = [
     location: "Punta Cana",
     timeslot: "3 PM",
     guests: 2,
+    children: 0,
     pickupTime: "2:45 PM",
-    transportType: "Privado",
+    pickupPoint: "barrera" as const,
     experience: "Apex Predator",
     date: "2026-02-17",
   },
@@ -142,6 +152,7 @@ const confirmedReservations = [
 export default function ChoferDashboard() {
   const [selectedDate, setSelectedDate] = useState<string>("all")
   const [selectedTimeslot, setSelectedTimeslot] = useState<string>("all")
+  const [cardStatus, setCardStatus] = useState<Record<string, "none" | "recibida" | "confirmada">>({})
 
   const uniqueDates = useMemo(
     () => [...new Set(confirmedReservations.map((r) => r.date))].sort(),
@@ -235,17 +246,23 @@ export default function ChoferDashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {filtered.map((r) => (
-              <Card key={r.id} className="border-l-4 border-l-green-500 shadow-sm">
+            {filtered.map((r) => {
+              const status = cardStatus[r.id] || "none"
+              return (
+              <Card key={r.id} className={`border-l-4 shadow-sm ${
+                status === "confirmada" ? "border-l-blue-500 bg-blue-50/50" :
+                status === "recibida" ? "border-l-yellow-500 bg-yellow-50/50" :
+                "border-l-green-500"
+              }`}>
                 <CardContent className="p-4 space-y-3">
-                  {/* Row 1: Pickup time + experience */}
+                  {/* Row 1: Pickup time + name (grande) */}
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       <div className="bg-red-600 text-white rounded-lg px-3 py-1.5 text-lg font-bold leading-none">
                         {r.pickupTime}
                       </div>
                       <div>
-                        <p className="font-semibold text-base leading-tight">{r.customerName}</p>
+                        <p className="font-bold text-xl leading-tight">{r.customerName}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{r.id}</p>
                       </div>
                     </div>
@@ -266,9 +283,16 @@ export default function ChoferDashboard() {
 
                   {/* Row 3: Details chips */}
                   <div className="flex flex-wrap gap-1.5">
-                    <Badge variant="secondary" className="text-xs gap-1">
-                      <Car className="h-3 w-3" />
-                      {r.transportType}
+                    <Badge
+                      variant="secondary"
+                      className={`text-xs gap-1 ${
+                        r.pickupPoint === "lobby"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-orange-100 text-orange-700"
+                      }`}
+                    >
+                      <DoorOpen className="h-3 w-3" />
+                      {r.pickupPoint === "lobby" ? "Lobby" : "Barrera"}
                     </Badge>
                     <Badge variant="secondary" className="text-xs gap-1">
                       <Clock className="h-3 w-3" />
@@ -280,6 +304,12 @@ export default function ChoferDashboard() {
                     <Badge variant="secondary" className="text-xs">
                       {formatDate(r.date)}
                     </Badge>
+                    {r.children > 0 && (
+                      <Badge variant="secondary" className="text-xs gap-1 bg-pink-100 text-pink-700">
+                        <Baby className="h-3 w-3" />
+                        {r.children} niño{r.children > 1 ? "s" : ""}
+                      </Badge>
+                    )}
                   </div>
 
                   {/* Row 4: Phone — big tap target */}
@@ -292,9 +322,50 @@ export default function ChoferDashboard() {
                       {r.phone}
                     </a>
                   )}
+
+                  {/* Row 5: Action buttons */}
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      variant={status === "recibida" ? "default" : "outline"}
+                      className={`flex-1 text-xs h-10 gap-1.5 ${
+                        status === "recibida"
+                          ? "bg-yellow-500 hover:bg-yellow-600 text-white"
+                          : ""
+                      }`}
+                      onClick={() =>
+                        setCardStatus((prev) => ({
+                          ...prev,
+                          [r.id]: prev[r.id] === "recibida" ? "none" : "recibida",
+                        }))
+                      }
+                    >
+                      <PackageCheck className="h-4 w-4" />
+                      Reserva Recibida
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={status === "confirmada" ? "default" : "outline"}
+                      className={`flex-1 text-xs h-10 gap-1.5 ${
+                        status === "confirmada"
+                          ? "bg-blue-600 hover:bg-blue-700 text-white"
+                          : ""
+                      }`}
+                      onClick={() =>
+                        setCardStatus((prev) => ({
+                          ...prev,
+                          [r.id]: prev[r.id] === "confirmada" ? "none" : "confirmada",
+                        }))
+                      }
+                    >
+                      <UserCheck className="h-4 w-4" />
+                      Recogida Confirmada
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
