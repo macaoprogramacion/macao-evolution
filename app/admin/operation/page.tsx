@@ -21,6 +21,7 @@ import {
   XCircle,
   Send,
   Loader2,
+  Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -51,6 +52,7 @@ import {
 } from "@/components/ui/dialog"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { supabase } from "@/lib/supabase"
+import { Label } from "@/components/ui/label"
 
 type Reservation = {
   id: string
@@ -125,6 +127,81 @@ export default function OperationPage() {
   const [choferes, setChoferes] = useState<Chofer[]>([])
   const [loadingChoferes, setLoadingChoferes] = useState(false)
   const [sending, setSending] = useState(false)
+
+  // Modal agregar reserva
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [newRes, setNewRes] = useState({
+    customer_name: "",
+    phone: "",
+    email: "",
+    hotel: "",
+    location: "",
+    timeslot: "8 AM",
+    guests: 1,
+    children: 0,
+    pickup_time: "",
+    pickup_point: "lobby",
+    transport_type: "included",
+    experience: "",
+    channel: "phone",
+    channel_url: "",
+    channel_color: "#6b7280",
+    date: new Date().toISOString().slice(0, 10),
+    notes: "",
+  })
+
+  const resetNewRes = () => setNewRes({
+    customer_name: "",
+    phone: "",
+    email: "",
+    hotel: "",
+    location: "",
+    timeslot: "8 AM",
+    guests: 1,
+    children: 0,
+    pickup_time: "",
+    pickup_point: "lobby",
+    transport_type: "included",
+    experience: "",
+    channel: "phone",
+    channel_url: "",
+    channel_color: "#6b7280",
+    date: new Date().toISOString().slice(0, 10),
+    notes: "",
+  })
+
+  const channelColors: Record<string, string> = {
+    website: "#dc2626",
+    whatsapp: "#22c55e",
+    phone: "#3b82f6",
+    walk_in: "#8b5cf6",
+    seller: "#d97706",
+    ota: "#ef4444",
+  }
+
+  // Guardar nueva reserva
+  const saveNewReservation = async () => {
+    if (!newRes.customer_name || !newRes.date) return
+    setSaving(true)
+    try {
+      const { error } = await supabase.from("reservations").insert({
+        ...newRes,
+        channel_color: channelColors[newRes.channel] || "#6b7280",
+      })
+      if (error) {
+        console.error("Error creating reservation:", error)
+      } else {
+        await fetchReservations()
+        setAddDialogOpen(false)
+        resetNewRes()
+      }
+    } catch (e) {
+      console.error("Error creating reservation:", e)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   // ── Cargar reservas desde Supabase ──
   const fetchReservations = async () => {
@@ -292,10 +369,16 @@ export default function OperationPage() {
             <h1 className="text-2xl md:text-3xl font-title text-gray-900">Operation</h1>
             <p className="text-sm md:text-base text-gray-600 mt-1">Gestión de reservas de todas las plataformas</p>
           </div>
-          <Button className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto">
-            <Download className="w-4 h-4 mr-2" />
-            Exportar Reservas
-          </Button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button className="bg-red-600 hover:bg-red-700 text-white flex-1 sm:flex-none" onClick={() => setAddDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Agregar Reserva
+            </Button>
+            <Button variant="outline" className="flex-1 sm:flex-none">
+              <Download className="w-4 h-4 mr-2" />
+              Exportar
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -695,6 +778,220 @@ export default function OperationPage() {
                 <>
                   <Send className="w-4 h-4 mr-2" />
                   Confirmar Envío
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Agregar reserva manual */}
+      <Dialog open={addDialogOpen} onOpenChange={(open) => { setAddDialogOpen(open); if (!open) resetNewRes() }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Agregar Reserva</DialogTitle>
+            <DialogDescription>
+              Completa los datos para crear una nueva reserva manualmente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Nombre */}
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Nombre del cliente *</Label>
+              <Input
+                value={newRes.customer_name}
+                onChange={(e) => setNewRes({ ...newRes, customer_name: e.target.value })}
+                placeholder="John Smith"
+              />
+            </div>
+
+            {/* Teléfono */}
+            <div className="space-y-1.5">
+              <Label>Teléfono</Label>
+              <Input
+                value={newRes.phone}
+                onChange={(e) => setNewRes({ ...newRes, phone: e.target.value })}
+                placeholder="+1 809-555-0000"
+              />
+            </div>
+
+            {/* Email */}
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={newRes.email}
+                onChange={(e) => setNewRes({ ...newRes, email: e.target.value })}
+                placeholder="cliente@email.com"
+              />
+            </div>
+
+            {/* Hotel */}
+            <div className="space-y-1.5">
+              <Label>Hotel</Label>
+              <Input
+                value={newRes.hotel}
+                onChange={(e) => setNewRes({ ...newRes, hotel: e.target.value })}
+                placeholder="Hard Rock Hotel & Casino"
+              />
+            </div>
+
+            {/* Ubicación */}
+            <div className="space-y-1.5">
+              <Label>Ubicación</Label>
+              <Input
+                value={newRes.location}
+                onChange={(e) => setNewRes({ ...newRes, location: e.target.value })}
+                placeholder="Punta Cana"
+              />
+            </div>
+
+            {/* Fecha */}
+            <div className="space-y-1.5">
+              <Label>Fecha *</Label>
+              <Input
+                type="date"
+                value={newRes.date}
+                onChange={(e) => setNewRes({ ...newRes, date: e.target.value })}
+              />
+            </div>
+
+            {/* Horario */}
+            <div className="space-y-1.5">
+              <Label>Horario</Label>
+              <Select value={newRes.timeslot} onValueChange={(v) => setNewRes({ ...newRes, timeslot: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="8 AM">8:00 AM</SelectItem>
+                  <SelectItem value="11 AM">11:00 AM</SelectItem>
+                  <SelectItem value="3 PM">3:00 PM</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Hora de recogida */}
+            <div className="space-y-1.5">
+              <Label>Hora de recogida</Label>
+              <Input
+                value={newRes.pickup_time}
+                onChange={(e) => setNewRes({ ...newRes, pickup_time: e.target.value })}
+                placeholder="7:30 AM"
+              />
+            </div>
+
+            {/* Punto de recogida */}
+            <div className="space-y-1.5">
+              <Label>Punto de recogida</Label>
+              <Select value={newRes.pickup_point} onValueChange={(v) => setNewRes({ ...newRes, pickup_point: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lobby">Lobby</SelectItem>
+                  <SelectItem value="barrera">Barrera</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Personas */}
+            <div className="space-y-1.5">
+              <Label>Adultos</Label>
+              <Input
+                type="number"
+                min={1}
+                value={newRes.guests}
+                onChange={(e) => setNewRes({ ...newRes, guests: parseInt(e.target.value) || 1 })}
+              />
+            </div>
+
+            {/* Niños */}
+            <div className="space-y-1.5">
+              <Label>Niños</Label>
+              <Input
+                type="number"
+                min={0}
+                value={newRes.children}
+                onChange={(e) => setNewRes({ ...newRes, children: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+
+            {/* Transporte */}
+            <div className="space-y-1.5">
+              <Label>Transporte</Label>
+              <Select value={newRes.transport_type} onValueChange={(v) => setNewRes({ ...newRes, transport_type: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="included">Incluido</SelectItem>
+                  <SelectItem value="self">Propio</SelectItem>
+                  <SelectItem value="hotel_shuttle">Shuttle Hotel</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Experiencia */}
+            <div className="space-y-1.5">
+              <Label>Experiencia</Label>
+              <Input
+                value={newRes.experience}
+                onChange={(e) => setNewRes({ ...newRes, experience: e.target.value })}
+                placeholder="Elite Couple, Apex Predator..."
+              />
+            </div>
+
+            {/* Canal */}
+            <div className="space-y-1.5">
+              <Label>Canal</Label>
+              <Select value={newRes.channel} onValueChange={(v) => setNewRes({ ...newRes, channel: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="phone">Teléfono</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="website">Website</SelectItem>
+                  <SelectItem value="walk_in">Walk-in</SelectItem>
+                  <SelectItem value="seller">Representante</SelectItem>
+                  <SelectItem value="ota">OTA (Viator, GYG...)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* URL / Referencia del canal */}
+            <div className="space-y-1.5">
+              <Label>Referencia del canal</Label>
+              <Input
+                value={newRes.channel_url}
+                onChange={(e) => setNewRes({ ...newRes, channel_url: e.target.value })}
+                placeholder="viator.com, nombre del rep..."
+              />
+            </div>
+
+            {/* Notas */}
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Notas</Label>
+              <Input
+                value={newRes.notes}
+                onChange={(e) => setNewRes({ ...newRes, notes: e.target.value })}
+                placeholder="Información adicional..."
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setAddDialogOpen(false); resetNewRes() }} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={saveNewReservation}
+              disabled={!newRes.customer_name || !newRes.date || saving}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Crear Reserva
                 </>
               )}
             </Button>
