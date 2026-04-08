@@ -322,6 +322,10 @@ export default function OperationPage() {
       hotel_shuttle: "Shuttle del hotel",
     }
 
+    const amountBlock = res.amount != null && res.amount > 0
+      ? '<div class="amount-box"><div class="label">MONTO A PAGAR</div><div class="amount">$' + res.amount.toFixed(2) + ' USD</div></div>'
+      : ""
+
     const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -377,10 +381,7 @@ export default function OperationPage() {
       <div class="row"><span class="label">Punto</span><span class="value">${res.pickupPoint === "lobby" ? "Lobby del hotel" : "Barrera de seguridad"}</span></div>
       <div class="row"><span class="label">Transporte</span><span class="value">${transportLabel[res.transportType] || res.transportType}</span></div>
     </div>
-    ${res.amount != null && res.amount > 0 ? \`<div class="amount-box">
-      <div class="label">MONTO A PAGAR</div>
-      <div class="amount">$\${res.amount.toFixed(2)} USD</div>
-    </div>\` : ""}
+    ${amountBlock}
   </div>
   <hr class="divider" />
   <div class="footer">
@@ -395,7 +396,7 @@ export default function OperationPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = \`ticket-\${res.customerName.replace(/\\s+/g, "-").toLowerCase()}-\${res.date}.html\`
+    a.download = "ticket-" + res.customerName.replace(/\s+/g, "-").toLowerCase() + "-" + res.date + ".html"
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
