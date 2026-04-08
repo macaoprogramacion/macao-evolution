@@ -51,7 +51,36 @@ import {
 } from "@/components/ui/dialog"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { supabase } from "@/lib/supabase"
-import { saveSentReservation } from "@/lib/reservation-store"
+import { saveSentReservation, loadChoferCardStatuses, type ChoferCardStatus } from "@/lib/reservation-store"
+
+const STATUS_STORAGE_KEY = "macao_reservation_statuses"
+const CHOFER_STORAGE_KEY = "macao_reservation_choferes"
+
+function loadSavedStatuses(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(STATUS_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+
+function saveStatus(id: string, status: string) {
+  const saved = loadSavedStatuses()
+  saved[id] = status
+  localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(saved))
+}
+
+function loadSavedChoferes(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(CHOFER_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+
+function saveChoferAssignment(id: string, choferId: string) {
+  const saved = loadSavedChoferes()
+  saved[id] = choferId
+  localStorage.setItem(CHOFER_STORAGE_KEY, JSON.stringify(saved))
+}
 
 // Data de reservas (mock — todas inician como pendientes)
 const initialReservations = [
@@ -285,9 +314,15 @@ type Chofer = {
 }
 
 export default function OperationPage() {
-  const [reservations, setReservations] = useState<Reservation[]>(
-    initialReservations.map((r) => ({ ...r }))
-  )
+  const [reservations, setReservations] = useState<Reservation[]>(() => {
+    const savedStatuses = loadSavedStatuses()
+    const savedChoferes = loadSavedChoferes()
+    return initialReservations.map((r) => ({
+      ...r,
+      status: (savedStatuses[r.id] as typeof r.status) || r.status,
+      assignedChofer: savedChoferes[r.id] || undefined,
+    }))
+  })
   const [searchQuery, setSearchQuery] = useState("")
   const [channelFilter, setChannelFilter] = useState("all")
   const [timeslotFilter, setTimeslotFilter] = useState("all")
@@ -301,6 +336,16 @@ export default function OperationPage() {
   const [choferes, setChoferes] = useState<Chofer[]>([])
   const [loadingChoferes, setLoadingChoferes] = useState(false)
   const [sending, setSending] = useState(false)
+
+  // Estado de confirmación del chofer (lectura periódica)
+  const [choferStatuses, setChoferStatuses] = useState<Record<string, ChoferCardStatus>>(() => loadChoferCardStatuses())
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setChoferStatuses(loadChoferCardStatuses())
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [])
 
   // Cargar choferes desde Supabase
   const fetchChoferes = async () => {
@@ -358,7 +403,8 @@ export default function OperationPage() {
       sentAt: new Date().toISOString(),
     })
 
-    // Simular delay (cuando haya backend real, aquí va el update en Supabase)
+    // Persistir asignación
+    saveChoferAssignment(selectedReservation.id, selectedChofer)
     await new Promise((r) => setTimeout(r, 400))
     setReservations((prev) =>
       prev.map((r) =>
@@ -376,11 +422,13 @@ export default function OperationPage() {
   // Cambiar estado de reserva
   const toggleStatus = (id: string) => {
     setReservations((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? { ...r, status: r.status === "pending" ? "confirmed" : r.status }
-          : r
-      )
+      prev.map((r) => {
+        if (r.id === id && r.status === "pending") {
+          saveStatus(id, "confirmed")
+          return { ...r, status: "confirmed" as const }
+        }
+        return r
+      })
     )
   }
 
@@ -719,12 +767,30 @@ export default function OperationPage() {
                         <div className="flex items-center gap-2">{getStatusButton(reservation)}</div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col items-start gap-1.5">
                           {reservation.assignedChofer ? (
-                            <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
-                              <Send className="w-3 h-3 mr-1" />
-                              Enviada
-                            </Badge>
+                            <>
+                              <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                                <Send className="w-3 h-3 mr-1" />
+                                Enviada
+                              </Badge>
+                              {choferStatuses[reservation.id] === "confirmada" ? (
+                                <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
+                                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                                  Recogida OK
+                                </Badge>
+                              ) : choferStatuses[reservation.id] === "recibida" ? (
+                                <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">
+                                  <AlertCircle className="w-3 h-3 mr-1" />
+                                  Recibida
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-gray-400 border-gray-200">
+                                  <Clock className="w-3 h-3 mr-1" />
+                                  Sin respuesta
+                                </Badge>
+                              )}
+                            </>
                           ) : (
                             <Button
                               size="sm"

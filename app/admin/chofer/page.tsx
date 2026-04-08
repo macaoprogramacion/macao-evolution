@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/select"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { findHotel } from "@/lib/hotel-locations"
-import { getSentReservations, getReservationsForChofer, type SentReservation } from "@/lib/reservation-store"
+import { getSentReservations, getReservationsForChofer, type SentReservation, loadChoferCardStatuses, persistChoferCardStatuses } from "@/lib/reservation-store"
 
 /* ──────────────────────────────────────────────────────────────── */
 
@@ -41,7 +41,14 @@ export default function ChoferDashboard() {
   const [selectedDate, setSelectedDate] = useState<string>("all")
   const [selectedTimeslot, setSelectedTimeslot] = useState<string>("all")
   const [selectedChofer, setSelectedChofer] = useState<string>("all")
-  const [cardStatus, setCardStatus] = useState<Record<string, "none" | "recibida" | "confirmada">>({})
+  const [cardStatus, setCardStatusRaw] = useState<Record<string, "none" | "recibida" | "confirmada">>(() => loadChoferCardStatuses())
+  const setCardStatus: typeof setCardStatusRaw = (update) => {
+    setCardStatusRaw((prev) => {
+      const next = typeof update === "function" ? update(prev) : update
+      persistChoferCardStatuses(next)
+      return next
+    })
+  }
   const [mapOpen, setMapOpen] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
 

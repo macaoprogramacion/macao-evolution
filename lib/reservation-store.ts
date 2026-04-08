@@ -50,3 +50,22 @@ export function getSentReservations(): SentReservation[] {
 export function getReservationsForChofer(choferId: string): SentReservation[] {
   return getSentReservations().filter((r) => r.choferId === choferId)
 }
+
+/* ── Estado de confirmación del chofer ── */
+
+export type ChoferCardStatus = "none" | "recibida" | "confirmada"
+
+const CARD_STATUS_KEY = "macao_chofer_card_status"
+
+/** Obtener todos los estados de tarjeta del chofer */
+export function loadChoferCardStatuses(): Record<string, ChoferCardStatus> {
+  try {
+    const raw = localStorage.getItem(CARD_STATUS_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+
+/** Persistir todos los estados de tarjeta */
+export function persistChoferCardStatuses(statuses: Record<string, ChoferCardStatus>) {
+  localStorage.setItem(CARD_STATUS_KEY, JSON.stringify(statuses))
+}
