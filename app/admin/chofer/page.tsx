@@ -219,6 +219,7 @@ export default function ChoferDashboard() {
                     key={r.id}
                     r={r}
                     showChoferBadge={false}
+                    readOnly={true}
                     cardStatus={cardStatus}
                     setCardStatus={setCardStatus}
                     mapOpen={mapOpen}
@@ -237,6 +238,7 @@ export default function ChoferDashboard() {
                 key={r.id}
                 r={r}
                 showChoferBadge={false}
+                readOnly={false}
                 cardStatus={cardStatus}
                 setCardStatus={setCardStatus}
                 mapOpen={mapOpen}
@@ -255,6 +257,7 @@ export default function ChoferDashboard() {
 function ReservationCard({
   r,
   showChoferBadge,
+  readOnly = false,
   cardStatus,
   setCardStatus,
   mapOpen,
@@ -263,6 +266,7 @@ function ReservationCard({
 }: {
   r: SentReservation
   showChoferBadge: boolean
+  readOnly?: boolean
   cardStatus: Record<string, "none" | "recibida" | "confirmada">
   setCardStatus: React.Dispatch<React.SetStateAction<Record<string, "none" | "recibida" | "confirmada">>>
   mapOpen: string | null
@@ -397,7 +401,8 @@ function ReservationCard({
           </div>
         )}
 
-        {/* Row 6: Action buttons */}
+        {/* Row 6: Action buttons (solo para choferes) */}
+        {!readOnly && (
         <div className="flex gap-2 pt-1">
           <Button
             size="sm"
@@ -438,6 +443,7 @@ function ReservationCard({
             Recogida Confirmada
           </Button>
         </div>
+        )}
       </CardContent>
     </Card>
   )
