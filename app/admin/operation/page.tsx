@@ -51,260 +51,29 @@ import {
 } from "@/components/ui/dialog"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { supabase } from "@/lib/supabase"
-import { saveSentReservation, loadChoferCardStatuses, type ChoferCardStatus } from "@/lib/reservation-store"
 
-const STATUS_STORAGE_KEY = "macao_reservation_statuses"
-const CHOFER_STORAGE_KEY = "macao_reservation_choferes"
-
-function loadSavedStatuses(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(STATUS_STORAGE_KEY)
-    return raw ? JSON.parse(raw) : {}
-  } catch { return {} }
-}
-
-function saveStatus(id: string, status: string) {
-  const saved = loadSavedStatuses()
-  saved[id] = status
-  localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(saved))
-}
-
-function loadSavedChoferes(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(CHOFER_STORAGE_KEY)
-    return raw ? JSON.parse(raw) : {}
-  } catch { return {} }
-}
-
-function saveChoferAssignment(id: string, choferId: string) {
-  const saved = loadSavedChoferes()
-  saved[id] = choferId
-  localStorage.setItem(CHOFER_STORAGE_KEY, JSON.stringify(saved))
-}
-
-// Data de reservas (mock — todas inician como pendientes)
-const initialReservations = [
-  {
-    id: "RES-001",
-    customerName: "John Smith",
-    phone: "+1 809-555-0123",
-    email: "john.smith@email.com",
-    hotel: "Hard Rock Hotel & Casino",
-    location: "Punta Cana",
-    timeslot: "8 AM",
-    guests: 2,
-    pickupTime: "7:30 AM",
-    transportType: "Privado",
-    experience: "Elite Couple",
-    channel: "Macao Off Road",
-    channelUrl: "macaooffroad.com",
-    channelColor: "#dc2626",
-    date: "2026-02-15",
-    status: "pending" as const,
-  },
-  {
-    id: "RES-002",
-    customerName: "María García",
-    phone: "+1 829-555-0456",
-    email: "maria.garcia@email.com",
-    hotel: "Barceló Bávaro Palace",
-    location: "Bávaro",
-    timeslot: "11 AM",
-    guests: 4,
-    pickupTime: "10:15 AM",
-    transportType: "Colectivo",
-    experience: "Elite Family",
-    channel: "Viator",
-    channelUrl: "viator.com",
-    channelColor: "#ef4444",
-    date: "2026-02-15",
-    status: "pending" as const,
-  },
-  {
-    id: "RES-003",
-    customerName: "Robert Johnson",
-    phone: "+1 849-555-0789",
-    email: "r.johnson@email.com",
-    hotel: "Dreams Macao Beach",
-    location: "Macao",
-    timeslot: "3 PM",
-    guests: 2,
-    pickupTime: "2:30 PM",
-    transportType: "Privado",
-    experience: "Apex Predator",
-    channel: "Caribe Buggy",
-    channelUrl: "caribebuggy.com",
-    channelColor: "#3b82f6",
-    date: "2026-02-15",
-    status: "pending" as const,
-  },
-  {
-    id: "RES-004",
-    customerName: "Sophie Laurent",
-    phone: "+33 6-55-55-01-23",
-    email: "sophie.laurent@email.fr",
-    hotel: "Royalton Punta Cana",
-    location: "Punta Cana",
-    timeslot: "8 AM",
-    guests: 3,
-    pickupTime: "7:45 AM",
-    transportType: "Colectivo",
-    experience: "Flintstone Era",
-    channel: "GetYourGuide",
-    channelUrl: "getyourguide.com",
-    channelColor: "#8b5cf6",
-    date: "2026-02-16",
-    status: "pending" as const,
-  },
-  {
-    id: "RES-005",
-    customerName: "Carlos Rodríguez",
-    phone: "+1 809-555-3456",
-    email: "carlos.r@email.com",
-    hotel: "Secrets Cap Cana",
-    location: "Cap Cana",
-    timeslot: "11 AM",
-    guests: 2,
-    pickupTime: "10:30 AM",
-    transportType: "Privado",
-    experience: "ATV QUAD",
-    channel: "Saona Island",
-    channelUrl: "saonaislandpuntacana.com",
-    channelColor: "#10b981",
-    date: "2026-02-16",
-    status: "pending" as const,
-  },
-  {
-    id: "RES-006",
-    customerName: "Anna Müller",
-    phone: "+49 151-555-7890",
-    email: "anna.mueller@email.de",
-    hotel: "Majestic Elegance",
-    location: "Punta Cana",
-    timeslot: "3 PM",
-    guests: 5,
-    pickupTime: "2:15 PM",
-    transportType: "Privado",
-    experience: "Predator Family",
-    channel: "Macao Off Road",
-    channelUrl: "macaooffroad.com",
-    channelColor: "#dc2626",
-    date: "2026-02-16",
-    status: "pending" as const,
-  },
-  {
-    id: "RES-007",
-    customerName: "James Wilson",
-    phone: "+1 829-555-9012",
-    email: "j.wilson@email.com",
-    hotel: "Excellence Punta Cana",
-    location: "Punta Cana",
-    timeslot: "8 AM",
-    guests: 2,
-    pickupTime: "7:30 AM",
-    transportType: "Colectivo",
-    experience: "THE COMBINED",
-    channel: "Viator",
-    channelUrl: "viator.com",
-    channelColor: "#ef4444",
-    date: "2026-02-17",
-    status: "pending" as const,
-  },
-  {
-    id: "RES-008",
-    customerName: "Isabella Costa",
-    phone: "+55 11-555-3456",
-    email: "isabella.costa@email.com.br",
-    hotel: "Paradisus Palma Real",
-    location: "Bávaro",
-    timeslot: "11 AM",
-    guests: 4,
-    pickupTime: "10:00 AM",
-    transportType: "Privado",
-    experience: "Flintstone Family",
-    channel: "Caribe Buggy",
-    channelUrl: "caribebuggy.com",
-    channelColor: "#3b82f6",
-    date: "2026-02-17",
-    status: "pending" as const,
-  },
-  // ── Reservas de Representantes (Sellers Portal) ──────────────────
-  {
-    id: "REP-BK-001",
-    customerName: "James Wilson",
-    phone: "—",
-    email: "—",
-    hotel: "Hard Rock Hotel & Casino",
-    location: "Punta Cana",
-    timeslot: "8 AM",
-    guests: 2,
-    pickupTime: "7:30 AM",
-    transportType: "Privado",
-    experience: "Elite Couple Experience",
-    channel: "Representante",
-    channelUrl: "Carlos Méndez — Excursiones PC",
-    channelColor: "#d97706",
-    date: "2026-02-15",
-    status: "pending" as const,
-  },
-  {
-    id: "REP-BK-002",
-    customerName: "Sophie Lambert",
-    phone: "—",
-    email: "—",
-    hotel: "Barceló Bávaro Palace",
-    location: "Bávaro",
-    timeslot: "11 AM",
-    guests: 4,
-    pickupTime: "10:00 AM",
-    transportType: "Colectivo",
-    experience: "Elite Family Experience",
-    channel: "Representante",
-    channelUrl: "Miguel Torres — Barceló Concierge",
-    channelColor: "#d97706",
-    date: "2026-02-15",
-    status: "pending" as const,
-  },
-  {
-    id: "REP-BK-003",
-    customerName: "Emily Chen",
-    phone: "—",
-    email: "—",
-    hotel: "Majestic Elegance",
-    location: "Punta Cana",
-    timeslot: "11 AM",
-    guests: 6,
-    pickupTime: "10:30 AM",
-    transportType: "Privado",
-    experience: "The Flintstone Family",
-    channel: "Representante",
-    channelUrl: "Laura Peña — Independiente",
-    channelColor: "#d97706",
-    date: "2026-02-16",
-    status: "pending" as const,
-  },
-  {
-    id: "REP-BK-004",
-    customerName: "David & Sarah Brown",
-    phone: "—",
-    email: "—",
-    hotel: "Secrets Royal Beach",
-    location: "Punta Cana",
-    timeslot: "11 AM",
-    guests: 5,
-    pickupTime: "9:30 AM",
-    transportType: "Colectivo",
-    experience: "Party Boat Experience",
-    channel: "Representante",
-    channelUrl: "Ana Rodríguez — Viajes Dominicanos",
-    channelColor: "#d97706",
-    date: "2026-02-17",
-    status: "pending" as const,
-  },
-]
-
-type Reservation = typeof initialReservations[number] & {
-  assignedChofer?: string
+type Reservation = {
+  id: string
+  customerName: string
+  phone: string
+  email: string
+  hotel: string
+  location: string
+  timeslot: string
+  guests: number
+  children: number
+  pickupTime: string
+  pickupPoint: string
+  transportType: string
+  experience: string
+  channel: string
+  channelUrl: string
+  channelColor: string
+  date: string
+  status: "pending" | "confirmed" | "in_progress" | "completed" | "cancelled"
+  assignedChoferId: string | null
+  assignedChoferName: string | null
+  choferStatus: "none" | "recibida" | "confirmada"
 }
 
 type Chofer = {
@@ -313,16 +82,36 @@ type Chofer = {
   phone: string
 }
 
+/** Mapear fila de Supabase a formato del componente */
+function mapRow(r: any): Reservation {
+  return {
+    id: r.id,
+    customerName: r.customer_name,
+    phone: r.phone || "—",
+    email: r.email || "—",
+    hotel: r.hotel || "",
+    location: r.location || "",
+    timeslot: r.timeslot || "",
+    guests: r.guests || 0,
+    children: r.children || 0,
+    pickupTime: r.pickup_time || "",
+    pickupPoint: r.pickup_point || "lobby",
+    transportType: r.transport_type || "",
+    experience: r.experience || "",
+    channel: r.channel || "",
+    channelUrl: r.channel_url || "",
+    channelColor: r.channel_color || "#6b7280",
+    date: r.date,
+    status: r.status,
+    assignedChoferId: r.assigned_chofer_id,
+    assignedChoferName: r.assigned_chofer_name,
+    choferStatus: r.chofer_status || "none",
+  }
+}
+
 export default function OperationPage() {
-  const [reservations, setReservations] = useState<Reservation[]>(() => {
-    const savedStatuses = loadSavedStatuses()
-    const savedChoferes = loadSavedChoferes()
-    return initialReservations.map((r) => ({
-      ...r,
-      status: (savedStatuses[r.id] as typeof r.status) || r.status,
-      assignedChofer: savedChoferes[r.id] || undefined,
-    }))
-  })
+  const [reservations, setReservations] = useState<Reservation[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [channelFilter, setChannelFilter] = useState("all")
   const [timeslotFilter, setTimeslotFilter] = useState("all")
@@ -337,13 +126,28 @@ export default function OperationPage() {
   const [loadingChoferes, setLoadingChoferes] = useState(false)
   const [sending, setSending] = useState(false)
 
-  // Estado de confirmación del chofer (lectura periódica)
-  const [choferStatuses, setChoferStatuses] = useState<Record<string, ChoferCardStatus>>(() => loadChoferCardStatuses())
+  // ── Cargar reservas desde Supabase ──
+  const fetchReservations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("reservations")
+        .select("*")
+        .order("date", { ascending: true })
+        .order("pickup_time", { ascending: true })
+      if (!error && data) {
+        setReservations(data.map(mapRow))
+      }
+    } catch (e) {
+      console.error("Error fetching reservations:", e)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setChoferStatuses(loadChoferCardStatuses())
-    }, 3000)
+    fetchReservations()
+    // Polling cada 5s para ver cambios del chofer
+    const interval = setInterval(fetchReservations, 5000)
     return () => clearInterval(interval)
   }, [])
 
@@ -379,40 +183,20 @@ export default function OperationPage() {
     if (!selectedReservation || !selectedChofer) return
     setSending(true)
 
-    const choferData = choferes.find((c) => c.id === selectedChofer)
+    try {
+      const { error } = await supabase.rpc("assign_reservation_to_chofer", {
+        p_reservation_id: selectedReservation.id,
+        p_chofer_id: selectedChofer,
+      })
+      if (error) {
+        console.error("Error assigning chofer:", error)
+      } else {
+        await fetchReservations()
+      }
+    } catch (e) {
+      console.error("Error assigning chofer:", e)
+    }
 
-    // Guardar en localStorage para que el chofer la vea
-    saveSentReservation({
-      id: selectedReservation.id,
-      customerName: selectedReservation.customerName,
-      phone: selectedReservation.phone,
-      email: selectedReservation.email,
-      hotel: selectedReservation.hotel,
-      location: selectedReservation.location,
-      timeslot: selectedReservation.timeslot,
-      guests: selectedReservation.guests,
-      children: 0,
-      pickupTime: selectedReservation.pickupTime,
-      pickupPoint: "lobby",
-      transportType: selectedReservation.transportType,
-      experience: selectedReservation.experience,
-      channel: selectedReservation.channel,
-      date: selectedReservation.date,
-      choferId: selectedChofer,
-      choferName: choferData?.name || "",
-      sentAt: new Date().toISOString(),
-    })
-
-    // Persistir asignación
-    saveChoferAssignment(selectedReservation.id, selectedChofer)
-    await new Promise((r) => setTimeout(r, 400))
-    setReservations((prev) =>
-      prev.map((r) =>
-        r.id === selectedReservation.id
-          ? { ...r, assignedChofer: selectedChofer }
-          : r
-      )
-    )
     setSending(false)
     setSendDialogOpen(false)
     setSelectedReservation(null)
@@ -420,16 +204,24 @@ export default function OperationPage() {
   }
 
   // Cambiar estado de reserva
-  const toggleStatus = (id: string) => {
-    setReservations((prev) =>
-      prev.map((r) => {
-        if (r.id === id && r.status === "pending") {
-          saveStatus(id, "confirmed")
-          return { ...r, status: "confirmed" as const }
-        }
-        return r
+  const toggleStatus = async (id: string) => {
+    try {
+      const { error } = await supabase.rpc("update_reservation_status", {
+        p_reservation_id: id,
+        p_status: "confirmed",
       })
-    )
+      if (error) {
+        console.error("Error updating status:", error)
+      } else {
+        setReservations((prev) =>
+          prev.map((r) =>
+            r.id === id ? { ...r, status: "confirmed" as const } : r
+          )
+        )
+      }
+    } catch (e) {
+      console.error("Error updating status:", e)
+    }
   }
 
   // Filtrar reservas
@@ -768,18 +560,18 @@ export default function OperationPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col items-start gap-1.5">
-                          {reservation.assignedChofer ? (
+                          {reservation.assignedChoferId ? (
                             <>
                               <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
                                 <Send className="w-3 h-3 mr-1" />
                                 Enviada
                               </Badge>
-                              {choferStatuses[reservation.id] === "confirmada" ? (
+                              {reservation.choferStatus === "confirmada" ? (
                                 <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
                                   <CheckCircle2 className="w-3 h-3 mr-1" />
                                   Recogida OK
                                 </Badge>
-                              ) : choferStatuses[reservation.id] === "recibida" ? (
+                              ) : reservation.choferStatus === "recibida" ? (
                                 <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">
                                   <AlertCircle className="w-3 h-3 mr-1" />
                                   Recibida

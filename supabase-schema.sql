@@ -47,6 +47,9 @@ CREATE TYPE cart_item_type AS ENUM ('service', 'product');
 -- Estado de reservación operativa
 CREATE TYPE reservation_status AS ENUM ('confirmed', 'pending', 'in_progress', 'completed', 'cancelled');
 
+-- Estado de confirmación del chofer
+CREATE TYPE chofer_status AS ENUM ('none', 'recibida', 'confirmada');
+
 -- Canal de reservación
 CREATE TYPE reservation_channel AS ENUM ('website', 'whatsapp', 'phone', 'walk_in', 'seller', 'ota');
 
@@ -475,6 +478,7 @@ CREATE TABLE reservations (
   assigned_chofer_id    UUID REFERENCES dashboard_users(id),
   assigned_chofer_name  TEXT,
   assigned_at           TIMESTAMPTZ,
+  chofer_status         chofer_status NOT NULL DEFAULT 'none',
   notes                 TEXT,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -881,12 +885,33 @@ BEGIN
       r.channel,
       r.date,
       r.status,
+      r.chofer_status,
       r.assigned_at
     FROM reservations r
     WHERE r.assigned_chofer_id = p_chofer_id
     ORDER BY r.date, r.pickup_time
   ) t;
 
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- ── Actualizar estado del chofer (recibida / confirmada) ───────────
+-- Página: /admin/chofer
+CREATE OR REPLACE FUNCTION update_chofer_status(
+  p_reservation_id UUID,
+  p_chofer_status chofer_status
+)
+RETURNS reservations AS $$
+DECLARE
+  result reservations;
+BEGIN
+  UPDATE reservations
+     SET chofer_status = p_chofer_status,
+         updated_at = NOW()
+   WHERE id = p_reservation_id
+  RETURNING * INTO result;
   RETURN result;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

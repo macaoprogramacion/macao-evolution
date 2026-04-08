@@ -32,28 +32,66 @@ import {
 } from "@/components/ui/select"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { findHotel } from "@/lib/hotel-locations"
-import { getSentReservations, getReservationsForChofer, type SentReservation, loadChoferCardStatuses, persistChoferCardStatuses } from "@/lib/reservation-store"
+import { supabase } from "@/lib/supabase"
+
+type ChoferReservation = {
+  id: string
+  customerName: string
+  phone: string
+  email: string
+  hotel: string
+  location: string
+  timeslot: string
+  guests: number
+  children: number
+  pickupTime: string
+  pickupPoint: "lobby" | "barrera"
+  transportType: string
+  experience: string
+  channel: string
+  date: string
+  status: string
+  choferStatus: "none" | "recibida" | "confirmada"
+  choferId: string
+  choferName: string
+}
+
+function mapChoferRow(r: any): ChoferReservation {
+  return {
+    id: r.id,
+    customerName: r.customer_name,
+    phone: r.phone || "—",
+    email: r.email || "—",
+    hotel: r.hotel || "",
+    location: r.location || "",
+    timeslot: r.timeslot || "",
+    guests: r.guests || 0,
+    children: r.children || 0,
+    pickupTime: r.pickup_time || "",
+    pickupPoint: r.pickup_point || "lobby",
+    transportType: r.transport_type || "",
+    experience: r.experience || "",
+    channel: r.channel || "",
+    date: r.date,
+    status: r.status,
+    choferStatus: r.chofer_status || "none",
+    choferId: r.assigned_chofer_id || "",
+    choferName: r.assigned_chofer_name || "",
+  }
+}
 
 /* ──────────────────────────────────────────────────────────────── */
 
 export default function ChoferDashboard() {
-  const [reservations, setReservations] = useState<SentReservation[]>([])
+  const [reservations, setReservations] = useState<ChoferReservation[]>([])
   const [selectedDate, setSelectedDate] = useState<string>("all")
   const [selectedTimeslot, setSelectedTimeslot] = useState<string>("all")
   const [selectedChofer, setSelectedChofer] = useState<string>("all")
-  const [cardStatus, setCardStatusRaw] = useState<Record<string, "none" | "recibida" | "confirmada">>(() => loadChoferCardStatuses())
-  const setCardStatus: typeof setCardStatusRaw = (update) => {
-    setCardStatusRaw((prev) => {
-      const next = typeof update === "function" ? update(prev) : update
-      persistChoferCardStatuses(next)
-      return next
-    })
-  }
   const [mapOpen, setMapOpen] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
 
-  // Leer reservas: admin ve TODAS, chofer ve solo las suyas
-  const loadReservations = () => {
+  // Leer reservas desde Supabase
+  const loadReservations = async () => {
     try {
       const session = JSON.parse(sessionStorage.getItem("macao_auth_session") || "null")
       if (!session) return
@@ -61,15 +99,53 @@ export default function ChoferDashboard() {
       const role = session.role
       if (role === "admin" || role === "both" || role === "operaciones") {
         setIsAdmin(true)
-        setReservations(getSentReservations())
+        // Admin ve todas las reservas asignadas a algún chofer
+        const { data, error } = await supabase
+          .from("reservations")
+          .select("*")
+          .not("assigned_chofer_id", "is", null)
+          .order("date", { ascending: true })
+          .order("pickup_time", { ascending: true })
+        if (!error && data) {
+          setReservations(data.map(mapChoferRow))
+        }
       } else {
         setIsAdmin(false)
         if (session.id) {
-          setReservations(getReservationsForChofer(session.id))
+          const { data, error } = await supabase
+            .from("reservations")
+            .select("*")
+            .eq("assigned_chofer_id", session.id)
+            .order("date", { ascending: true })
+            .order("pickup_time", { ascending: true })
+          if (!error && data) {
+            setReservations(data.map(mapChoferRow))
+          }
         }
       }
     } catch {
       setReservations([])
+    }
+  }
+
+  // Actualizar chofer_status en Supabase
+  const updateChoferStatus = async (reservationId: string, newStatus: "recibida" | "confirmada") => {
+    try {
+      const { error } = await supabase.rpc("update_chofer_status", {
+        p_reservation_id: reservationId,
+        p_chofer_status: newStatus,
+      })
+      if (!error) {
+        setReservations((prev) =>
+          prev.map((r) =>
+            r.id === reservationId ? { ...r, choferStatus: newStatus } : r
+          )
+        )
+      } else {
+        console.error("Error updating chofer status:", error)
+      }
+    } catch (e) {
+      console.error("Error updating chofer status:", e)
     }
   }
 
@@ -104,7 +180,7 @@ export default function ChoferDashboard() {
   // Agrupar por chofer para vista admin
   const groupedByChofer = useMemo(() => {
     if (!isAdmin) return null
-    const groups: Record<string, { name: string; reservations: SentReservation[] }> = {}
+    const groups: Record<string, { name: string; reservations: ChoferReservation[] }> = {}
     for (const r of filtered) {
       if (!groups[r.choferId]) {
         groups[r.choferId] = { name: r.choferName, reservations: [] }
@@ -227,8 +303,7 @@ export default function ChoferDashboard() {
                     r={r}
                     showChoferBadge={false}
                     readOnly={true}
-                    cardStatus={cardStatus}
-                    setCardStatus={setCardStatus}
+                    onUpdateStatus={updateChoferStatus}
                     mapOpen={mapOpen}
                     setMapOpen={setMapOpen}
                     formatDate={formatDate}
@@ -246,8 +321,7 @@ export default function ChoferDashboard() {
                 r={r}
                 showChoferBadge={false}
                 readOnly={false}
-                cardStatus={cardStatus}
-                setCardStatus={setCardStatus}
+                onUpdateStatus={updateChoferStatus}
                 mapOpen={mapOpen}
                 setMapOpen={setMapOpen}
                 formatDate={formatDate}
@@ -265,22 +339,20 @@ function ReservationCard({
   r,
   showChoferBadge,
   readOnly = false,
-  cardStatus,
-  setCardStatus,
+  onUpdateStatus,
   mapOpen,
   setMapOpen,
   formatDate,
 }: {
-  r: SentReservation
+  r: ChoferReservation
   showChoferBadge: boolean
   readOnly?: boolean
-  cardStatus: Record<string, "none" | "recibida" | "confirmada">
-  setCardStatus: React.Dispatch<React.SetStateAction<Record<string, "none" | "recibida" | "confirmada">>>
+  onUpdateStatus: (id: string, status: "recibida" | "confirmada") => Promise<void>
   mapOpen: string | null
   setMapOpen: React.Dispatch<React.SetStateAction<string | null>>
   formatDate: (d: string) => string
 }) {
-  const status = cardStatus[r.id] || "none"
+  const status = r.choferStatus || "none"
   const isMapOpen = mapOpen === r.id
   const hotelInfo = findHotel(r.hotel)
   const searchName = hotelInfo ? hotelInfo.name : r.hotel
@@ -420,12 +492,7 @@ function ReservationCard({
                 ? "bg-yellow-500 text-white opacity-100"
                 : ""
             }`}
-            onClick={() =>
-              setCardStatus((prev) => ({
-                ...prev,
-                [r.id]: "recibida",
-              }))
-            }
+            onClick={() => onUpdateStatus(r.id, "recibida")}
           >
             <PackageCheck className="h-4 w-4" />
             Reserva Recibida
@@ -439,12 +506,7 @@ function ReservationCard({
                 ? "bg-blue-600 text-white opacity-100"
                 : ""
             }`}
-            onClick={() =>
-              setCardStatus((prev) => ({
-                ...prev,
-                [r.id]: "confirmada",
-              }))
-            }
+            onClick={() => onUpdateStatus(r.id, "confirmada")}
           >
             <UserCheck className="h-4 w-4" />
             Recogida Confirmada
