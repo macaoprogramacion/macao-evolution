@@ -22,6 +22,8 @@ import {
   Send,
   Loader2,
   Plus,
+  Ticket,
+  DollarSign,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -76,6 +78,8 @@ type Reservation = {
   assignedChoferId: string | null
   assignedChoferName: string | null
   choferStatus: "none" | "recibida" | "confirmada"
+  amount: number | null
+  notes: string
 }
 
 type Chofer = {
@@ -108,6 +112,8 @@ function mapRow(r: any): Reservation {
     assignedChoferId: r.assigned_chofer_id,
     assignedChoferName: r.assigned_chofer_name,
     choferStatus: r.chofer_status || "none",
+    amount: r.amount != null ? Number(r.amount) : null,
+    notes: r.notes || "",
   }
 }
 
@@ -148,6 +154,7 @@ export default function OperationPage() {
     channel_url: "",
     channel_color: "#6b7280",
     date: new Date().toISOString().slice(0, 10),
+    amount: 0,
     notes: "",
   })
 
@@ -168,6 +175,7 @@ export default function OperationPage() {
     channel_url: "",
     channel_color: "#6b7280",
     date: new Date().toISOString().slice(0, 10),
+    amount: 0,
     notes: "",
   })
 
@@ -299,6 +307,99 @@ export default function OperationPage() {
     } catch (e) {
       console.error("Error updating status:", e)
     }
+  }
+
+  // Generar y descargar ticket para el cliente
+  const downloadTicket = (res: Reservation) => {
+    const formatDate = (d: string) => {
+      const date = new Date(d + "T12:00:00")
+      return date.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    }
+
+    const transportLabel: Record<string, string> = {
+      included: "Incluido",
+      self: "Transporte propio",
+      hotel_shuttle: "Shuttle del hotel",
+    }
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ticket - ${res.customerName}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f3f4f6; padding: 20px; }
+  .ticket { max-width: 480px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.1); }
+  .header { background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: #fff; padding: 28px 24px; text-align: center; }
+  .header h1 { font-size: 22px; font-weight: 800; letter-spacing: 2px; margin-bottom: 4px; }
+  .header p { font-size: 12px; opacity: 0.85; letter-spacing: 1px; }
+  .status { text-align: center; padding: 12px; background: #f0fdf4; border-bottom: 1px solid #e5e7eb; }
+  .status span { display: inline-block; background: #22c55e; color: #fff; font-size: 12px; font-weight: 700; padding: 4px 16px; border-radius: 20px; letter-spacing: 0.5px; }
+  .body { padding: 24px; }
+  .guest-name { font-size: 20px; font-weight: 700; color: #111; margin-bottom: 16px; text-align: center; }
+  .section { margin-bottom: 18px; }
+  .section-title { font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+  .row:last-child { border-bottom: none; }
+  .row .label { color: #6b7280; }
+  .row .value { font-weight: 600; color: #111; text-align: right; max-width: 60%; }
+  .amount-box { background: #fef2f2; border: 2px solid #fecaca; border-radius: 12px; padding: 16px; text-align: center; margin: 16px 0; }
+  .amount-box .label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+  .amount-box .amount { font-size: 32px; font-weight: 800; color: #dc2626; }
+  .footer { text-align: center; padding: 16px 24px 24px; color: #9ca3af; font-size: 11px; line-height: 1.5; }
+  .divider { border: none; border-top: 2px dashed #e5e7eb; margin: 0; }
+  @media print { body { background: #fff; padding: 0; } .ticket { box-shadow: none; } }
+</style>
+</head>
+<body>
+<div class="ticket">
+  <div class="header">
+    <h1>MACAO OFF ROAD</h1>
+    <p>EXPERIENCE TICKET</p>
+  </div>
+  <div class="status"><span>✓ RESERVA CONFIRMADA</span></div>
+  <div class="body">
+    <div class="guest-name">${res.customerName}</div>
+    <div class="section">
+      <div class="section-title">Detalles de la Experiencia</div>
+      <div class="row"><span class="label">Experiencia</span><span class="value">${res.experience || "—"}</span></div>
+      <div class="row"><span class="label">Fecha</span><span class="value">${formatDate(res.date)}</span></div>
+      <div class="row"><span class="label">Horario</span><span class="value">${res.timeslot}</span></div>
+      <div class="row"><span class="label">Personas</span><span class="value">${res.guests} adulto${res.guests !== 1 ? "s" : ""}${res.children > 0 ? ` + ${res.children} niño${res.children > 1 ? "s" : ""}` : ""}</span></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Recogida</div>
+      <div class="row"><span class="label">Hotel</span><span class="value">${res.hotel}</span></div>
+      <div class="row"><span class="label">Ubicación</span><span class="value">${res.location}</span></div>
+      <div class="row"><span class="label">Hora de recogida</span><span class="value" style="font-size:16px;color:#dc2626;font-weight:800">${res.pickupTime}</span></div>
+      <div class="row"><span class="label">Punto</span><span class="value">${res.pickupPoint === "lobby" ? "Lobby del hotel" : "Barrera de seguridad"}</span></div>
+      <div class="row"><span class="label">Transporte</span><span class="value">${transportLabel[res.transportType] || res.transportType}</span></div>
+    </div>
+    ${res.amount != null && res.amount > 0 ? \`<div class="amount-box">
+      <div class="label">MONTO A PAGAR</div>
+      <div class="amount">$\${res.amount.toFixed(2)} USD</div>
+    </div>\` : ""}
+  </div>
+  <hr class="divider" />
+  <div class="footer">
+    Ticket generado el ${new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}<br/>
+    Para cualquier consulta: info@macaooffroad.com
+  </div>
+</div>
+</body>
+</html>`
+
+    const blob = new Blob([html], { type: "text/html" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = \`ticket-\${res.customerName.replace(/\\s+/g, "-").toLowerCase()}-\${res.date}.html\`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   // Filtrar reservas
@@ -543,6 +644,7 @@ export default function OperationPage() {
                     <TableHead>Personas</TableHead>
                     <TableHead>Transporte</TableHead>
                     <TableHead>Experiencia</TableHead>
+                    <TableHead>Monto</TableHead>
                     <TableHead>Canal</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Acciones</TableHead>
@@ -621,6 +723,11 @@ export default function OperationPage() {
                         <div className="text-sm font-medium text-gray-900">{reservation.experience}</div>
                       </TableCell>
                       <TableCell>
+                        <div className="text-sm font-medium text-gray-900">
+                          {reservation.amount != null ? `$${reservation.amount.toFixed(2)}` : "—"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
                         <div className="space-y-1">
                           <Badge
                             className="flex items-center gap-1 w-fit"
@@ -677,6 +784,15 @@ export default function OperationPage() {
                               Enviar a Chofer
                             </Button>
                           )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 w-full"
+                            onClick={() => downloadTicket(reservation)}
+                          >
+                            <Ticket className="w-3 h-3 mr-1" />
+                            Ticket
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -934,6 +1050,19 @@ export default function OperationPage() {
                 value={newRes.experience}
                 onChange={(e) => setNewRes({ ...newRes, experience: e.target.value })}
                 placeholder="Elite Couple, Apex Predator..."
+              />
+            </div>
+
+            {/* Monto */}
+            <div className="space-y-1.5">
+              <Label>Monto (USD)</Label>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                value={newRes.amount}
+                onChange={(e) => setNewRes({ ...newRes, amount: parseFloat(e.target.value) || 0 })}
+                placeholder="0.00"
               />
             </div>
 

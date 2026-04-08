@@ -479,6 +479,7 @@ CREATE TABLE reservations (
   assigned_chofer_name  TEXT,
   assigned_at           TIMESTAMPTZ,
   chofer_status         chofer_status NOT NULL DEFAULT 'none',
+  amount                NUMERIC(10,2),
   notes                 TEXT,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()

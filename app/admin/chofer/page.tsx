@@ -131,10 +131,10 @@ export default function ChoferDashboard() {
   // Actualizar chofer_status en Supabase
   const updateChoferStatus = async (reservationId: string, newStatus: "recibida" | "confirmada") => {
     try {
-      const { error } = await supabase.rpc("update_chofer_status", {
-        p_reservation_id: reservationId,
-        p_chofer_status: newStatus,
-      })
+      const { error } = await supabase
+        .from("reservations")
+        .update({ chofer_status: newStatus, updated_at: new Date().toISOString() })
+        .eq("id", reservationId)
       if (!error) {
         setReservations((prev) =>
           prev.map((r) =>
@@ -143,9 +143,11 @@ export default function ChoferDashboard() {
         )
       } else {
         console.error("Error updating chofer status:", error)
+        alert("Error al actualizar estado: " + error.message)
       }
     } catch (e) {
       console.error("Error updating chofer status:", e)
+      alert("Error al actualizar estado")
     }
   }
 
@@ -352,6 +354,7 @@ function ReservationCard({
   setMapOpen: React.Dispatch<React.SetStateAction<string | null>>
   formatDate: (d: string) => string
 }) {
+  const [updating, setUpdating] = useState(false)
   const status = r.choferStatus || "none"
   const isMapOpen = mapOpen === r.id
   const hotelInfo = findHotel(r.hotel)
@@ -486,30 +489,30 @@ function ReservationCard({
           <Button
             size="sm"
             variant={status === "recibida" || status === "confirmada" ? "default" : "outline"}
-            disabled={status === "recibida" || status === "confirmada"}
+            disabled={status === "recibida" || status === "confirmada" || updating}
             className={`flex-1 text-xs h-11 gap-1.5 ${
               status === "recibida" || status === "confirmada"
                 ? "bg-yellow-500 text-white opacity-100"
                 : ""
             }`}
-            onClick={() => onUpdateStatus(r.id, "recibida")}
+            onClick={async () => { setUpdating(true); await onUpdateStatus(r.id, "recibida"); setUpdating(false) }}
           >
             <PackageCheck className="h-4 w-4" />
-            Reserva Recibida
+            {updating ? "Actualizando..." : "Reserva Recibida"}
           </Button>
           <Button
             size="sm"
             variant={status === "confirmada" ? "default" : "outline"}
-            disabled={status !== "recibida"}
+            disabled={status !== "recibida" || updating}
             className={`flex-1 text-xs h-11 gap-1.5 ${
               status === "confirmada"
                 ? "bg-blue-600 text-white opacity-100"
                 : ""
             }`}
-            onClick={() => onUpdateStatus(r.id, "confirmada")}
+            onClick={async () => { setUpdating(true); await onUpdateStatus(r.id, "confirmada"); setUpdating(false) }}
           >
             <UserCheck className="h-4 w-4" />
-            Recogida Confirmada
+            {updating ? "Actualizando..." : "Recogida Confirmada"}
           </Button>
         </div>
         )}
