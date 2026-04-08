@@ -183,6 +183,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ╚══════════════════════════════════════════════════════════════════════════╝
 
 -- Vista: Operaciones con info del chofer
+DROP VIEW IF EXISTS operations_summary;
 CREATE OR REPLACE VIEW operations_summary AS
 SELECT
   r.*,
@@ -204,6 +205,7 @@ LEFT JOIN dashboard_users du ON du.id = r.assigned_chofer_id
 ORDER BY r.date DESC, r.pickup_time;
 
 -- Vista: Reservas de un chofer
+DROP VIEW IF EXISTS chofer_reservations;
 CREATE OR REPLACE VIEW chofer_reservations AS
 SELECT
   r.id,
