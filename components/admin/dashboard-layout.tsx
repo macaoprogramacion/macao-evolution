@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft } from "lucide-react"
+import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft, Ship } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -21,6 +21,7 @@ import {
 const navigation = [
   { name: "Overview", href: "/admin", icon: Home },
   { name: "Operation", href: "/admin/operation", icon: ClipboardList },
+  { name: "Operación Saona", href: "/admin/operation-saona", icon: Ship },
   { name: "Mis Recogidas", href: "/admin/chofer", icon: Navigation },
   { name: "Representantes", href: "/admin/representatives", icon: Handshake },
   { name: "Products", href: "/admin/products", icon: Package },
@@ -35,7 +36,7 @@ const navigation = [
 // admin and both have access to everything
 // DO NOT add "/admin" here — it matches all subpaths via startsWith
 const rolePageAccess: Record<string, string[]> = {
-  operaciones: ["/admin/operation"],
+  operaciones: ["/admin/operation", "/admin/operation-saona"],
   chofer: ["/admin/chofer"],
   contabilidad: ["/admin/analytics", "/admin/products"],
 }
