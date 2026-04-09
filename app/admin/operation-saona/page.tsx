@@ -377,7 +377,7 @@ export default function OperationSaonaPage() {
           <div>
             <h1 className="text-2xl md:text-3xl font-title text-gray-900 flex items-center gap-2">
               <Ship className="w-7 h-7 text-cyan-600" />
-              Operación Saona
+              Operacion Saona
             </h1>
             <p className="text-sm md:text-base text-gray-600 mt-1">Gestión de reservas del tour Saona Island</p>
           </div>

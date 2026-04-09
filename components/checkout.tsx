@@ -604,7 +604,7 @@ export function CheckoutModal({
                 <MapPin size={24} className="text-foreground" />
               </div>
               <h2 className="text-xl font-title text-foreground mb-1 text-center">
-                ¿Dónde te recogemos?
+                ¿Donde te recogemos?
               </h2>
               <p className="text-sm text-muted-foreground mb-6 text-center">
                 Indica el lugar, fecha y horario para tu aventura

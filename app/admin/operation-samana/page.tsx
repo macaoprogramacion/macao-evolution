@@ -368,7 +368,7 @@ export default function OperationSamanaPage() {
           <div>
             <h1 className="text-2xl md:text-3xl font-title text-gray-900 flex items-center gap-2">
               <Mountain className="w-7 h-7 text-green-600" />
-              Operación Samaná
+              Operacion Samana
             </h1>
             <p className="text-sm md:text-base text-gray-600 mt-1">Gestión de reservas del tour Samaná</p>
           </div>
