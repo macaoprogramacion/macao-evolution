@@ -667,9 +667,9 @@ export default function Dashboard() {
             <CardContent>
               <div className="space-y-4">
                 {[
-                  { turno: "Primer Turno (06:00 – 14:00)", amount: 4800, sales: 12, pct: 35 },
-                  { turno: "Segundo Turno (14:00 – 22:00)", amount: 8200, sales: 22, pct: 55 },
-                  { turno: "Tercer Turno (22:00 – 06:00)", amount: 1400, sales: 4, pct: 10 },
+                  { turno: "Turno 9:00 AM", amount: 4800, sales: 12, pct: 35 },
+                  { turno: "Turno 12:00 PM", amount: 8200, sales: 22, pct: 55 },
+                  { turno: "Turno 3:00 PM", amount: 1400, sales: 4, pct: 10 },
                 ].map((t, i) => (
                   <div key={i}>
                     <div className="flex items-center justify-between mb-1">
@@ -704,11 +704,11 @@ export default function Dashboard() {
                 </TableHeader>
                 <TableBody>
                   {[
-                    { num: "FAC-0032", client: "María García", turno: "1er Turno", total: "$70.00" },
-                    { num: "FAC-0031", client: "Carlos Méndez", turno: "2do Turno", total: "$50.00" },
-                    { num: "FAC-0030", client: "Ana Rodríguez", turno: "2do Turno", total: "$30.00" },
-                    { num: "FAC-0029", client: "Juan Pérez", turno: "1er Turno", total: "$70.00" },
-                    { num: "FAC-0028", client: "Luis Fernández", turno: "3er Turno", total: "$50.00" },
+                    { num: "FAC-0032", client: "María García", turno: "9:00 AM", total: "$70.00" },
+                    { num: "FAC-0031", client: "Carlos Méndez", turno: "12:00 PM", total: "$50.00" },
+                    { num: "FAC-0030", client: "Ana Rodríguez", turno: "12:00 PM", total: "$30.00" },
+                    { num: "FAC-0029", client: "Juan Pérez", turno: "9:00 AM", total: "$70.00" },
+                    { num: "FAC-0028", client: "Luis Fernández", turno: "3:00 PM", total: "$50.00" },
                   ].map((inv, i) => (
                     <TableRow key={i}>
                       <TableCell className="text-xs font-medium">{inv.num}</TableCell>

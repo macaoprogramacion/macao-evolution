@@ -531,11 +531,11 @@ function DevolucionPanel({ invoices }) {
 // Ventas por Turno Panel Component — reads real invoices
 function VentasTurnoPanel({ invoices }) {
   const turnoData = calculateSalesByTurno(invoices);
-  const turnoTimes = { 'Primer Turno': '06:00 – 14:00', 'Segundo Turno': '14:00 – 22:00', 'Tercer Turno': '22:00 – 06:00' };
+  const turnoTimes = { 'Turno 9:00': '9:00 AM', 'Turno 12:00': '12:00 PM', 'Turno 3:00': '3:00 PM' };
 
   // Determine current turno by hour
   const currentHour = new Date().getHours();
-  const currentTurno = currentHour >= 6 && currentHour < 14 ? 'Primer Turno' : currentHour >= 14 && currentHour < 22 ? 'Segundo Turno' : 'Tercer Turno';
+  const currentTurno = currentHour < 12 ? 'Turno 9:00' : currentHour < 15 ? 'Turno 12:00' : 'Turno 3:00';
   const currentData = turnoData.find(t => t.shift === currentTurno) || { sales: 0, amount: 0 };
   const totalToday = turnoData.reduce((s, t) => s + t.amount, 0);
   const totalSales = turnoData.reduce((s, t) => s + t.sales, 0);
@@ -545,8 +545,8 @@ function VentasTurnoPanel({ invoices }) {
   const dateGroups = {};
   invoices.forEach(inv => {
     const d = inv.date || 'Sin fecha';
-    if (!dateGroups[d]) dateGroups[d] = { 'Primer Turno': 0, 'Segundo Turno': 0, 'Tercer Turno': 0 };
-    const t = inv.turno || 'Primer Turno';
+    if (!dateGroups[d]) dateGroups[d] = { 'Turno 9:00': 0, 'Turno 12:00': 0, 'Turno 3:00': 0 };
+    const t = inv.turno || 'Turno 9:00';
     dateGroups[d][t] = (dateGroups[d][t] || 0) + inv.total;
   });
   const historyDays = Object.entries(dateGroups).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 5);
@@ -615,16 +615,16 @@ function VentasTurnoPanel({ invoices }) {
                   </div>
                   <div className="flex gap-4 text-sm">
                     <div className="text-center">
-                      <p className="text-white/50 text-xs">1er Turno</p>
-                      <p className="text-white">US$ {(turnos['Primer Turno'] || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                      <p className="text-white/50 text-xs">9:00 AM</p>
+                      <p className="text-white">US$ {(turnos['Turno 9:00'] || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-white/50 text-xs">2do Turno</p>
-                      <p className="text-white">US$ {(turnos['Segundo Turno'] || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                      <p className="text-white/50 text-xs">12:00 PM</p>
+                      <p className="text-white">US$ {(turnos['Turno 12:00'] || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-white/50 text-xs">3er Turno</p>
-                      <p className="text-white">US$ {(turnos['Tercer Turno'] || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                      <p className="text-white/50 text-xs">3:00 PM</p>
+                      <p className="text-white">US$ {(turnos['Turno 3:00'] || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
                     </div>
                   </div>
                 </div>
@@ -778,12 +778,17 @@ function CustomSelect({ label, value, onChange, options, placeholder }) {
             {options.map((option) => (
               <button
                 key={option.value}
+                disabled={option.disabled}
                 onClick={() => {
+                  if (option.disabled) return;
                   onChange(option.value);
                   setIsOpen(false);
                 }}
-                className="w-full px-4 py-2.5 text-left text-white hover:bg-white/10 
-                           transition-colors text-sm"
+                className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                  option.disabled
+                    ? 'text-white/25 cursor-not-allowed'
+                    : 'text-white hover:bg-white/10'
+                }`}
               >
                 {option.label}
               </button>
@@ -966,7 +971,7 @@ function POSReceipt({ invoice, onClose }) {
               ` : ''}
               <tr>
                 <td>Turno:</td>
-                <td>${invoice.turno || 'Primer Turno'}</td>
+                <td>${invoice.turno || 'Turno 9:00'}</td>
               </tr>
             </table>
             
@@ -1067,7 +1072,7 @@ function POSReceipt({ invoice, onClose }) {
               )}
               <tr>
                 <td className="py-1 font-semibold">Turno:</td>
-                <td className="py-1 text-right">{invoice.turno || 'Primer Turno'}</td>
+                <td className="py-1 text-right">{invoice.turno || 'Turno 9:00'}</td>
               </tr>
             </tbody>
           </table>
@@ -1241,7 +1246,7 @@ export default function BillingPage() {
       timestamp: new Date().toISOString(),
       clientName: clientName || 'Cliente General',
       clientPhone: clientPhone,
-      turno: turno || 'Primer Turno',
+      turno: turno || 'Turno 9:00',
       photographer: photographer,
       source: 'billing',
       date: new Date().toLocaleDateString('es-DO'),
@@ -1267,7 +1272,7 @@ export default function BillingPage() {
         id: `bc_${Date.now()}`,
         name: clientName || 'Cliente General',
         phone: clientPhone,
-        turno: turno || 'Primer Turno',
+        turno: turno || 'Turno 9:00',
         photographer: photographer,
         invoiceNumber: newInvoice.invoiceNumber,
         total: total,
@@ -1427,11 +1432,17 @@ export default function BillingPage() {
                 value={turno}
                 onChange={setTurno}
                 placeholder="Seleccionar turno..."
-                options={[
-                  { value: 'Primer Turno', label: 'Primer Turno (06:00 – 14:00)' },
-                  { value: 'Segundo Turno', label: 'Segundo Turno (14:00 – 22:00)' },
-                  { value: 'Tercer Turno', label: 'Tercer Turno (22:00 – 06:00)' },
-                ]}
+                options={(() => {
+                  const now = new Date();
+                  const h = now.getHours();
+                  const m = now.getMinutes();
+                  const current = h + m / 60;
+                  return [
+                    { value: 'Turno 9:00', label: 'Turno 9:00 AM', disabled: current >= 12 },
+                    { value: 'Turno 12:00', label: 'Turno 12:00 PM', disabled: current >= 15 },
+                    { value: 'Turno 3:00', label: 'Turno 3:00 PM', disabled: current >= 18 },
+                  ];
+                })()}
               />
 
               {/* Client Name */}
