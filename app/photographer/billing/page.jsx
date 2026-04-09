@@ -1433,14 +1433,11 @@ export default function BillingPage() {
                 onChange={setTurno}
                 placeholder="Seleccionar turno..."
                 options={(() => {
-                  const now = new Date();
-                  const h = now.getHours();
-                  const m = now.getMinutes();
-                  const current = h + m / 60;
+                  const h = new Date().getHours();
                   return [
-                    { value: 'Turno 9:00', label: 'Turno 9:00 AM', disabled: current >= 12 },
-                    { value: 'Turno 12:00', label: 'Turno 12:00 PM', disabled: current >= 15 },
-                    { value: 'Turno 3:00', label: 'Turno 3:00 PM', disabled: current >= 18 },
+                    { value: 'Turno 9:00', label: 'Turno 9:00 AM', disabled: h >= 10 },
+                    { value: 'Turno 12:00', label: 'Turno 12:00 PM', disabled: h >= 13 },
+                    { value: 'Turno 3:00', label: 'Turno 3:00 PM', disabled: h >= 16 },
                   ];
                 })()}
               />
