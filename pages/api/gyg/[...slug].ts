@@ -1,11 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next"
 import { authenticate, authError, gygError } from "@/lib/gyg/config"
-import availabilityHandler from "../availability"
-import reserveHandler from "../reserve"
-import cancelReservationHandler from "../cancel-reservation"
-import bookHandler from "../book"
-import cancelBookingHandler from "../cancel-booking"
-import notifyHandler from "../notify"
+import availabilityHandler from "./availability"
+import reserveHandler from "./reserve"
+import cancelReservationHandler from "./cancel-reservation"
+import bookHandler from "./book"
+import cancelBookingHandler from "./cancel-booking"
+import notifyHandler from "./notify"
 
 /* ────────────────────────────────────────────────────────────────
    GYG Supplier API – Path-based Router
