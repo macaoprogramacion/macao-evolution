@@ -72,6 +72,8 @@ type SamanaReservation = {
   notes: string
   lunchIncluded: boolean
   whaleWatching: boolean
+  gygBookingRef: string
+  gygBookingReference: string
 }
 
 function mapRow(r: any): SamanaReservation {
@@ -95,6 +97,8 @@ function mapRow(r: any): SamanaReservation {
     notes: r.notes || "",
     lunchIncluded: r.lunch_included ?? true,
     whaleWatching: r.whale_watching ?? false,
+    gygBookingRef: r.gyg_booking_ref || "",
+    gygBookingReference: r.gyg_booking_reference || "",
   }
 }
 
@@ -532,6 +536,7 @@ export default function OperationSamanaPage() {
                     <TableHead>Ballenas</TableHead>
                     <TableHead>Monto</TableHead>
                     <TableHead>Canal</TableHead>
+                    <TableHead>Ref. GYG</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
@@ -634,6 +639,15 @@ export default function OperationSamanaPage() {
                           <Globe className="w-3 h-3" />
                           {reservation.channel}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {reservation.gygBookingRef ? (
+                          <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 text-xs">
+                            {reservation.gygBookingReference || reservation.gygBookingRef}
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">{getStatusButton(reservation)}</div>

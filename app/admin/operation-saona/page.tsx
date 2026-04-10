@@ -75,6 +75,8 @@ type SaonaReservation = {
   notes: string
   lunchIncluded: boolean
   drinkPackage: string
+  gygBookingRef: string
+  gygBookingReference: string
 }
 
 function mapRow(r: any): SaonaReservation {
@@ -98,6 +100,8 @@ function mapRow(r: any): SaonaReservation {
     notes: r.notes || "",
     lunchIncluded: r.lunch_included ?? true,
     drinkPackage: r.drink_package || "standard",
+    gygBookingRef: r.gyg_booking_ref || "",
+    gygBookingReference: r.gyg_booking_reference || "",
   }
 }
 
@@ -539,6 +543,7 @@ export default function OperationSaonaPage() {
                     <TableHead>Bebidas</TableHead>
                     <TableHead>Monto</TableHead>
                     <TableHead>Canal</TableHead>
+                    <TableHead>Ref. GYG</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
@@ -638,6 +643,15 @@ export default function OperationSaonaPage() {
                           <Globe className="w-3 h-3" />
                           {reservation.channel}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {reservation.gygBookingRef ? (
+                          <span className="font-mono text-xs text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
+                            {reservation.gygBookingRef}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">{getStatusButton(reservation)}</div>
