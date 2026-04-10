@@ -94,6 +94,7 @@ CREATE INDEX IF NOT EXISTS idx_gyg_reservations_expires ON gyg_reservations(expi
 
 -- Disable RLS on GYG tables (auth handled at API level)
 ALTER TABLE gyg_reservations DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON gyg_reservations TO anon, authenticated, service_role;
 
 -- Tracks confirmed GYG bookings with their reference mapping.
 -- Links to the destination reservation table (saona or samana).
@@ -126,6 +127,7 @@ CREATE INDEX IF NOT EXISTS idx_gyg_bookings_saona ON gyg_bookings(saona_reservat
 CREATE INDEX IF NOT EXISTS idx_gyg_bookings_status ON gyg_bookings(status);
 
 ALTER TABLE gyg_bookings DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON gyg_bookings TO anon, authenticated, service_role;
 
 -- Log of GYG notifications received (product deactivations, etc.)
 CREATE TABLE IF NOT EXISTS gyg_notifications (
@@ -138,6 +140,11 @@ CREATE TABLE IF NOT EXISTS gyg_notifications (
 );
 
 ALTER TABLE gyg_notifications DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON gyg_notifications TO anon, authenticated, service_role;
+
+-- Grant access on destination tables too
+GRANT ALL ON saona_reservations TO anon, authenticated, service_role;
+GRANT ALL ON samana_reservations TO anon, authenticated, service_role;
 
 -- Add gyg columns to saona_reservations if the table exists
 DO $$
