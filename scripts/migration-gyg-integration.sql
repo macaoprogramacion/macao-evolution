@@ -2,9 +2,75 @@
 -- GYG (GetYourGuide) Integration Tables
 -- Adds reservation hold tracking for the GYG Supplier API flow:
 --   reserve → book → cancel
--- The final bookings land in `saona_reservations` which is already
--- consumed by admin/operation-saona.
+-- The final bookings land in saona_reservations or samana_reservations
+-- consumed by admin/operation-saona and admin/operation-samana.
 -- =====================================================================
+
+-- ─── PREREQUISITE: Ensure destination tables exist ──────────────────────────
+
+CREATE TABLE IF NOT EXISTS saona_reservations (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_name TEXT NOT NULL,
+  phone         TEXT,
+  email         TEXT,
+  hotel         TEXT,
+  location      TEXT,
+  guests        INT DEFAULT 1,
+  children      INT DEFAULT 0,
+  pickup_time   TEXT,
+  boat_type     TEXT DEFAULT 'catamaran',
+  lunch_included BOOLEAN DEFAULT TRUE,
+  drink_package TEXT DEFAULT 'standard',
+  channel       TEXT,
+  channel_url   TEXT,
+  channel_color TEXT DEFAULT '#6b7280',
+  date          DATE NOT NULL,
+  status        TEXT DEFAULT 'pending',
+  amount        NUMERIC(10,2),
+  notes         TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE saona_reservations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow full access for authenticated users" ON saona_reservations;
+CREATE POLICY "Allow full access for authenticated users" ON saona_reservations
+  FOR ALL USING (true) WITH CHECK (true);
+CREATE INDEX IF NOT EXISTS idx_saona_reservations_date ON saona_reservations(date);
+CREATE INDEX IF NOT EXISTS idx_saona_reservations_status ON saona_reservations(status);
+
+CREATE TABLE IF NOT EXISTS samana_reservations (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_name   TEXT NOT NULL,
+  phone           TEXT,
+  email           TEXT,
+  hotel           TEXT,
+  location        TEXT,
+  guests          INT DEFAULT 1,
+  children        INT DEFAULT 0,
+  pickup_time     TEXT,
+  tour_type       TEXT DEFAULT 'full_day',
+  lunch_included  BOOLEAN DEFAULT TRUE,
+  whale_watching  BOOLEAN DEFAULT FALSE,
+  channel         TEXT,
+  channel_url     TEXT,
+  channel_color   TEXT DEFAULT '#6b7280',
+  date            DATE NOT NULL,
+  status          TEXT DEFAULT 'pending',
+  amount          NUMERIC(10,2),
+  notes           TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE samana_reservations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow full access for authenticated users" ON samana_reservations;
+CREATE POLICY "Allow full access for authenticated users" ON samana_reservations
+  FOR ALL USING (true) WITH CHECK (true);
+CREATE INDEX IF NOT EXISTS idx_samana_reservations_date ON samana_reservations(date);
+CREATE INDEX IF NOT EXISTS idx_samana_reservations_status ON samana_reservations(status);
+
+-- ─── GYG TABLES ─────────────────────────────────────────────────────────────
 
 -- Tracks GYG reservations (holds) before they become confirmed bookings.
 -- A reservation expires after the hold time if not converted to a booking.
@@ -27,6 +93,7 @@ CREATE INDEX IF NOT EXISTS idx_gyg_reservations_gyg_ref ON gyg_reservations(gyg_
 CREATE INDEX IF NOT EXISTS idx_gyg_reservations_expires ON gyg_reservations(expires_at);
 
 ALTER TABLE gyg_reservations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow full access gyg_reservations" ON gyg_reservations;
 CREATE POLICY "Allow full access gyg_reservations" ON gyg_reservations
   FOR ALL USING (true) WITH CHECK (true);
 
@@ -61,6 +128,7 @@ CREATE INDEX IF NOT EXISTS idx_gyg_bookings_saona ON gyg_bookings(saona_reservat
 CREATE INDEX IF NOT EXISTS idx_gyg_bookings_status ON gyg_bookings(status);
 
 ALTER TABLE gyg_bookings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow full access gyg_bookings" ON gyg_bookings;
 CREATE POLICY "Allow full access gyg_bookings" ON gyg_bookings
   FOR ALL USING (true) WITH CHECK (true);
 
@@ -75,31 +143,42 @@ CREATE TABLE IF NOT EXISTS gyg_notifications (
 );
 
 ALTER TABLE gyg_notifications ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow full access gyg_notifications" ON gyg_notifications;
 CREATE POLICY "Allow full access gyg_notifications" ON gyg_notifications
   FOR ALL USING (true) WITH CHECK (true);
 
--- Add gyg columns to saona_reservations if not present
+-- Add gyg columns to saona_reservations if the table exists
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'saona_reservations' AND column_name = 'gyg_booking_ref'
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_name = 'saona_reservations'
   ) THEN
-    ALTER TABLE saona_reservations ADD COLUMN gyg_booking_ref TEXT;
-    ALTER TABLE saona_reservations ADD COLUMN gyg_booking_reference TEXT;
-    CREATE INDEX IF NOT EXISTS idx_saona_gyg_ref ON saona_reservations(gyg_booking_ref);
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'saona_reservations' AND column_name = 'gyg_booking_ref'
+    ) THEN
+      ALTER TABLE saona_reservations ADD COLUMN gyg_booking_ref TEXT;
+      ALTER TABLE saona_reservations ADD COLUMN gyg_booking_reference TEXT;
+      CREATE INDEX IF NOT EXISTS idx_saona_gyg_ref ON saona_reservations(gyg_booking_ref);
+    END IF;
   END IF;
 END $$;
 
--- Add gyg columns to samana_reservations if not present
+-- Add gyg columns to samana_reservations if the table exists
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'samana_reservations' AND column_name = 'gyg_booking_ref'
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_name = 'samana_reservations'
   ) THEN
-    ALTER TABLE samana_reservations ADD COLUMN gyg_booking_ref TEXT;
-    ALTER TABLE samana_reservations ADD COLUMN gyg_booking_reference TEXT;
-    CREATE INDEX IF NOT EXISTS idx_samana_gyg_ref ON samana_reservations(gyg_booking_ref);
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'samana_reservations' AND column_name = 'gyg_booking_ref'
+    ) THEN
+      ALTER TABLE samana_reservations ADD COLUMN gyg_booking_ref TEXT;
+      ALTER TABLE samana_reservations ADD COLUMN gyg_booking_reference TEXT;
+      CREATE INDEX IF NOT EXISTS idx_samana_gyg_ref ON samana_reservations(gyg_booking_ref);
+    END IF;
   END IF;
 END $$;
