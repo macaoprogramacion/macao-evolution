@@ -105,8 +105,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       )
     }
 
-    // Create the reservation hold
-    const expiresAt = new Date(Date.now() + product.reserveHoldMinutes * 60 * 1000).toISOString()
+    // Create the reservation hold – GYG requires ISO 8601 without milliseconds
+    const expiresAt = new Date(Date.now() + product.reserveHoldMinutes * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, "Z")
 
     const { data: reservation, error } = await supabase
       .from("gyg_reservations")
