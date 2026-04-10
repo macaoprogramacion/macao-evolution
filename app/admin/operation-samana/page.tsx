@@ -20,6 +20,8 @@ import {
   Ticket,
   Mountain,
   TreePalm,
+  Copy,
+  MessageSquare,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,14 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import {
   Dialog,
   DialogContent,
@@ -74,6 +68,7 @@ type SamanaReservation = {
   whaleWatching: boolean
   gygBookingRef: string
   gygBookingReference: string
+  language: string
 }
 
 function mapRow(r: any): SamanaReservation {
@@ -99,6 +94,7 @@ function mapRow(r: any): SamanaReservation {
     whaleWatching: r.whale_watching ?? false,
     gygBookingRef: r.gyg_booking_ref || "",
     gygBookingReference: r.gyg_booking_reference || "",
+    language: r.language || "en",
   }
 }
 
@@ -109,6 +105,7 @@ export default function OperationSamanaPage() {
   const [channelFilter, setChannelFilter] = useState("all")
   const [tourFilter, setTourFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [copiedMsg, setCopiedMsg] = useState("")
 
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -130,6 +127,7 @@ export default function OperationSamanaPage() {
     notes: "",
     lunch_included: true,
     whale_watching: false,
+    language: "en",
   })
 
   const resetNewRes = () => setNewRes({
@@ -150,6 +148,7 @@ export default function OperationSamanaPage() {
     notes: "",
     lunch_included: true,
     whale_watching: false,
+    language: "en",
   })
 
   const channelColors: Record<string, string> = {
@@ -228,25 +227,223 @@ export default function OperationSamanaPage() {
     }
   }
 
+  const languageOptions = [
+    { value: "en", label: "English", flag: "🇬🇧" },
+    { value: "es", label: "Español", flag: "🇪🇸" },
+    { value: "fr", label: "Français", flag: "🇫🇷" },
+    { value: "de", label: "Deutsch", flag: "🇩🇪" },
+    { value: "it", label: "Italiano", flag: "🇮🇹" },
+    { value: "pt", label: "Português", flag: "🇵🇹" },
+    { value: "nl", label: "Nederlands", flag: "🇳🇱" },
+    { value: "ru", label: "Русский", flag: "🇷🇺" },
+    { value: "pl", label: "Polski", flag: "🇵🇱" },
+  ]
+
+  const langLocales: Record<string, string> = {
+    en: "en-US", es: "es-ES", fr: "fr-FR", de: "de-DE", it: "it-IT", pt: "pt-PT", nl: "nl-NL", ru: "ru-RU", pl: "pl-PL",
+  }
+
+  const t9n: Record<string, Record<string, string>> = {
+    en: {
+      greeting: "Hello", thankYou: "Thank you for booking the Samana Tour with Tavisa Travel.",
+      pickupIs: "Your pickup time is", waitAt: "Please wait at", atTime: "at the indicated time.",
+      beReady: "Please be ready 10 minutes in advance.", getReady: "Get ready for a unique experience in Samaná!",
+      details: "TOUR DETAILS", type: "Type", guests: "Guests", adults: "adults", children: "children",
+      date: "Date", ref: "Reference",
+      ticket: "EXPERIENCE TICKET", confirmed: "RESERVATION CONFIRMED", tourDetails: "Tour Details",
+      tourType: "Tour type", people: "People", lunch: "Lunch", included: "Included", notIncluded: "Not included",
+      whaleWatch: "Whale watching", yes: "Yes", no: "No", pickup: "Pickup", hotel: "Hotel", location: "Location",
+      pickupTime: "Pickup time", amount: "AMOUNT TO PAY", generated: "Ticket generated on",
+      inquiries: "For any inquiries:", fullDay: "Full Day Tour", halfDay: "Half Day",
+      whaleOnly: "Whale Watching", cayoLev: "Cayo Levantado",
+    },
+    es: {
+      greeting: "Hola", thankYou: "Gracias por reservar el tour de Samaná con Tavisa Travel.",
+      pickupIs: "Su hora de recogida es", waitAt: "Por favor espere en", atTime: "a la hora indicada.",
+      beReady: "Por favor esté listo 10 minutos antes.", getReady: "¡Prepárese para una experiencia única en Samaná!",
+      details: "DETALLES DEL TOUR", type: "Tipo", guests: "Personas", adults: "adultos", children: "niños",
+      date: "Fecha", ref: "Referencia",
+      ticket: "TICKET DE EXPERIENCIA", confirmed: "RESERVA CONFIRMADA", tourDetails: "Detalles del Tour",
+      tourType: "Tipo de tour", people: "Personas", lunch: "Almuerzo", included: "Incluido", notIncluded: "No incluido",
+      whaleWatch: "Avistamiento de ballenas", yes: "Sí", no: "No", pickup: "Recogida", hotel: "Hotel", location: "Ubicación",
+      pickupTime: "Hora de recogida", amount: "MONTO A PAGAR", generated: "Ticket generado el",
+      inquiries: "Para cualquier consulta:", fullDay: "Tour Completo (Día Entero)", halfDay: "Medio Día",
+      whaleOnly: "Avistamiento de Ballenas", cayoLev: "Cayo Levantado",
+    },
+    fr: {
+      greeting: "Bonjour", thankYou: "Merci d'avoir réservé le tour de Samaná avec Tavisa Travel.",
+      pickupIs: "Votre heure de prise en charge est", waitAt: "Veuillez attendre à", atTime: "à l'heure indiquée.",
+      beReady: "Merci d'être prêt 10 minutes à l'avance.", getReady: "Préparez-vous pour une expérience unique à Samaná !",
+      details: "DÉTAILS DE LA VISITE", type: "Type", guests: "Personnes", adults: "adultes", children: "enfants",
+      date: "Date", ref: "Référence",
+      ticket: "TICKET D'EXPÉRIENCE", confirmed: "RÉSERVATION CONFIRMÉE", tourDetails: "Détails de la visite",
+      tourType: "Type de visite", people: "Personnes", lunch: "Déjeuner", included: "Inclus", notIncluded: "Non inclus",
+      whaleWatch: "Observation des baleines", yes: "Oui", no: "Non", pickup: "Prise en charge", hotel: "Hôtel", location: "Emplacement",
+      pickupTime: "Heure de prise en charge", amount: "MONTANT À PAYER", generated: "Ticket généré le",
+      inquiries: "Pour toute question :", fullDay: "Visite complète (journée entière)", halfDay: "Demi-journée",
+      whaleOnly: "Observation des baleines", cayoLev: "Cayo Levantado",
+    },
+    de: {
+      greeting: "Hallo", thankYou: "Vielen Dank für die Buchung der Samaná Tour mit Tavisa Travel.",
+      pickupIs: "Ihre Abholzeit ist", waitAt: "Bitte warten Sie an", atTime: "zur angegebenen Zeit.",
+      beReady: "Bitte seien Sie 10 Minuten vorher bereit.", getReady: "Machen Sie sich bereit für ein einzigartiges Erlebnis in Samaná!",
+      details: "TOURDETAILS", type: "Typ", guests: "Personen", adults: "Erwachsene", children: "Kinder",
+      date: "Datum", ref: "Referenz",
+      ticket: "ERLEBNIS-TICKET", confirmed: "RESERVIERUNG BESTÄTIGT", tourDetails: "Tourdetails",
+      tourType: "Tourtyp", people: "Personen", lunch: "Mittagessen", included: "Inbegriffen", notIncluded: "Nicht inbegriffen",
+      whaleWatch: "Walbeobachtung", yes: "Ja", no: "Nein", pickup: "Abholung", hotel: "Hotel", location: "Standort",
+      pickupTime: "Abholzeit", amount: "ZU ZAHLENDER BETRAG", generated: "Ticket erstellt am",
+      inquiries: "Für Fragen:", fullDay: "Ganztägige Tour", halfDay: "Halbtägig",
+      whaleOnly: "Walbeobachtung", cayoLev: "Cayo Levantado",
+    },
+    it: {
+      greeting: "Ciao", thankYou: "Grazie per aver prenotato il tour di Samaná con Tavisa Travel.",
+      pickupIs: "L'orario di ritiro è", waitAt: "Si prega di attendere a", atTime: "all'orario indicato.",
+      beReady: "Si prega di essere pronti 10 minuti prima.", getReady: "Preparatevi per un'esperienza unica a Samaná!",
+      details: "DETTAGLI DEL TOUR", type: "Tipo", guests: "Persone", adults: "adulti", children: "bambini",
+      date: "Data", ref: "Riferimento",
+      ticket: "BIGLIETTO ESPERIENZA", confirmed: "PRENOTAZIONE CONFERMATA", tourDetails: "Dettagli del tour",
+      tourType: "Tipo di tour", people: "Persone", lunch: "Pranzo", included: "Incluso", notIncluded: "Non incluso",
+      whaleWatch: "Avvistamento balene", yes: "Sì", no: "No", pickup: "Ritiro", hotel: "Hotel", location: "Posizione",
+      pickupTime: "Orario di ritiro", amount: "IMPORTO DA PAGARE", generated: "Biglietto generato il",
+      inquiries: "Per qualsiasi domanda:", fullDay: "Tour completo (giornata intera)", halfDay: "Mezza giornata",
+      whaleOnly: "Avvistamento balene", cayoLev: "Cayo Levantado",
+    },
+    pt: {
+      greeting: "Olá", thankYou: "Obrigado por reservar o tour de Samaná com a Tavisa Travel.",
+      pickupIs: "Seu horário de busca é", waitAt: "Por favor, aguarde em", atTime: "no horário indicado.",
+      beReady: "Por favor, esteja pronto 10 minutos antes.", getReady: "Prepare-se para uma experiência única em Samaná!",
+      details: "DETALHES DO TOUR", type: "Tipo", guests: "Pessoas", adults: "adultos", children: "crianças",
+      date: "Data", ref: "Referência",
+      ticket: "BILHETE DE EXPERIÊNCIA", confirmed: "RESERVA CONFIRMADA", tourDetails: "Detalhes do tour",
+      tourType: "Tipo de tour", people: "Pessoas", lunch: "Almoço", included: "Incluído", notIncluded: "Não incluído",
+      whaleWatch: "Observação de baleias", yes: "Sim", no: "Não", pickup: "Busca", hotel: "Hotel", location: "Localização",
+      pickupTime: "Horário de busca", amount: "VALOR A PAGAR", generated: "Bilhete gerado em",
+      inquiries: "Para consultas:", fullDay: "Tour completo (dia inteiro)", halfDay: "Meio dia",
+      whaleOnly: "Observação de baleias", cayoLev: "Cayo Levantado",
+    },
+    nl: {
+      greeting: "Hallo", thankYou: "Bedankt voor het boeken van de Samaná Tour met Tavisa Travel.",
+      pickupIs: "Uw ophaaltijd is", waitAt: "Wacht alstublieft bij", atTime: "op het aangegeven tijdstip.",
+      beReady: "Wees alstublieft 10 minuten van tevoren klaar.", getReady: "Bereid u voor op een unieke ervaring in Samaná!",
+      details: "TOURDETAILS", type: "Type", guests: "Personen", adults: "volwassenen", children: "kinderen",
+      date: "Datum", ref: "Referentie",
+      ticket: "BELEVINGSTICKET", confirmed: "RESERVERING BEVESTIGD", tourDetails: "Tourdetails",
+      tourType: "Type tour", people: "Personen", lunch: "Lunch", included: "Inbegrepen", notIncluded: "Niet inbegrepen",
+      whaleWatch: "Walvissen spotten", yes: "Ja", no: "Nee", pickup: "Ophalen", hotel: "Hotel", location: "Locatie",
+      pickupTime: "Ophaaltijd", amount: "TE BETALEN BEDRAG", generated: "Ticket gegenereerd op",
+      inquiries: "Voor vragen:", fullDay: "Volledige dagtour", halfDay: "Halve dag",
+      whaleOnly: "Walvissen spotten", cayoLev: "Cayo Levantado",
+    },
+    ru: {
+      greeting: "Здравствуйте", thankYou: "Спасибо за бронирование тура Самана с Tavisa Travel.",
+      pickupIs: "Время встречи:", waitAt: "Пожалуйста, ожидайте в", atTime: "в указанное время.",
+      beReady: "Пожалуйста, будьте готовы за 10 минут.", getReady: "Приготовьтесь к уникальному опыту в Самане!",
+      details: "ДЕТАЛИ ТУРА", type: "Тип", guests: "Гости", adults: "взрослых", children: "детей",
+      date: "Дата", ref: "Ссылка",
+      ticket: "БИЛЕТ НА ЭКСКУРСИЮ", confirmed: "БРОНИРОВАНИЕ ПОДТВЕРЖДЕНО", tourDetails: "Детали тура",
+      tourType: "Тип тура", people: "Человек", lunch: "Обед", included: "Включён", notIncluded: "Не включён",
+      whaleWatch: "Наблюдение за китами", yes: "Да", no: "Нет", pickup: "Встреча", hotel: "Отель", location: "Место",
+      pickupTime: "Время встречи", amount: "СУММА К ОПЛАТЕ", generated: "Билет создан",
+      inquiries: "По вопросам:", fullDay: "Полный дневной тур", halfDay: "Полдня",
+      whaleOnly: "Наблюдение за китами", cayoLev: "Кайо Левантадо",
+    },
+    pl: {
+      greeting: "Cześć", thankYou: "Dziękujemy za rezerwację wycieczki Samaná z Tavisa Travel.",
+      pickupIs: "Godzina odbioru to", waitAt: "Prosimy czekać w", atTime: "o wskazanej godzinie.",
+      beReady: "Prosimy być gotowym 10 minut wcześniej.", getReady: "Przygotuj się na wyjątkowe doświadczenie w Samaná!",
+      details: "SZCZEGÓŁY WYCIECZKI", type: "Typ", guests: "Osoby", adults: "dorosłych", children: "dzieci",
+      date: "Data", ref: "Numer referencyjny",
+      ticket: "BILET NA WYCIECZKĘ", confirmed: "REZERWACJA POTWIERDZONA", tourDetails: "Szczegóły wycieczki",
+      tourType: "Typ wycieczki", people: "Osoby", lunch: "Lunch", included: "W cenie", notIncluded: "Nie w cenie",
+      whaleWatch: "Obserwacja wielorybów", yes: "Tak", no: "Nie", pickup: "Odbiór", hotel: "Hotel", location: "Lokalizacja",
+      pickupTime: "Godzina odbioru", amount: "KWOTA DO ZAPŁATY", generated: "Bilet wygenerowany",
+      inquiries: "W razie pytań:", fullDay: "Całodniowa wycieczka", halfDay: "Pół dnia",
+      whaleOnly: "Obserwacja wielorybów", cayoLev: "Cayo Levantado",
+    },
+  }
+
+  const PRODUCT_NAME = "Samana: Hidden Waterfall & the virgin island Bacardi"
+
+  const generateChoferMessage = (res: SamanaReservation) => {
+    const totalPax = res.guests + res.children
+    const dateObj = new Date(res.date + "T12:00:00")
+    const dateStr = `${dateObj.getDate()} de ${dateObj.toLocaleDateString("es-ES", { month: "long" })} de ${dateObj.getFullYear()}`
+
+    return `🚨 NUEVA RESERVA - SAMANA TOUR (SAMANÁ)
+👤 Nombre: ${res.customerName}
+📞 Teléfono: ${res.phone}
+🛞 Producto: ${PRODUCT_NAME}
+👥 PAX: ${res.guests} + ${res.children} | ${totalPax} PAX
+📌 Hotel: ${res.hotel}
+📍 Punto recogida: ${res.location || res.hotel}
+🕖 Hora recogida: ${res.pickupTime}
+📅 Fecha: ${dateStr}`
+  }
+
+  const generateClientMessage = (res: SamanaReservation) => {
+    const lang = res.language || "en"
+    const t = t9n[lang] || t9n.en
+    const totalPax = res.guests + res.children
+    const locale = langLocales[lang] || "en-US"
+    const dateStr = new Date(res.date + "T12:00:00").toLocaleDateString(locale, { month: "long", day: "numeric", year: "numeric" })
+    const ref = res.gygBookingRef || res.gygBookingReference || "N/A"
+    const pickupLocation = res.location || res.hotel
+
+    return `${t.greeting} ${res.customerName} 👋
+${t.thankYou}
+${t.pickupIs} ${res.pickupTime}.
+📍 ${t.waitAt} ${pickupLocation} ${t.atTime}
+⏰ ${t.beReady}
+${t.getReady} 🐋⚓
+
+📋 ${t.details}
+• 🐋 ${t.type}: Samana Hidden Tour
+• 👥 ${t.guests}: ${totalPax} PAX (${res.guests} ${t.adults}, ${res.children} ${t.children})
+• 📅 ${t.date}: ${dateStr}
+• 🔖 ${t.ref}: ${ref}`
+  }
+
+  const copyToClipboard = async (text: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedMsg(key)
+      setTimeout(() => setCopiedMsg(""), 2000)
+    } catch {
+      const ta = document.createElement("textarea")
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand("copy")
+      document.body.removeChild(ta)
+      setCopiedMsg(key)
+      setTimeout(() => setCopiedMsg(""), 2000)
+    }
+  }
+
   const downloadTicket = (res: SamanaReservation) => {
+    const lang = res.language || "en"
+    const t = t9n[lang] || t9n.en
+    const locale = langLocales[lang] || "en-US"
+
     const formatDate = (d: string) => {
       const date = new Date(d + "T12:00:00")
-      return date.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+      return date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" })
     }
 
-    const tourLabel: Record<string, string> = {
-      full_day: "Tour Completo (Día Entero)",
-      half_day: "Medio Día",
-      whale_only: "Avistamiento de Ballenas",
-      cayo_levantado: "Cayo Levantado",
-    }
+    const tourLabel = t[
+      res.tourType === "full_day" ? "fullDay"
+        : res.tourType === "half_day" ? "halfDay"
+        : res.tourType === "whale_only" ? "whaleOnly"
+        : "cayoLev"
+    ] || res.tourType
 
     const amountBlock = res.amount != null && res.amount > 0
-      ? '<div class="amount-box"><div class="label">MONTO A PAGAR</div><div class="amount">$' + res.amount.toFixed(2) + ' USD</div></div>'
+      ? `<div class="amount-box"><div class="label">${t.amount}</div><div class="amount">$${res.amount.toFixed(2)} USD</div></div>`
       : ""
 
     const html = `<!DOCTYPE html>
-<html lang="es">
+<html lang="${lang}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -258,6 +455,7 @@ export default function OperationSamanaPage() {
   .header { background: linear-gradient(135deg, #16a34a 0%, #166534 100%); color: #fff; padding: 28px 24px; text-align: center; }
   .header h1 { font-size: 22px; font-weight: 800; letter-spacing: 2px; margin-bottom: 4px; }
   .header p { font-size: 12px; opacity: 0.85; letter-spacing: 1px; }
+  .product-name { text-align: center; padding: 10px 24px 0; font-size: 13px; color: #166534; font-weight: 600; }
   .status { text-align: center; padding: 12px; background: #f0fdf4; border-bottom: 1px solid #e5e7eb; }
   .status span { display: inline-block; background: #22c55e; color: #fff; font-size: 12px; font-weight: 700; padding: 4px 16px; border-radius: 20px; letter-spacing: 0.5px; }
   .body { padding: 24px; }
@@ -280,31 +478,32 @@ export default function OperationSamanaPage() {
 <div class="ticket">
   <div class="header">
     <h1>SAMANÁ</h1>
-    <p>EXPERIENCE TICKET</p>
+    <p>${t.ticket}</p>
   </div>
-  <div class="status"><span>✓ RESERVA CONFIRMADA</span></div>
+  <div class="status"><span>✓ ${t.confirmed}</span></div>
+  <div class="product-name">${PRODUCT_NAME}</div>
   <div class="body">
     <div class="guest-name">${res.customerName}</div>
     <div class="section">
-      <div class="section-title">Detalles del Tour</div>
-      <div class="row"><span class="label">Tipo de tour</span><span class="value">${tourLabel[res.tourType] || res.tourType}</span></div>
-      <div class="row"><span class="label">Fecha</span><span class="value">${formatDate(res.date)}</span></div>
-      <div class="row"><span class="label">Personas</span><span class="value">${res.guests} adulto${res.guests !== 1 ? "s" : ""}${res.children > 0 ? " + " + res.children + " niño" + (res.children > 1 ? "s" : "") : ""}</span></div>
-      <div class="row"><span class="label">Almuerzo</span><span class="value">${res.lunchIncluded ? "Incluido" : "No incluido"}</span></div>
-      <div class="row"><span class="label">Avistamiento ballenas</span><span class="value">${res.whaleWatching ? "Sí" : "No"}</span></div>
+      <div class="section-title">${t.tourDetails}</div>
+      <div class="row"><span class="label">${t.tourType}</span><span class="value">${tourLabel}</span></div>
+      <div class="row"><span class="label">${t.date}</span><span class="value">${formatDate(res.date)}</span></div>
+      <div class="row"><span class="label">${t.people}</span><span class="value">${res.guests} ${t.adults}${res.children > 0 ? " + " + res.children + " " + t.children : ""}</span></div>
+      <div class="row"><span class="label">${t.lunch}</span><span class="value">${res.lunchIncluded ? t.included : t.notIncluded}</span></div>
+      <div class="row"><span class="label">${t.whaleWatch}</span><span class="value">${res.whaleWatching ? t.yes : t.no}</span></div>
     </div>
     <div class="section">
-      <div class="section-title">Recogida</div>
-      <div class="row"><span class="label">Hotel</span><span class="value">${res.hotel}</span></div>
-      <div class="row"><span class="label">Ubicación</span><span class="value">${res.location}</span></div>
-      <div class="row"><span class="label">Hora de recogida</span><span class="value" style="font-size:16px;color:#16a34a;font-weight:800">${res.pickupTime}</span></div>
+      <div class="section-title">${t.pickup}</div>
+      <div class="row"><span class="label">${t.hotel}</span><span class="value">${res.hotel}</span></div>
+      <div class="row"><span class="label">${t.location}</span><span class="value">${res.location}</span></div>
+      <div class="row"><span class="label">${t.pickupTime}</span><span class="value" style="font-size:16px;color:#16a34a;font-weight:800">${res.pickupTime}</span></div>
     </div>
     ${amountBlock}
   </div>
   <hr class="divider" />
   <div class="footer">
-    Ticket generado el ${new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}<br/>
-    Para cualquier consulta: info@macaooffroad.com
+    ${t.generated} ${new Date().toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" })}<br/>
+    ${t.inquiries} info@macaooffroad.com
   </div>
 </div>
 </body>
@@ -507,7 +706,7 @@ export default function OperationSamanaPage() {
           </CardContent>
         </Card>
 
-        {/* Table */}
+        {/* Reservations */}
         <Card className="border-gray-200">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -520,155 +719,129 @@ export default function OperationSamanaPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Contacto</TableHead>
-                    <TableHead>Hotel / Ubicación</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Recogida</TableHead>
-                    <TableHead>Personas</TableHead>
-                    <TableHead>Tour</TableHead>
-                    <TableHead>Almuerzo</TableHead>
-                    <TableHead>Ballenas</TableHead>
-                    <TableHead>Monto</TableHead>
-                    <TableHead>Canal</TableHead>
-                    <TableHead>Ref. GYG</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredReservations.map((reservation) => (
-                    <TableRow key={reservation.id}>
-                      <TableCell className="font-mono text-sm">{reservation.id}</TableCell>
-                      <TableCell>
-                        <div className="font-medium text-gray-900">{reservation.customerName}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <Phone className="w-3 h-3" />
-                            {reservation.phone}
-                          </div>
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <Mail className="w-3 h-3" />
-                            {reservation.email}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
-                            <Hotel className="w-3 h-3" />
-                            {reservation.hotel}
-                          </div>
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <MapPin className="w-3 h-3" />
-                            {reservation.location}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm text-gray-900">
-                          <Calendar className="w-3 h-3" />
-                          {new Date(reservation.date).toLocaleDateString("es-ES", {
-                            day: "2-digit",
-                            month: "short",
-                          })}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm text-gray-900">
-                          <Clock className="w-3 h-3" />
-                          {reservation.pickupTime}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
-                          <Users className="w-3 h-3" />
-                          {reservation.guests}
-                          {reservation.children > 0 && (
-                            <span className="text-gray-400 text-xs ml-1">+{reservation.children}n</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-                          <Mountain className="w-3 h-3 mr-1" />
-                          {reservation.tourType === "full_day" ? "Completo"
-                            : reservation.tourType === "half_day" ? "Medio día"
-                            : reservation.tourType === "whale_only" ? "Ballenas"
-                            : "Cayo Levantado"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={
-                          reservation.lunchIncluded
-                            ? "bg-green-100 text-green-700 hover:bg-green-100"
-                            : "bg-gray-100 text-gray-500 hover:bg-gray-100"
-                        }>
-                          {reservation.lunchIncluded ? "Sí" : "No"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={
-                          reservation.whaleWatching
-                            ? "bg-blue-100 text-blue-700 hover:bg-blue-100"
-                            : "bg-gray-100 text-gray-500 hover:bg-gray-100"
-                        }>
-                          {reservation.whaleWatching ? "Sí" : "No"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm font-medium text-gray-900">
-                          {reservation.amount != null ? `$${reservation.amount.toFixed(2)}` : "—"}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          className="flex items-center gap-1 w-fit"
-                          style={{
-                            backgroundColor: `${reservation.channelColor}20`,
-                            color: reservation.channelColor,
-                          }}
-                        >
-                          <Globe className="w-3 h-3" />
-                          {reservation.channel}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {reservation.gygBookingRef ? (
-                          <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 text-xs">
-                            {reservation.gygBookingReference || reservation.gygBookingRef}
-                          </Badge>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">{getStatusButton(reservation)}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col items-start gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-green-300 text-green-700 hover:bg-green-50 w-full"
-                            onClick={() => downloadTicket(reservation)}
-                          >
-                            <Ticket className="w-3 h-3 mr-1" />
-                            Ticket
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className="space-y-3">
+              {filteredReservations.map((reservation) => (
+                <div key={reservation.id} className="border rounded-lg p-4 space-y-3 hover:border-green-200 transition-colors">
+                  {/* Row 1: Status + Channel + Ref + Language */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {getStatusButton(reservation)}
+                    <Badge
+                      className="flex items-center gap-1"
+                      style={{
+                        backgroundColor: `${reservation.channelColor}20`,
+                        color: reservation.channelColor,
+                      }}
+                    >
+                      <Globe className="w-3 h-3" />
+                      {reservation.channel}
+                    </Badge>
+                    {(reservation.gygBookingRef || reservation.gygBookingReference) && (
+                      <Badge className="bg-orange-100 text-orange-700 text-xs">
+                        {reservation.gygBookingReference || reservation.gygBookingRef}
+                      </Badge>
+                    )}
+                    <span className="text-base" title={languageOptions.find(l => l.value === reservation.language)?.label || "English"}>
+                      {languageOptions.find(l => l.value === reservation.language)?.flag || "🇬🇧"}
+                    </span>
+                    {reservation.amount != null && reservation.amount > 0 && (
+                      <span className="ml-auto text-sm font-bold text-green-700">${reservation.amount.toFixed(2)} USD</span>
+                    )}
+                  </div>
+
+                  {/* Row 2: Customer info + Date/Time */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <div className="font-semibold text-gray-900 text-base">{reservation.customerName}</div>
+                      <div className="flex items-center gap-3 text-sm text-gray-600 mt-0.5 flex-wrap">
+                        <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{reservation.phone}</span>
+                        <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{reservation.email}</span>
+                      </div>
+                    </div>
+                    <div className="sm:text-right">
+                      <div className="flex items-center gap-1 text-sm font-medium text-gray-900 sm:justify-end">
+                        <Calendar className="w-3.5 h-3.5" />
+                        {new Date(reservation.date + "T12:00:00").toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })}
+                      </div>
+                      <div className="flex items-center gap-1 text-base text-green-700 font-bold sm:justify-end mt-0.5">
+                        <Clock className="w-3.5 h-3.5" />
+                        {reservation.pickupTime}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Hotel + Location */}
+                  <div className="bg-gray-50 rounded-md px-3 py-2 text-sm">
+                    <div className="flex items-center gap-1.5 font-medium text-gray-900">
+                      <Hotel className="w-3.5 h-3.5 text-gray-500" />
+                      {reservation.hotel}
+                    </div>
+                    {reservation.location && (
+                      <div className="flex items-center gap-1.5 text-gray-600 mt-0.5">
+                        <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                        {reservation.location}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Row 4: Details badges */}
+                  <div className="flex items-center gap-2 flex-wrap text-sm">
+                    <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
+                      <Users className="w-3 h-3 mr-1" />
+                      {reservation.guests} + {reservation.children} niños | {reservation.guests + reservation.children} PAX
+                    </Badge>
+                    <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
+                      <Mountain className="w-3 h-3 mr-1" />
+                      {reservation.tourType === "full_day" ? "Completo"
+                        : reservation.tourType === "half_day" ? "Medio día"
+                        : reservation.tourType === "whale_only" ? "Ballenas"
+                        : "Cayo Levantado"}
+                    </Badge>
+                    <Badge className={reservation.lunchIncluded ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-gray-100 text-gray-500 hover:bg-gray-100"}>
+                      🍽️ {reservation.lunchIncluded ? "Almuerzo ✓" : "Sin almuerzo"}
+                    </Badge>
+                    <Badge className={reservation.whaleWatching ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : "bg-gray-100 text-gray-500 hover:bg-gray-100"}>
+                      🐋 {reservation.whaleWatching ? "Ballenas ✓" : "Sin ballenas"}
+                    </Badge>
+                  </div>
+
+                  {/* Row 5: Actions */}
+                  <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-gray-100">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-green-300 text-green-700 hover:bg-green-50"
+                      onClick={() => downloadTicket(reservation)}
+                    >
+                      <Ticket className="w-3.5 h-3.5 mr-1" />
+                      Ticket
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={copiedMsg === `chofer-${reservation.id}` ? "border-green-500 bg-green-50 text-green-700" : "border-amber-300 text-amber-700 hover:bg-amber-50"}
+                      onClick={() => copyToClipboard(generateChoferMessage(reservation), `chofer-${reservation.id}`)}
+                    >
+                      {copiedMsg === `chofer-${reservation.id}` ? (
+                        <><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Copiado</>
+                      ) : (
+                        <><Copy className="w-3.5 h-3.5 mr-1" />Msg Chofer</>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={copiedMsg === `client-${reservation.id}` ? "border-green-500 bg-green-50 text-green-700" : "border-blue-300 text-blue-700 hover:bg-blue-50"}
+                      onClick={() => copyToClipboard(generateClientMessage(reservation), `client-${reservation.id}`)}
+                    >
+                      {copiedMsg === `client-${reservation.id}` ? (
+                        <><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Copiado</>
+                      ) : (
+                        <><MessageSquare className="w-3.5 h-3.5 mr-1" />Msg Cliente</>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {filteredReservations.length === 0 && (
@@ -756,6 +929,20 @@ export default function OperationSamanaPage() {
                 onChange={(e) => setNewRes({ ...newRes, pickup_time: e.target.value })}
                 placeholder="5:00 AM"
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Idioma del cliente</Label>
+              <Select value={newRes.language} onValueChange={(v) => setNewRes({ ...newRes, language: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {languageOptions.map((lang) => (
+                    <SelectItem key={lang.value} value={lang.value}>
+                      {lang.flag} {lang.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">
