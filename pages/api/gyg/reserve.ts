@@ -86,13 +86,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       totalBooked = existing.reduce((sum, r) => sum + (r.guests || 0) + (r.children || 0), 0)
     }
 
-    // Also count active holds
+    // Also count active holds FOR THE SAME DATE
+    const dateTimeStart = `${dateStr}T00:00:00${product.timezone}`
+    const nextDay = new Date(new Date(dateStr + "T00:00:00").getTime() + 86400000)
+    const nextDateStr = nextDay.toISOString().split("T")[0]
+    const dateTimeEnd = `${nextDateStr}T00:00:00${product.timezone}`
+
     const { data: activeHolds } = await supabase
       .from("gyg_reservations")
       .select("total_participants")
       .eq("product_id", productId)
       .eq("status", "active")
       .gte("expires_at", new Date().toISOString())
+      .gte("date_time", dateTimeStart)
+      .lt("date_time", dateTimeEnd)
 
     if (activeHolds) {
       totalBooked += activeHolds.reduce((sum, h) => sum + (h.total_participants || 0), 0)

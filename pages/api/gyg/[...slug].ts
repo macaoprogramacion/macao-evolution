@@ -59,5 +59,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     )
   }
 
-  return routeHandler(req, res)
+  try {
+    return await routeHandler(req, res)
+  } catch (err: any) {
+    if (!res.headersSent) {
+      return res.status(200).json(
+        gygError("INTERNAL_SYSTEM_FAILURE", err.message || "Unexpected error in route handler.")
+      )
+    }
+  }
 }
