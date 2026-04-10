@@ -83,11 +83,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const availabilities: AvailabilityItem[] = []
     const current = new Date(fromDate)
     const end = new Date(toDate)
+    const todayStr = new Date().toISOString().split("T")[0]
 
     while (current <= end) {
       const dateStr = current.toISOString().split("T")[0]
       const booked = bookedPerDate[dateStr] || 0
-      const vacancies = Math.max(0, product.defaultVacancies - booked)
+      // Past dates have 0 vacancies
+      const vacancies = dateStr < todayStr ? 0 : Math.max(0, product.defaultVacancies - booked)
 
       if (product.type === "time_point") {
         // Time point: specific departure time (e.g. 07:30 AM)
