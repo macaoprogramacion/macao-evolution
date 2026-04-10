@@ -74,6 +74,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Check availability
     const dateStr = dateTime.split("T")[0]
+    const todayStr = new Date().toISOString().split("T")[0]
+
+    // Past dates have no availability
+    if (dateStr < todayStr) {
+      return res.status(200).json(
+        gygError("NO_AVAILABILITY", `No availability for past date ${dateStr}.`)
+      )
+    }
 
     const { data: existing } = await supabase
       .from(product.destinationTable)
