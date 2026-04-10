@@ -92,10 +92,8 @@ CREATE INDEX IF NOT EXISTS idx_gyg_reservations_status ON gyg_reservations(statu
 CREATE INDEX IF NOT EXISTS idx_gyg_reservations_gyg_ref ON gyg_reservations(gyg_booking_ref);
 CREATE INDEX IF NOT EXISTS idx_gyg_reservations_expires ON gyg_reservations(expires_at);
 
-ALTER TABLE gyg_reservations ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow full access gyg_reservations" ON gyg_reservations;
-CREATE POLICY "Allow full access gyg_reservations" ON gyg_reservations
-  FOR ALL USING (true) WITH CHECK (true);
+-- Disable RLS on GYG tables (auth handled at API level)
+ALTER TABLE gyg_reservations DISABLE ROW LEVEL SECURITY;
 
 -- Tracks confirmed GYG bookings with their reference mapping.
 -- Links to the destination reservation table (saona or samana).
@@ -127,10 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_gyg_bookings_gyg_ref ON gyg_bookings(gyg_booking_
 CREATE INDEX IF NOT EXISTS idx_gyg_bookings_saona ON gyg_bookings(saona_reservation_id);
 CREATE INDEX IF NOT EXISTS idx_gyg_bookings_status ON gyg_bookings(status);
 
-ALTER TABLE gyg_bookings ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow full access gyg_bookings" ON gyg_bookings;
-CREATE POLICY "Allow full access gyg_bookings" ON gyg_bookings
-  FOR ALL USING (true) WITH CHECK (true);
+ALTER TABLE gyg_bookings DISABLE ROW LEVEL SECURITY;
 
 -- Log of GYG notifications received (product deactivations, etc.)
 CREATE TABLE IF NOT EXISTS gyg_notifications (
@@ -142,10 +137,7 @@ CREATE TABLE IF NOT EXISTS gyg_notifications (
   created_at        TIMESTAMPTZ DEFAULT NOW()
 );
 
-ALTER TABLE gyg_notifications ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow full access gyg_notifications" ON gyg_notifications;
-CREATE POLICY "Allow full access gyg_notifications" ON gyg_notifications
-  FOR ALL USING (true) WITH CHECK (true);
+ALTER TABLE gyg_notifications DISABLE ROW LEVEL SECURITY;
 
 -- Add gyg columns to saona_reservations if the table exists
 DO $$
