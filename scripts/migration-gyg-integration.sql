@@ -31,11 +31,11 @@ CREATE POLICY "Allow full access gyg_reservations" ON gyg_reservations
   FOR ALL USING (true) WITH CHECK (true);
 
 -- Tracks confirmed GYG bookings with their reference mapping.
--- Links to saona_reservations for the operation dashboard.
+-- Links to the destination reservation table (saona or samana).
 CREATE TABLE IF NOT EXISTS gyg_bookings (
   id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   reservation_id        UUID REFERENCES gyg_reservations(id),
-  saona_reservation_id  UUID REFERENCES saona_reservations(id),
+  saona_reservation_id  UUID,  -- points to saona_reservations or samana_reservations depending on product
   product_id            TEXT NOT NULL,
   gyg_booking_ref       TEXT NOT NULL,
   gyg_activity_ref      TEXT,
