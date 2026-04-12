@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next"
 import { authenticate, authError, gygError } from "@/lib/gyg/config"
+import { logWebhookRequest, markWebhookSuccess, markWebhookFailed } from "@/lib/gyg/webhook-logger"
 
 /* ────────────────────────────────────────────────────────────────
    GYG Supplier API – Main Router
@@ -60,6 +61,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     )
   }
 
-  // Delegate to the specific handler (auth is already validated)
-  return routeHandler(req, res)
+  // Log the incoming request (skip GET availability)
+  const shouldLog = req.method === "POST"
+  const logId = shouldLog ? await logWebhookRequest(action, req) : null
+
+  // Intercept res.json to capture response body
+  const origJson = res.json.bind(res)
+  let capturedBody: any
+  res.json = (body: any) => {
+    capturedBody = body
+    return origJson(body)
+  }
+
+  try {
+    await routeHandler(req, res)
+    if (logId) {
+      if (capturedBody?.errorCode) {
+        markWebhookFailed(logId, capturedBody, capturedBody.errorMessage)
+      } else {
+        markWebhookSuccess(logId, capturedBody)
+      }
+    }
+  } catch (err: any) {
+    if (logId) {
+      markWebhookFailed(logId, capturedBody, err.message)
+    }
+    if (!res.headersSent) {
+      return res.status(200).json(
+        gygError("INTERNAL_SYSTEM_FAILURE", err.message || "Unexpected error.")
+      )
+    }
+  }
 }

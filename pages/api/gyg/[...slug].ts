@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next"
 import { authenticate, authError, gygError } from "@/lib/gyg/config"
+import { logWebhookRequest, markWebhookSuccess, markWebhookFailed } from "@/lib/gyg/webhook-logger"
 import availabilityHandler from "./availability"
 import reserveHandler from "./reserve"
 import cancelReservationHandler from "./cancel-reservation"
@@ -59,9 +60,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     )
   }
 
+  // Log the incoming request (non-blocking for GET availability)
+  const shouldLog = req.method === "POST"
+  const logId = shouldLog ? await logWebhookRequest(endpoint, req) : null
+
+  // Intercept res.json to capture response body
+  const origJson = res.json.bind(res)
+  let capturedBody: any
+  res.json = (body: any) => {
+    capturedBody = body
+    return origJson(body)
+  }
+
   try {
-    return await routeHandler(req, res)
+    await routeHandler(req, res)
+    if (logId) {
+      if (capturedBody?.errorCode) {
+        markWebhookFailed(logId, capturedBody, capturedBody.errorMessage)
+      } else {
+        markWebhookSuccess(logId, capturedBody)
+      }
+    }
   } catch (err: any) {
+    if (logId) {
+      markWebhookFailed(logId, capturedBody, err.message)
+    }
     if (!res.headersSent) {
       return res.status(200).json(
         gygError("INTERNAL_SYSTEM_FAILURE", err.message || "Unexpected error in route handler.")

@@ -179,6 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       notes: noteParts.join(" | "),
       gyg_booking_ref: gygBookingReference,
       gyg_booking_reference: bookingReference,
+      ...(language ? { language } : {}),
     }
 
     // Merge product-specific extra fields (boat_type, tour_type, etc.)
