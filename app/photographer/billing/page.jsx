@@ -92,13 +92,7 @@ const demoProducts = [
   },
 ];
 
-// Demo photographers
-const photographers = [
-  { id: 1, name: 'Carlos Méndez' },
-  { id: 2, name: 'Ana García' },
-  { id: 3, name: 'Luis Rodríguez' },
-  { id: 4, name: 'María López' },
-];
+// Photographers will be loaded from Supabase
 
 // Sidebar menu items
 const sidebarItems = [
@@ -1195,6 +1189,7 @@ export default function BillingPage() {
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [photographer, setPhotographer] = useState('');
+  const [photographers, setPhotographers] = useState([]);
   
   // Invoice management state
   const [invoices, setInvoices] = useState([]);
@@ -1207,6 +1202,22 @@ export default function BillingPage() {
     const stored = getStoredInvoices();
     setInvoices(stored);
     setNextInvoiceNum(getNextInvoiceNumber());
+  }, []);
+
+  // Load photographers from Supabase
+  useEffect(() => {
+    async function fetchPhotographers() {
+      const { data, error } = await supabase
+        .from('dashboard_users')
+        .select('id, name')
+        .in('role', ['photographer', 'both'])
+        .eq('active', true)
+        .order('name');
+      if (!error && data) {
+        setPhotographers(data.map((p) => ({ id: p.id, name: p.name })));
+      }
+    }
+    fetchPhotographers();
   }, []);
   
   // Current invoice number display
