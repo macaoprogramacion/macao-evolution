@@ -695,6 +695,474 @@ function VentasTurnoPanel({ invoices }) {
   );
 }
 
+// ─── Currency helpers ────────────────────────────────────────────
+const CURRENCY_SYMBOLS = { USD: 'US$', EUR: '€', DOP: 'RD$' };
+const currencyLabel = (code) => CURRENCY_SYMBOLS[code] || code;
+const fmtMoney = (amount, cur = 'USD') =>
+  `${currencyLabel(cur)} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+
+// ─── Cierre Turno Panel ──────────────────────────────────────────
+function CierreTurnoPanel({ invoices }) {
+  const [selectedTurno, setSelectedTurno] = useState('');
+  const todayStr = new Date().toLocaleDateString('es-DO');
+  const returns = getReturns();
+
+  // Only today's invoices
+  const todayInvoices = invoices.filter(inv => inv.date === todayStr);
+
+  // Current turno
+  const currentHour = new Date().getHours();
+  const currentTurno = currentHour < 12 ? 'Turno 9:00' : currentHour < 15 ? 'Turno 12:00' : 'Turno 3:00';
+  const activeTurno = selectedTurno || currentTurno;
+
+  // Filter invoices for selected turno
+  const turnoInvoices = todayInvoices.filter(inv => (inv.turno || 'Turno 9:00') === activeTurno);
+
+  // Group by currency
+  const byCurrency = {};
+  turnoInvoices.forEach(inv => {
+    const cur = inv.currency || 'USD';
+    if (!byCurrency[cur]) byCurrency[cur] = { total: 0, count: 0, items: [] };
+    byCurrency[cur].total += inv.total;
+    byCurrency[cur].count++;
+    byCurrency[cur].items.push(inv);
+  });
+
+  const turnoReturns = returns.filter(r => {
+    const d = r.date || (r.timestamp ? new Date(r.timestamp).toLocaleDateString('es-DO') : '');
+    return d === todayStr && (r.status === 'aprobada' || r.status === 'procesada');
+  });
+  const returnsTotal = turnoReturns.reduce((s, r) => s + (r.amount || 0), 0);
+
+  const turnoTimes = { 'Turno 9:00': '9:00 AM', 'Turno 12:00': '12:00 PM', 'Turno 3:00': '3:00 PM' };
+  const turnos = ['Turno 9:00', 'Turno 12:00', 'Turno 3:00'];
+
+  return (
+    <div className="flex-1 flex flex-col lg:flex-row gap-6">
+      <div className="flex-1 flex flex-col">
+        <h1 className="font-title text-3xl lg:text-4xl text-white mb-6">Cierre de Turno</h1>
+
+        {/* Turno selector */}
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          {turnos.map(t => (
+            <motion.button
+              key={t}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setSelectedTurno(t)}
+              className={`p-4 rounded-2xl border text-center transition-all ${
+                activeTurno === t
+                  ? 'bg-[#DC2626]/20 border-[#DC2626]/50 ring-1 ring-[#DC2626]/20'
+                  : 'bg-black/25 border-white/20 hover:border-white/40'
+              }`}
+            >
+              <p className="text-white font-semibold">{t}</p>
+              <p className="text-white/50 text-xs">{turnoTimes[t]}</p>
+              {t === currentTurno && (
+                <span className="text-[10px] font-semibold bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full mt-1 inline-block">ACTIVO</span>
+              )}
+            </motion.button>
+          ))}
+        </div>
+
+        {/* Currency Breakdown */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          {Object.keys(CURRENCY_SYMBOLS).map(cur => {
+            const data = byCurrency[cur] || { total: 0, count: 0 };
+            return (
+              <motion.div
+                key={cur}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#DC2626]/20 flex items-center justify-center">
+                    <DollarSign className="w-5 h-5 text-[#DC2626]" />
+                  </div>
+                  <div>
+                    <p className="text-white font-semibold">{cur}</p>
+                    <p className="text-white/50 text-xs">{data.count} factura{data.count !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+                <p className="text-[#DC2626] text-xl font-bold">{fmtMoney(data.total, cur)}</p>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        {/* Invoice list for turno */}
+        <div className="flex-1 bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20 overflow-hidden">
+          <h3 className="text-white font-semibold mb-4">Facturas del {activeTurno}</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-white/70 text-xs border-b border-white/10">
+                  <th className="text-left py-3 px-2">Factura</th>
+                  <th className="text-left py-3 px-2">Cliente</th>
+                  <th className="text-left py-3 px-2">Moneda</th>
+                  <th className="text-right py-3 px-2">Total</th>
+                  <th className="text-left py-3 px-2">Hora</th>
+                </tr>
+              </thead>
+              <tbody>
+                {turnoInvoices.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-white/50">Sin facturas en este turno</td>
+                  </tr>
+                ) : turnoInvoices.map(inv => (
+                  <tr key={inv.id} className="border-b border-white/5 hover:bg-black/10">
+                    <td className="py-3 px-2 text-white text-sm">{inv.invoiceNumber}</td>
+                    <td className="py-3 px-2 text-white text-sm">{inv.clientName}</td>
+                    <td className="py-3 px-2">
+                      <span className="text-xs px-2 py-1 rounded-full bg-blue-500/20 text-blue-400">{inv.currency || 'USD'}</span>
+                    </td>
+                    <td className="py-3 px-2 text-right text-white font-medium text-sm">{fmtMoney(inv.total, inv.currency || 'USD')}</td>
+                    <td className="py-3 px-2 text-white/70 text-sm">{new Date(inv.timestamp).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Summary */}
+      <div className="lg:w-80 bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20 h-fit">
+        <h3 className="text-white font-semibold mb-4">Resumen {activeTurno}</h3>
+        <div className="space-y-3">
+          <div className="p-4 bg-[#DC2626]/20 rounded-2xl">
+            <p className="text-white/70 text-xs mb-1">Total Facturas</p>
+            <p className="text-white text-2xl font-bold">{turnoInvoices.length}</p>
+          </div>
+          {Object.entries(byCurrency).map(([cur, data]) => (
+            <div key={cur} className="p-4 bg-black/15 rounded-2xl">
+              <p className="text-white/70 text-xs mb-1">Total en {cur}</p>
+              <p className="text-[#DC2626] text-xl font-bold">{fmtMoney(data.total, cur)}</p>
+            </div>
+          ))}
+          {returnsTotal > 0 && (
+            <div className="p-4 bg-orange-500/15 rounded-2xl">
+              <p className="text-white/70 text-xs mb-1">Devoluciones</p>
+              <p className="text-orange-400 text-xl font-bold">US$ {returnsTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Cierre del Dia Panel ────────────────────────────────────────
+function CierreDiaPanel({ invoices }) {
+  const todayStr = new Date().toLocaleDateString('es-DO');
+  const returns = getReturns();
+
+  // Exchange rates state — cashier can edit
+  const [rates, setRates] = useState(() => {
+    try {
+      const stored = localStorage.getItem('macao_exchange_rates');
+      return stored ? JSON.parse(stored) : { USD: 1, EUR: 1.08, DOP: 0.0167 };
+    } catch { return { USD: 1, EUR: 1.08, DOP: 0.0167 }; }
+  });
+  const [editingRates, setEditingRates] = useState(false);
+  const [convertToDOP, setConvertToDOP] = useState(false);
+
+  const saveRates = (newRates) => {
+    setRates(newRates);
+    localStorage.setItem('macao_exchange_rates', JSON.stringify(newRates));
+  };
+
+  // Today's invoices
+  const todayInvoices = invoices.filter(inv => inv.date === todayStr);
+
+  // Group by currency
+  const byCurrency = {};
+  todayInvoices.forEach(inv => {
+    const cur = inv.currency || 'USD';
+    if (!byCurrency[cur]) byCurrency[cur] = { total: 0, subtotal: 0, tax: 0, count: 0 };
+    byCurrency[cur].total += inv.total;
+    byCurrency[cur].subtotal += inv.subtotal;
+    byCurrency[cur].tax += inv.tax;
+    byCurrency[cur].count++;
+  });
+
+  // Group by turno
+  const byTurno = {};
+  todayInvoices.forEach(inv => {
+    const t = inv.turno || 'Turno 9:00';
+    if (!byTurno[t]) byTurno[t] = { total: 0, count: 0, currencies: {} };
+    byTurno[t].total += inv.total;
+    byTurno[t].count++;
+    const cur = inv.currency || 'USD';
+    if (!byTurno[t].currencies[cur]) byTurno[t].currencies[cur] = 0;
+    byTurno[t].currencies[cur] += inv.total;
+  });
+
+  // Returns
+  const todayReturns = returns.filter(r => {
+    const d = r.date || (r.timestamp ? new Date(r.timestamp).toLocaleDateString('es-DO') : '');
+    return d === todayStr && (r.status === 'aprobada' || r.status === 'procesada');
+  });
+  const returnsTotal = todayReturns.reduce((s, r) => s + (r.amount || 0), 0);
+
+  // Convert to DOP
+  const toDOP = (amount, cur) => {
+    if (cur === 'DOP') return amount;
+    // rates store how much 1 unit of currency = in USD. DOP rate = how much 1 DOP = USD
+    // To convert to DOP: amount_in_cur * (rate_cur_to_usd / rate_dop_to_usd)
+    const rateToUSD = rates[cur] || 1;
+    const dopToUSD = rates['DOP'] || 0.0167;
+    return amount * rateToUSD / dopToUSD;
+  };
+
+  const totalAllInDOP = Object.entries(byCurrency).reduce((sum, [cur, data]) => sum + toDOP(data.total, cur), 0);
+
+  const turnoTimes = { 'Turno 9:00': '9:00 AM', 'Turno 12:00': '12:00 PM', 'Turno 3:00': '3:00 PM' };
+
+  return (
+    <div className="flex-1 flex flex-col lg:flex-row gap-6">
+      <div className="flex-1 flex flex-col">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="font-title text-3xl lg:text-4xl text-white">Cierre del Dia</h1>
+          <p className="text-white/50 text-sm">{todayStr}</p>
+        </div>
+
+        {/* Exchange Rate Config */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20 mb-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#DC2626]/20 flex items-center justify-center">
+                <Settings className="w-5 h-5 text-[#DC2626]" />
+              </div>
+              <div>
+                <h3 className="text-white font-semibold">Tasas de Cambio</h3>
+                <p className="text-white/50 text-xs">Equivalencia a 1 USD</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setEditingRates(!editingRates)}
+              className="text-xs px-3 py-1.5 rounded-xl bg-white/10 text-white/70 hover:bg-white/20 transition-colors flex items-center gap-1.5"
+            >
+              <Edit className="w-3 h-3" />
+              {editingRates ? 'Cerrar' : 'Editar Tasas'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            {Object.entries(CURRENCY_SYMBOLS).map(([cur, symbol]) => (
+              <div key={cur} className="p-3 bg-black/15 rounded-2xl">
+                <p className="text-white/50 text-xs mb-1">{symbol} ({cur})</p>
+                {editingRates && cur !== 'USD' ? (
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={rates[cur] || ''}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      if (!isNaN(val) && val > 0) saveRates({ ...rates, [cur]: val });
+                    }}
+                    className="w-full bg-black/30 rounded-xl px-3 py-1.5 text-white text-sm border border-white/20 focus:outline-none focus:ring-1 focus:ring-[#DC2626]/30"
+                  />
+                ) : (
+                  <p className="text-white font-semibold">{cur === 'USD' ? '1.0000' : (rates[cur] || 0).toFixed(4)}</p>
+                )}
+                {cur !== 'USD' && (
+                  <p className="text-white/40 text-[10px] mt-1">
+                    1 {cur} = {cur === 'DOP'
+                      ? `${(rates['DOP'] || 0.0167).toFixed(4)} USD`
+                      : `${(rates[cur] || 1).toFixed(4)} USD`
+                    }
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Currency Totals */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          {Object.keys(CURRENCY_SYMBOLS).map(cur => {
+            const data = byCurrency[cur] || { total: 0, subtotal: 0, tax: 0, count: 0 };
+            return (
+              <motion.div
+                key={cur}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#DC2626]/20 flex items-center justify-center">
+                      <DollarSign className="w-5 h-5 text-[#DC2626]" />
+                    </div>
+                    <div>
+                      <p className="text-white font-semibold">{cur}</p>
+                      <p className="text-white/50 text-xs">{data.count} factura{data.count !== 1 ? 's' : ''}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-1 mb-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-white/60">Subtotal</span>
+                    <span className="text-white">{fmtMoney(data.subtotal, cur)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-white/60">ITBIS</span>
+                    <span className="text-white">{fmtMoney(data.tax, cur)}</span>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-white/10">
+                  <p className="text-[#DC2626] text-xl font-bold">{fmtMoney(data.total, cur)}</p>
+                  {convertToDOP && cur !== 'DOP' && (
+                    <p className="text-white/40 text-xs mt-1">≈ RD$ {toDOP(data.total, cur).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        {/* Sales by Turno */}
+        <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20 mb-6">
+          <h3 className="text-white font-semibold mb-4">Ventas por Turno</h3>
+          <div className="space-y-3">
+            {['Turno 9:00', 'Turno 12:00', 'Turno 3:00'].map(t => {
+              const data = byTurno[t] || { total: 0, count: 0, currencies: {} };
+              return (
+                <div key={t} className="p-4 bg-black/15 rounded-2xl flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-[#DC2626]/20 flex items-center justify-center">
+                    <Clock className="w-5 h-5 text-[#DC2626]" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-white font-medium">{t}</p>
+                      <span className="text-white/40 text-xs">{turnoTimes[t]}</span>
+                    </div>
+                    <p className="text-white/50 text-xs">{data.count} factura{data.count !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div className="text-right">
+                    {Object.entries(data.currencies).map(([cur, amt]) => (
+                      <p key={cur} className="text-white font-medium text-sm">{fmtMoney(amt, cur)}</p>
+                    ))}
+                    {data.count === 0 && <p className="text-white/30 text-sm">—</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Invoice Detail Table */}
+        <div className="flex-1 bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20 overflow-hidden">
+          <h3 className="text-white font-semibold mb-4">Todas las Facturas del D\u00eda</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-white/70 text-xs border-b border-white/10">
+                  <th className="text-left py-3 px-2">Factura</th>
+                  <th className="text-left py-3 px-2">Cliente</th>
+                  <th className="text-left py-3 px-2">Turno</th>
+                  <th className="text-left py-3 px-2">Moneda</th>
+                  <th className="text-right py-3 px-2">Total</th>
+                  {convertToDOP && <th className="text-right py-3 px-2">Equiv. DOP</th>}
+                  <th className="text-left py-3 px-2">Hora</th>
+                </tr>
+              </thead>
+              <tbody>
+                {todayInvoices.length === 0 ? (
+                  <tr>
+                    <td colSpan={convertToDOP ? 7 : 6} className="py-8 text-center text-white/50">No hay facturas hoy</td>
+                  </tr>
+                ) : todayInvoices.map(inv => {
+                  const cur = inv.currency || 'USD';
+                  return (
+                    <tr key={inv.id} className="border-b border-white/5 hover:bg-black/10">
+                      <td className="py-3 px-2 text-white text-sm">{inv.invoiceNumber}</td>
+                      <td className="py-3 px-2 text-white text-sm">{inv.clientName}</td>
+                      <td className="py-3 px-2 text-white/70 text-sm">{inv.turno}</td>
+                      <td className="py-3 px-2">
+                        <span className="text-xs px-2 py-1 rounded-full bg-blue-500/20 text-blue-400">{cur}</span>
+                      </td>
+                      <td className="py-3 px-2 text-right text-white font-medium text-sm">{fmtMoney(inv.total, cur)}</td>
+                      {convertToDOP && (
+                        <td className="py-3 px-2 text-right text-white/50 text-sm">RD$ {toDOP(inv.total, cur).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                      )}
+                      <td className="py-3 px-2 text-white/70 text-sm">{new Date(inv.timestamp).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Summary */}
+      <div className="lg:w-80 space-y-4">
+        {/* Convert toggle */}
+        <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20">
+          <button
+            onClick={() => setConvertToDOP(!convertToDOP)}
+            className={`w-full py-3 rounded-2xl font-medium text-sm transition-all ${
+              convertToDOP
+                ? 'bg-[#DC2626] text-white'
+                : 'bg-white/10 text-white/70 hover:bg-white/20'
+            }`}
+          >
+            {convertToDOP ? 'Conversión a DOP Activa' : 'Convertir Todo a DOP'}
+          </button>
+        </div>
+
+        {/* Summary Card */}
+        <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20">
+          <h3 className="text-white font-semibold mb-4">Resumen del Dia</h3>
+          <div className="space-y-3">
+            <div className="p-4 bg-[#DC2626]/20 rounded-2xl">
+              <p className="text-white/70 text-xs mb-1">Total Facturas</p>
+              <p className="text-white text-2xl font-bold">{todayInvoices.length}</p>
+            </div>
+
+            {Object.entries(byCurrency).map(([cur, data]) => (
+              <div key={cur} className="p-4 bg-black/15 rounded-2xl">
+                <p className="text-white/70 text-xs mb-1">Ventas en {cur}</p>
+                <p className="text-[#DC2626] text-xl font-bold">{fmtMoney(data.total, cur)}</p>
+              </div>
+            ))}
+
+            {returnsTotal > 0 && (
+              <div className="p-4 bg-orange-500/15 rounded-2xl">
+                <p className="text-white/70 text-xs mb-1">Devoluciones</p>
+                <p className="text-orange-400 text-xl font-bold">US$ {returnsTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+              </div>
+            )}
+
+            {convertToDOP && (
+              <div className="p-4 bg-green-500/15 rounded-2xl">
+                <p className="text-white/70 text-xs mb-1">Total Convertido a DOP</p>
+                <p className="text-green-400 text-2xl font-bold">RD$ {totalAllInDOP.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+              </div>
+            )}
+
+            <div className="p-4 bg-black/15 rounded-2xl">
+              <p className="text-white/70 text-xs mb-1">Ticket Promedio</p>
+              <p className="text-white text-xl font-bold">
+                {todayInvoices.length > 0
+                  ? `US$ ${(todayInvoices.filter(i => (i.currency || 'USD') === 'USD').reduce((s, i) => s + i.total, 0) / Math.max(1, todayInvoices.filter(i => (i.currency || 'USD') === 'USD').length)).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                  : 'US$ 0.00'
+                }
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Product Card Component
 function ProductCard({ product, onAdd }) {
   return (
@@ -1190,6 +1658,7 @@ export default function BillingPage() {
   const [clientPhone, setClientPhone] = useState('');
   const [photographer, setPhotographer] = useState('');
   const [photographers, setPhotographers] = useState([]);
+  const [currency, setCurrency] = useState('USD');
   
   // Invoice management state
   const [invoices, setInvoices] = useState([]);
@@ -1275,6 +1744,7 @@ export default function BillingPage() {
     setClientName('');
     setClientPhone('');
     setPhotographer('');
+    setCurrency('USD');
   };
 
   // Generate invoice
@@ -1307,6 +1777,7 @@ export default function BillingPage() {
       subtotal: subtotal,
       tax: tax,
       total: total,
+      currency: currency,
       status: 'active',
     };
     
@@ -1323,6 +1794,7 @@ export default function BillingPage() {
       subtotal,
       tax,
       total,
+      currency: currency,
       status: 'active',
     });
     if (sbError) {
@@ -1554,6 +2026,19 @@ export default function BillingPage() {
                 placeholder="Seleccionar fotógrafo..."
                 options={photographers.map((p) => ({ value: p.id.toString(), label: p.name }))}
               />
+
+              {/* Currency */}
+              <CustomSelect
+                label="Moneda"
+                value={currency}
+                onChange={setCurrency}
+                placeholder="Seleccionar moneda..."
+                options={[
+                  { value: 'USD', label: 'USD — Dólar Americano' },
+                  { value: 'EUR', label: 'EUR — Euro' },
+                  { value: 'DOP', label: 'DOP — Peso Dominicano' },
+                ]}
+              />
             </div>
 
             {/* Cart Items */}
@@ -1670,6 +2155,18 @@ export default function BillingPage() {
       {activeTab === 'turnos' && (
         <main className="relative z-10 flex-1 p-4 lg:p-6 overflow-auto">
           <VentasTurnoPanel invoices={invoices} />
+        </main>
+      )}
+
+      {activeTab === 'cierre-turno' && (
+        <main className="relative z-10 flex-1 p-4 lg:p-6 overflow-auto">
+          <CierreTurnoPanel invoices={invoices} />
+        </main>
+      )}
+
+      {activeTab === 'cierre-dia' && (
+        <main className="relative z-10 flex-1 p-4 lg:p-6 overflow-auto">
+          <CierreDiaPanel invoices={invoices} />
         </main>
       )}
 
