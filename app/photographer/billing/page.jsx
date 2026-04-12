@@ -1762,6 +1762,9 @@ export default function BillingPage() {
       quantity: item.quantity,
     }));
 
+    // Resolve photographer name from ID
+    const photographerName = photographers.find(p => p.id.toString() === photographer)?.name || photographer || null;
+
     // Create invoice object
     const newInvoice = {
       id: `inv_${Date.now()}`,
@@ -1770,7 +1773,7 @@ export default function BillingPage() {
       clientName: clientName || 'Cliente General',
       clientPhone: clientPhone,
       turno: turno || 'Turno 9:00',
-      photographer: photographer,
+      photographer: photographerName,
       source: 'billing',
       date: new Date().toLocaleDateString('es-DO'),
       items: itemsList,
@@ -1781,13 +1784,13 @@ export default function BillingPage() {
       status: 'active',
     };
     
-    // Save to Supabase
-    const { error: sbError } = await supabase.from('photo_invoices').insert({
+    // Save to Supabase (non-blocking — localStorage is the primary store)
+    supabase.from('photo_invoices').insert({
       invoice_number: invoiceNum,
       client_name: clientName || 'Cliente General',
       client_phone: clientPhone || null,
       turno: turno || 'Turno 9:00',
-      photographer: photographer || null,
+      photographer: photographerName,
       source: 'billing',
       date: new Date().toLocaleDateString('es-DO'),
       items: itemsList,
@@ -1796,12 +1799,9 @@ export default function BillingPage() {
       total,
       currency: currency,
       status: 'active',
+    }).then(({ error }) => {
+      if (error) console.warn('Supabase insert error (offline fallback active):', error.message);
     });
-    if (sbError) {
-      console.error('Supabase insert error:', sbError);
-      alert('Error guardando factura: ' + sbError.message);
-      return;
-    }
 
     // Also save to localStorage (offline fallback)
     const updatedInvoices = [...invoices, newInvoice];
@@ -1815,7 +1815,7 @@ export default function BillingPage() {
         name: clientName || 'Cliente General',
         phone: clientPhone,
         turno: turno || 'Turno 9:00',
-        photographer: photographer,
+        photographer: photographerName,
         invoiceNumber: newInvoice.invoiceNumber,
         total: total,
         date: newInvoice.date,

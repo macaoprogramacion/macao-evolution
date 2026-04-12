@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS photo_invoices (
   subtotal        NUMERIC(10,2) NOT NULL DEFAULT 0,
   tax             NUMERIC(10,2) NOT NULL DEFAULT 0,
   total           NUMERIC(10,2) NOT NULL DEFAULT 0,
+  currency        TEXT NOT NULL DEFAULT 'USD',      -- USD | EUR | DOP
   status          TEXT NOT NULL DEFAULT 'active',   -- active | cancelled
   cancelled_at    TIMESTAMPTZ,
   cancel_reason   TEXT,
