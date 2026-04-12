@@ -57,7 +57,7 @@ import {
 // Background image
 
 // Demo product data
-const demoProducts = [
+const DEFAULT_PRODUCTS = [
   {
     id: 1,
     name: 'PAQUETE BÁSICO',
@@ -91,6 +91,25 @@ const demoProducts = [
     description: 'Video HD de la experiencia completa',
   },
 ];
+
+const PRODUCTS_KEY = 'macao_billing_products';
+const loadProducts = () => {
+  try {
+    const stored = localStorage.getItem(PRODUCTS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Merge with defaults to pick up any new products added in code
+      return DEFAULT_PRODUCTS.map(dp => {
+        const saved = parsed.find(p => p.id === dp.id);
+        return saved ? { ...dp, price: saved.price, name: saved.name } : dp;
+      });
+    }
+  } catch {}
+  return DEFAULT_PRODUCTS;
+};
+const persistProducts = (products) => {
+  localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+};
 
 // Photographers will be loaded from Supabase
 
@@ -1164,7 +1183,7 @@ function CierreDiaPanel({ invoices }) {
 }
 
 // Product Card Component
-function ProductCard({ product, onAdd }) {
+function ProductCard({ product, onAdd, onEdit }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -1175,8 +1194,17 @@ function ProductCard({ product, onAdd }) {
       transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       onClick={() => onAdd(product)}
       className="bg-black/40 rounded-3xl overflow-hidden shadow-md hover:shadow-xl 
-                 cursor-pointer transition-shadow duration-300 border border-white/20"
+                 cursor-pointer transition-shadow duration-300 border border-white/20 relative group"
     >
+      {/* Edit button */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onEdit(product); }}
+        className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm
+                   flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity
+                   hover:bg-black/80 border border-white/20"
+      >
+        <Edit className="w-3.5 h-3.5 text-white/80" />
+      </button>
       <div className="aspect-[4/3] overflow-hidden">
         <img
           src={product.image}
@@ -1192,6 +1220,78 @@ function ProductCard({ product, onAdd }) {
           US$ {product.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
         </p>
       </div>
+    </motion.div>
+  );
+}
+
+// Product Edit Modal
+function ProductEditModal({ product, onSave, onClose }) {
+  const [name, setName] = useState(product.name);
+  const [price, setPrice] = useState(product.price.toString());
+
+  const handleSave = () => {
+    const newPrice = parseFloat(price);
+    if (isNaN(newPrice) || newPrice < 0) return;
+    onSave({ ...product, name: name.trim() || product.name, price: newPrice });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[#1a1a1a] rounded-3xl p-6 w-full max-w-sm border border-white/20 shadow-2xl"
+      >
+        <h3 className="text-white text-lg font-semibold mb-4">Editar Producto</h3>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-white/60 text-xs mb-1.5">Nombre</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-2.5 bg-black/30 rounded-2xl border border-white/20 text-white text-sm
+                        focus:outline-none focus:ring-2 focus:ring-[#DC2626]/30"
+            />
+          </div>
+          <div>
+            <label className="block text-white/60 text-xs mb-1.5">Precio (USD)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="w-full px-4 py-2.5 bg-black/30 rounded-2xl border border-white/20 text-white text-sm
+                        focus:outline-none focus:ring-2 focus:ring-[#DC2626]/30"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-2xl border border-white/20 text-white/60 text-sm hover:bg-white/5 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            className="flex-1 py-2.5 rounded-2xl bg-[#DC2626] text-white text-sm font-medium hover:bg-[#B91C1C] transition-colors"
+          >
+            Guardar
+          </button>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }
@@ -1659,6 +1759,13 @@ export default function BillingPage() {
   const [photographer, setPhotographer] = useState('');
   const [photographers, setPhotographers] = useState([]);
   const [currency, setCurrency] = useState('USD');
+  const [products, setProducts] = useState(DEFAULT_PRODUCTS);
+  const [editingProduct, setEditingProduct] = useState(null);
+
+  // Load products from localStorage
+  useEffect(() => {
+    setProducts(loadProducts());
+  }, []);
   
   // Invoice management state
   const [invoices, setInvoices] = useState([]);
@@ -1694,14 +1801,14 @@ export default function BillingPage() {
 
   // Filter products based on search
   const filteredProducts = useMemo(() => {
-    if (!searchQuery.trim()) return demoProducts;
+    if (!searchQuery.trim()) return products;
     const query = searchQuery.toLowerCase();
-    return demoProducts.filter(
+    return products.filter(
       (product) =>
         product.name.toLowerCase().includes(query) ||
         product.code.toLowerCase().includes(query)
     );
-  }, [searchQuery]);
+  }, [searchQuery, products]);
 
   // Add product to cart
   const addToCart = (product) => {
@@ -1942,7 +2049,7 @@ export default function BillingPage() {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4">
                 <AnimatePresence mode="popLayout">
                   {filteredProducts.map((product) => (
-                    <ProductCard key={product.id} product={product} onAdd={addToCart} />
+                    <ProductCard key={product.id} product={product} onAdd={addToCart} onEdit={setEditingProduct} />
                   ))}
                 </AnimatePresence>
               </div>
@@ -2174,6 +2281,22 @@ export default function BillingPage() {
       <AnimatePresence>
         {showPrintModal && currentInvoice && (
           <POSReceipt invoice={currentInvoice} onClose={handleClosePrintModal} />
+        )}
+      </AnimatePresence>
+
+      {/* Product Edit Modal */}
+      <AnimatePresence>
+        {editingProduct && (
+          <ProductEditModal
+            product={editingProduct}
+            onClose={() => setEditingProduct(null)}
+            onSave={(updated) => {
+              const newProducts = products.map(p => p.id === updated.id ? { ...p, name: updated.name, price: updated.price } : p);
+              setProducts(newProducts);
+              persistProducts(newProducts);
+              setEditingProduct(null);
+            }}
+          />
         )}
       </AnimatePresence>
 

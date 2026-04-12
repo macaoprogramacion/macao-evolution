@@ -186,9 +186,9 @@ function ClientGallery() {
     }
   };
 
-  // Handle download all photos (sequential with small delay to avoid browser blocking)
+  // Handle download all photos + video (sequential with small delay to avoid browser blocking)
   const handleDownloadAll = async () => {
-    if (galleryPhotos.length === 0) return;
+    if (galleryPhotos.length === 0 && !portfolioVideo) return;
     for (let i = 0; i < galleryPhotos.length; i++) {
       const photo = galleryPhotos[i];
       await downloadImage(photo.image, `macao-foto-${i + 1}.png`);
@@ -197,7 +197,12 @@ function ClientGallery() {
         await new Promise(r => setTimeout(r, 400));
       }
     }
-    logActivity('Descarga completa', `${clientName} descargó ${galleryPhotos.length} fotos`);
+    // Also download video if available
+    if (portfolioVideo) {
+      await new Promise(r => setTimeout(r, 400));
+      await downloadImage(portfolioVideo, 'macao-video-aventura.mp4');
+    }
+    logActivity('Descarga completa', `${clientName} descargó ${galleryPhotos.length} fotos${portfolioVideo ? ' + video' : ''}`);
   };
 
   // Handle download only selected photos
@@ -269,7 +274,7 @@ function ClientGallery() {
               </div>
             </div>
             <p className="text-white/70 text-sm mb-4">
-              Tu pago ha sido confirmado. Puedes descargar todas tus fotos sin costo adicional.
+              Tu pago ha sido confirmado. Puedes descargar todas tus fotos{portfolioVideo ? ' y video' : ''} sin costo adicional.
             </p>
             <GlassButton
               variant="primary"
@@ -277,7 +282,7 @@ function ClientGallery() {
               onClick={handleDownloadAll}
             >
               <Download className="w-5 h-5" />
-              Descargar Todas las Fotos
+              Descargar Todo {portfolioVideo ? '(Fotos + Video)' : '(Fotos)'}
             </GlassButton>
           </GlassCard>
         ) : (
@@ -500,6 +505,36 @@ function ClientGallery() {
             </div>
           </motion.div>
         </motion.div>
+        )}
+
+        {/* If user has verified invoice → show video for separate download */}
+        {isVerified && portfolioVideo && (
+          <motion.div
+            className="mt-8 max-w-md mx-auto"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
+            <h2 className="font-title text-2xl text-center text-white mb-4">
+              Video de tu Aventura
+            </h2>
+            <GlassCard className="p-6" hover={false}>
+              <video
+                src={portfolioVideo}
+                controls
+                className="w-full rounded-lg mb-4"
+                style={{ maxHeight: '300px' }}
+              />
+              <GlassButton
+                variant="primary"
+                className="w-full flex items-center justify-center gap-2"
+                onClick={() => downloadImage(portfolioVideo, 'macao-video-aventura.mp4')}
+              >
+                <Download className="w-5 h-5" />
+                Descargar Video
+              </GlassButton>
+            </GlassCard>
+          </motion.div>
         )}
 
         {/* If user has invoice → show message that photos are included */}
