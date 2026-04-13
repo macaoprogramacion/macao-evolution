@@ -80,6 +80,9 @@ export const PRODUCTS: Record<string, ProductConfig> = {
       { category: "ADULT", price: 9500 },  // $95.00
       { category: "CHILD", price: 6500 },  // $65.00
     ],
+    openingTimes: [
+      { fromTime: "06:00", toTime: "18:00" },
+    ],
     cutoffSeconds: 86400, // 24h before
     reserveHoldMinutes: 60,
     extraInsertFields: {
@@ -103,6 +106,9 @@ export const PRODUCTS: Record<string, ProductConfig> = {
     prices: [
       { category: "ADULT", price: 11500 }, // $115.00
       { category: "CHILD", price: 7500 },  // $75.00
+    ],
+    openingTimes: [
+      { fromTime: "06:00", toTime: "19:00" },
     ],
     cutoffSeconds: 86400,
     reserveHoldMinutes: 60,

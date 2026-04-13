@@ -91,38 +91,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Past dates have 0 vacancies
       const vacancies = dateStr < todayStr ? 0 : Math.max(0, product.defaultVacancies - booked)
 
-      if (product.type === "time_point") {
-        // Time point: specific departure time (e.g. 07:30 AM)
-        const dateTime = `${dateStr}T07:30:00${product.timezone}`
+      const pricesByCategory = {
+        retailPrices: product.prices.map((p) => ({
+          category: p.category as any,
+          price: p.price,
+        })),
+      }
+
+      // Time point entry: specific departure time (e.g. 07:30 AM)
+      const timePointDateTime = `${dateStr}T07:30:00${product.timezone}`
+      availabilities.push({
+        productId: product.id,
+        dateTime: timePointDateTime,
+        vacancies,
+        cutoffSeconds: product.cutoffSeconds,
+        currency: product.currency,
+        pricesByCategory,
+      })
+
+      // Time period entry: opening hours (for GYG self-testing compatibility)
+      if (product.openingTimes && product.openingTimes.length > 0) {
+        const timePeriodDateTime = `${dateStr}T00:00:00${product.timezone}`
         availabilities.push({
           productId: product.id,
-          dateTime,
-          vacancies,
-          cutoffSeconds: product.cutoffSeconds,
-          currency: product.currency,
-          pricesByCategory: {
-            retailPrices: product.prices.map((p) => ({
-              category: p.category as any,
-              price: p.price,
-            })),
-          },
-        })
-      } else {
-        // Time period: opening hours
-        const dateTime = `${dateStr}T00:00:00${product.timezone}`
-        availabilities.push({
-          productId: product.id,
-          dateTime,
+          dateTime: timePeriodDateTime,
           vacancies,
           cutoffSeconds: product.cutoffSeconds,
           openingTimes: product.openingTimes,
           currency: product.currency,
-          pricesByCategory: {
-            retailPrices: product.prices.map((p) => ({
-              category: p.category as any,
-              price: p.price,
-            })),
-          },
+          pricesByCategory,
         })
       }
 
