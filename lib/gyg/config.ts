@@ -41,7 +41,7 @@ export function authError() {
 // ─── Product configuration ──────────────────────────────────────────────────
 // Maps product IDs to their configuration.
 // GYG product codes:
-//   90929    → Saona Island Tour   → saona_reservations  → admin/operation-saona
+//   909291   → Saona Island Tour   → saona_reservations  → admin/operation-saona
 //   1068932  → Samaná Tour         → samana_reservations → admin/operation-samana
 
 export type DestinationTable = "saona_reservations" | "samana_reservations"
@@ -65,9 +65,9 @@ export interface ProductConfig {
 }
 
 export const PRODUCTS: Record<string, ProductConfig> = {
-  // ─── SAONA (GYG product 90929) ──────────────────────────────────
-  "90929": {
-    id: "90929",
+  // ─── SAONA (GYG product 909291) ─────────────────────────────────
+  "909291": {
+    id: "909291",
     name: "Saona Island Tour",
     type: "time_point",
     timezone: "-04:00",

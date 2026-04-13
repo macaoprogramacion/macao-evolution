@@ -10,7 +10,7 @@ import type { BookingRequest, Ticket, TicketCategory } from "@/lib/gyg/types"
  *
  * Converts a reservation hold into a confirmed booking.
  * Routes to the correct table based on product:
- *   90929   → saona_reservations  → admin/operation-saona
+ *   909291  → saona_reservations  → admin/operation-saona
  *   1068932 → samana_reservations → admin/operation-samana
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
