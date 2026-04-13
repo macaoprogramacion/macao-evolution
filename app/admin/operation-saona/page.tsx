@@ -23,6 +23,7 @@ import {
   Ticket,
   Ship,
   Anchor,
+  RefreshCw,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -112,6 +113,8 @@ export default function OperationSaonaPage() {
   const [channelFilter, setChannelFilter] = useState("all")
   const [boatFilter, setBoatFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState<string | null>(null)
 
   // Modal agregar reserva
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -163,6 +166,35 @@ export default function OperationSaonaPage() {
     walk_in: "#8b5cf6",
     seller: "#d97706",
     ota: "#ef4444",
+  }
+
+  const syncGygBookings = async () => {
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await fetch("/api/gyg/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": "dashboard",
+        },
+      })
+      const data = await res.json()
+      const retried = data.retriedWebhooks?.filter((r: any) => r.success).length || 0
+      const reconciled = data.reconciledBookings?.filter((r: any) => r.success).length || 0
+      if (retried > 0 || reconciled > 0) {
+        setSyncResult(`Sincronizado: ${retried} reintentos, ${reconciled} reconciliados`)
+        await fetchReservations()
+      } else {
+        setSyncResult("Todo sincronizado \u2014 sin pendientes")
+      }
+    } catch (e) {
+      console.error("Sync error:", e)
+      setSyncResult("Error al sincronizar")
+    } finally {
+      setSyncing(false)
+      setTimeout(() => setSyncResult(null), 5000)
+    }
   }
 
   const saveNewReservation = async () => {
@@ -386,6 +418,15 @@ export default function OperationSaonaPage() {
             <p className="text-sm md:text-base text-gray-600 mt-1">Gestión de reservas del tour Saona Island</p>
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              className="flex-1 sm:flex-none border-orange-300 text-orange-700 hover:bg-orange-50"
+              onClick={syncGygBookings}
+              disabled={syncing}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
+              {syncing ? "Sincronizando..." : "Sync GYG"}
+            </Button>
             <Button className="bg-cyan-600 hover:bg-cyan-700 text-white flex-1 sm:flex-none" onClick={() => setAddDialogOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Agregar Reserva
@@ -396,6 +437,15 @@ export default function OperationSaonaPage() {
             </Button>
           </div>
         </div>
+
+        {/* Sync Result Banner */}
+        {syncResult && (
+          <div className={`px-4 py-2 rounded-lg text-sm font-medium ${
+            syncResult.includes("Error") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"
+          }`}>
+            {syncResult}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
