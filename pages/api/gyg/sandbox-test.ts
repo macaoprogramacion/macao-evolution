@@ -16,8 +16,8 @@ import { PRODUCTS } from "@/lib/gyg/config"
  */
 
 const SANDBOX_BASE = "https://supplier-api.getyourguide.com/sandbox/1"
-const GYG_API_USER = process.env.GYG_API_USER || ""
-const GYG_API_PASS = process.env.GYG_API_PASSWORD || ""
+const GYG_API_USER = (process.env.GYG_API_USER || "").trim()
+const GYG_API_PASS = (process.env.GYG_API_PASSWORD || "").trim()
 
 function authHeader(): string {
   return "Basic " + Buffer.from(`${GYG_API_USER}:${GYG_API_PASS}`).toString("base64")

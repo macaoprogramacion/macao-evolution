@@ -14,9 +14,9 @@ import { PRODUCTS, type ProductConfig } from "@/lib/gyg/config"
  * POST https://supplier-api.getyourguide.com/1/notify-availability-update
  */
 
-const GYG_API_BASE = process.env.GYG_API_BASE_URL || "https://supplier-api.getyourguide.com"
-const GYG_API_USER = process.env.GYG_API_USER || ""
-const GYG_API_PASS = process.env.GYG_API_PASSWORD || ""
+const GYG_API_BASE = (process.env.GYG_API_BASE_URL || "https://supplier-api.getyourguide.com").trim()
+const GYG_API_USER = (process.env.GYG_API_USER || "").trim()
+const GYG_API_PASS = (process.env.GYG_API_PASSWORD || "").trim()
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
