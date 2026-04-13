@@ -35,28 +35,64 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       )
     }
 
-    // Find the booking
-    const { data: booking, error: findError } = await supabase
+    // Find the booking in gyg_bookings (primary lookup)
+    const { data: booking } = await supabase
       .from("gyg_bookings")
       .select("id, saona_reservation_id, product_id, status, date_time")
       .eq("booking_reference", bookingReference)
       .eq("gyg_booking_ref", gygBookingReference)
-      .single()
+      .maybeSingle()
 
-    if (findError || !booking) {
-      return res.status(200).json(
-        gygError("INVALID_BOOKING", `Booking '${bookingReference}' not found.`)
-      )
+    // Fallback: search only by gygBookingReference (handles cases where
+    // bookingReference doesn't match, e.g. re-sent cancellations)
+    let resolvedBooking = booking
+    if (!resolvedBooking) {
+      const { data: fallback } = await supabase
+        .from("gyg_bookings")
+        .select("id, saona_reservation_id, product_id, status, date_time")
+        .eq("gyg_booking_ref", gygBookingReference)
+        .maybeSingle()
+      resolvedBooking = fallback
     }
 
-    if (booking.status === "cancelled") {
+    const product = getProduct(productId)
+    if (!product) {
+      return res.status(200).json(gygError("INVALID_PRODUCT", `Product '${productId}' does not exist.`))
+    }
+
+    // If no gyg_bookings record found, try cancelling directly in destination table
+    if (!resolvedBooking) {
+      const { data: destRow } = await supabase
+        .from(product.destinationTable)
+        .select("id, status")
+        .eq("gyg_booking_ref", gygBookingReference)
+        .maybeSingle()
+
+      if (destRow) {
+        if (destRow.status === "cancelled") {
+          return res.status(200).json(
+            gygError("BOOKING_ALREADY_CANCELED", "The booking has already been cancelled.")
+          )
+        }
+        await supabase
+          .from(product.destinationTable)
+          .update({ status: "cancelled", updated_at: new Date().toISOString() })
+          .eq("id", destRow.id)
+        return res.status(200).json({ data: {} })
+      }
+
+      // Not found anywhere — still return success per GYG spec (idempotent cancel)
+      return res.status(200).json({ data: {} })
+    }
+
+    if (resolvedBooking.status === "cancelled") {
       return res.status(200).json(
         gygError("BOOKING_ALREADY_CANCELED", "The booking has already been cancelled.")
       )
     }
 
     // Check if booking is in the past
-    const bookingDate = new Date(booking.date_time)
+    const bookingDate = new Date(resolvedBooking.date_time)
     if (bookingDate < new Date()) {
       return res.status(200).json(
         gygError("BOOKING_IN_PAST", "The booking is in the past and cannot be cancelled.")
@@ -67,7 +103,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { error: cancelError } = await supabase
       .from("gyg_bookings")
       .update({ status: "cancelled", updated_at: new Date().toISOString() })
-      .eq("id", booking.id)
+      .eq("id", resolvedBooking.id)
 
     if (cancelError) {
       return res.status(200).json(
@@ -76,14 +112,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Cancel in the correct destination table based on the product
-    if (booking.saona_reservation_id) {
-      const product = getProduct(booking.product_id)
-      const table = product?.destinationTable || "saona_reservations"
-
+    if (resolvedBooking.saona_reservation_id) {
       await supabase
-        .from(table)
+        .from(product.destinationTable)
         .update({ status: "cancelled", updated_at: new Date().toISOString() })
-        .eq("id", booking.saona_reservation_id)
+        .eq("id", resolvedBooking.saona_reservation_id)
     }
 
     return res.status(200).json({ data: {} })
