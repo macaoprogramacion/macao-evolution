@@ -186,15 +186,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const insertPayload = { ...commonFields, ...(product.extraInsertFields || {}) }
 
     // Insert into the correct destination table
-    const { data: destRow, error: destError } = await supabase
+    let destRow: { id: string } | null = null
+    let destError: any = null
+
+    ;({ data: destRow, error: destError } = await supabase
       .from(product.destinationTable)
       .insert(insertPayload)
       .select("id")
-      .single()
+      .single())
 
-    if (destError) {
+    // If insert failed because of missing 'language' column, retry without it
+    if (destError && destError.message?.includes("language")) {
+      const { language: _lang, ...payloadWithoutLang } = insertPayload
+      ;({ data: destRow, error: destError } = await supabase
+        .from(product.destinationTable)
+        .insert(payloadWithoutLang)
+        .select("id")
+        .single())
+    }
+
+    if (destError || !destRow) {
       return res.status(200).json(
-        gygError("INTERNAL_SYSTEM_FAILURE", `Failed to create booking record: ${destError.message}`)
+        gygError("INTERNAL_SYSTEM_FAILURE", `Failed to create booking record: ${destError?.message}`)
       )
     }
 
