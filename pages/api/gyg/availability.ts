@@ -98,19 +98,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         })),
       }
 
-      // Time point entry: specific departure time (e.g. 07:30 AM)
-      const timePointDateTime = `${dateStr}T07:30:00${product.timezone}`
-      availabilities.push({
-        productId: product.id,
-        dateTime: timePointDateTime,
-        vacancies,
-        cutoffSeconds: product.cutoffSeconds,
-        currency: product.currency,
-        pricesByCategory,
-      })
-
-      // Time period entry: opening hours (for GYG self-testing compatibility)
-      if (product.openingTimes && product.openingTimes.length > 0) {
+      if (product.type === "time_period" && product.openingTimes && product.openingTimes.length > 0) {
+        // Time period entry: T00:00:00 with openingTimes
         const timePeriodDateTime = `${dateStr}T00:00:00${product.timezone}`
         availabilities.push({
           productId: product.id,
@@ -118,6 +107,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           vacancies,
           cutoffSeconds: product.cutoffSeconds,
           openingTimes: product.openingTimes,
+          currency: product.currency,
+          pricesByCategory,
+        })
+      } else {
+        // Time point entry: specific departure time (e.g. 07:30 AM)
+        const timePointDateTime = `${dateStr}T07:30:00${product.timezone}`
+        availabilities.push({
+          productId: product.id,
+          dateTime: timePointDateTime,
+          vacancies,
+          cutoffSeconds: product.cutoffSeconds,
           currency: product.currency,
           pricesByCategory,
         })
