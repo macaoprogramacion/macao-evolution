@@ -601,11 +601,11 @@ ${t.getReady} 🐋⚓
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl md:text-3xl font-title text-gray-900 flex items-center gap-2">
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Mountain className="w-7 h-7 text-green-600" />
               Operacion Samana
             </h1>
-            <p className="text-sm md:text-base text-gray-600 mt-1">Gestión de reservas del tour Samaná</p>
+            <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">Gestión de reservas del tour Samaná</p>
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
             <Button
@@ -801,14 +801,14 @@ ${t.getReady} 🐋⚓
                   {/* Row 2: Customer info + Date/Time */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
-                      <div className="font-semibold text-gray-900 text-base">{reservation.customerName}</div>
-                      <div className="flex items-center gap-3 text-sm text-gray-600 mt-0.5 flex-wrap">
+                      <div className="font-semibold text-gray-900 dark:text-gray-100 text-base">{reservation.customerName}</div>
+                      <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400 mt-0.5 flex-wrap">
                         <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{reservation.phone}</span>
                         <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{reservation.email}</span>
                       </div>
                     </div>
                     <div className="sm:text-right">
-                      <div className="flex items-center gap-1 text-sm font-medium text-gray-900 sm:justify-end">
+                      <div className="flex items-center gap-1 text-sm font-medium text-gray-900 dark:text-gray-100 sm:justify-end">
                         <Calendar className="w-3.5 h-3.5" />
                         {new Date(reservation.date + "T12:00:00").toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })}
                       </div>
@@ -820,13 +820,13 @@ ${t.getReady} 🐋⚓
                   </div>
 
                   {/* Row 3: Hotel + Location */}
-                  <div className="bg-gray-50 rounded-md px-3 py-2 text-sm">
+                  <div className="bg-gray-50 dark:bg-gray-900 rounded-md px-3 py-2 text-sm">
                     <div className="flex items-center gap-1.5 font-medium text-gray-900">
                       <Hotel className="w-3.5 h-3.5 text-gray-500" />
                       {reservation.hotel}
                     </div>
                     {reservation.location && (
-                      <div className="flex items-center gap-1.5 text-gray-600 mt-0.5">
+                      <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400 mt-0.5">
                         <MapPin className="w-3.5 h-3.5 text-gray-400" />
                         {reservation.location}
                       </div>
@@ -846,10 +846,10 @@ ${t.getReady} 🐋⚓
                         : reservation.tourType === "whale_only" ? "Ballenas"
                         : "Cayo Levantado"}
                     </Badge>
-                    <Badge className={reservation.lunchIncluded ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-gray-100 text-gray-500 hover:bg-gray-100"}>
+                    <Badge className={reservation.lunchIncluded ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-gray-100 text-gray-500 dark:text-gray-400 hover:bg-gray-100"}>
                       🍽️ {reservation.lunchIncluded ? "Almuerzo ✓" : "Sin almuerzo"}
                     </Badge>
-                    <Badge className={reservation.whaleWatching ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : "bg-gray-100 text-gray-500 hover:bg-gray-100"}>
+                    <Badge className={reservation.whaleWatching ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : "bg-gray-100 text-gray-500 dark:text-gray-400 hover:bg-gray-100"}>
                       🐋 {reservation.whaleWatching ? "Ballenas ✓" : "Sin ballenas"}
                     </Badge>
                   </div>

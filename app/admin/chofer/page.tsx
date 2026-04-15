@@ -465,7 +465,7 @@ function ReservationCard({
               href={hotelInfo ? hotelInfo.mapUrl : `https://www.google.com/maps/search/?api=1&query=${mapQuery}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full py-2 border-b border-gray-200 bg-gray-50 text-gray-700 font-medium text-sm hover:bg-gray-100 transition-colors"
+              className="flex items-center justify-center gap-2 w-full py-2 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300 font-medium text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
               <MapPinned className="h-4 w-4 text-red-500" />
               Ver en Google Maps

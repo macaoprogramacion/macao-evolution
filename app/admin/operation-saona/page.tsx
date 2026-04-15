@@ -411,11 +411,11 @@ export default function OperationSaonaPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl md:text-3xl font-title text-gray-900 flex items-center gap-2">
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Ship className="w-7 h-7 text-cyan-600" />
               Operacion Saona
             </h1>
-            <p className="text-sm md:text-base text-gray-600 mt-1">Gestión de reservas del tour Saona Island</p>
+            <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">Gestión de reservas del tour Saona Island</p>
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
             <Button
@@ -667,7 +667,7 @@ export default function OperationSaonaPage() {
                         <Badge className={
                           reservation.lunchIncluded
                             ? "bg-green-100 text-green-700 hover:bg-green-100"
-                            : "bg-gray-100 text-gray-500 hover:bg-gray-100"
+                            : "bg-gray-100 text-gray-500 dark:text-gray-400 hover:bg-gray-100"
                         }>
                           {reservation.lunchIncluded ? "Sí" : "No"}
                         </Badge>

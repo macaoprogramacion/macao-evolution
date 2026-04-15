@@ -138,7 +138,7 @@ export default function TemplatesPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-title text-gray-900">Templates</h1>
-            <p className="text-gray-600 mt-1">Discover and use pre-built workflow templates</p>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">Discover and use pre-built workflow templates</p>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="outline" className="gap-2 bg-transparent">
@@ -190,7 +190,7 @@ export default function TemplatesPage() {
             {/* Templates Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredTemplates.map((template) => (
-                <Card key={template.id} className="border-gray-200 hover:shadow-md transition-shadow">
+                <Card key={template.id} className="border-gray-200 dark:border-gray-800 hover:shadow-md transition-shadow">
                   <CardHeader className="pb-4">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
@@ -251,7 +251,7 @@ export default function TemplatesPage() {
                       ))}
                     </div>
 
-                    <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
+                    <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-4">
                       <div className="flex items-center gap-1">
                         <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                         <span>{template.rating}</span>
@@ -279,7 +279,7 @@ export default function TemplatesPage() {
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Search className="w-8 h-8 text-gray-400" />
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No templates found</h3>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No templates found</h3>
                 <p className="text-gray-600">Try adjusting your search or filter criteria.</p>
               </div>
             )}
@@ -288,7 +288,7 @@ export default function TemplatesPage() {
           <TabsContent value="featured" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {featuredTemplates.map((template) => (
-                <Card key={template.id} className="border-gray-200 hover:shadow-md transition-shadow">
+                <Card key={template.id} className="border-gray-200 dark:border-gray-800 hover:shadow-md transition-shadow">
                   <CardHeader className="pb-4">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
@@ -313,7 +313,7 @@ export default function TemplatesPage() {
                   <CardContent>
                     <CardDescription className="mb-4">{template.description}</CardDescription>
 
-                    <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
+                    <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-4">
                       <div className="flex items-center gap-1">
                         <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                         <span>{template.rating}</span>
@@ -339,8 +339,8 @@ export default function TemplatesPage() {
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Database className="w-8 h-8 text-gray-400" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Custom Templates</h3>
-              <p className="text-gray-600 mb-4">Create your first custom template to reuse your workflows.</p>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No Custom Templates</h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">Create your first custom template to reuse your workflows.</p>
               <Button className="bg-red-600 hover:bg-red-700">
                 <Plus className="w-4 h-4 mr-2" />
                 Create Template

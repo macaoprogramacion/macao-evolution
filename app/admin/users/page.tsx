@@ -243,7 +243,7 @@ export default function UsersPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Gestión de Usuarios</h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Administra los usuarios con acceso a Billing y Photographer Dashboard
             </p>
           </div>
@@ -359,7 +359,7 @@ export default function UsersPage() {
             {filteredUsers.length === 0 ? (
               <div className="text-center py-12">
                 <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 font-medium">No hay usuarios registrados</p>
+                <p className="text-gray-500 dark:text-gray-400 font-medium">No hay usuarios registrados</p>
                 <p className="text-sm text-gray-400 mt-1">
                   Crea el primer usuario para dar acceso a los dashboards
                 </p>
@@ -400,7 +400,7 @@ export default function UsersPage() {
                               </AvatarFallback>
                             </Avatar>
                             <div>
-                              <p className="font-medium text-gray-900 text-sm">{user.name}</p>
+                              <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{user.name}</p>
                               <p className="text-xs text-gray-400">ID: {user.id.slice(-6)}</p>
                             </div>
                           </div>
@@ -728,7 +728,7 @@ export default function UsersPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 text-center">
-            <div className="inline-flex items-center gap-2 bg-gray-50 rounded-lg px-6 py-4 border">
+            <div className="inline-flex items-center gap-2 bg-gray-50 dark:bg-gray-900 rounded-lg px-6 py-4 border">
               <KeyRound className="w-5 h-5 text-gray-400" />
               <span className="font-mono text-3xl tracking-[0.3em] text-gray-900">
                 {showPin ? formData.pin : "••••"}

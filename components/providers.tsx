@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { ThemeProvider } from "@/components/theme-provider";
 import { CartProvider } from "@/context/cart-context";
 import { CartButton, CartPanel } from "@/components/cart";
 import { Toaster } from "@/components/ui/sonner";
@@ -19,10 +20,12 @@ function CartUI() {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <CartProvider>
-      {children}
-      <CartUI />
-      <Toaster />
-    </CartProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <CartProvider>
+        {children}
+        <CartUI />
+        <Toaster />
+      </CartProvider>
+    </ThemeProvider>
   );
 }

@@ -469,7 +469,7 @@ export default function OperationPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl md:text-3xl font-title text-gray-900">Operation</h1>
-            <p className="text-sm md:text-base text-gray-600 mt-1">Gestión de reservas de todas las plataformas</p>
+            <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">Gestión de reservas de todas las plataformas</p>
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
             <Button className="bg-red-600 hover:bg-red-700 text-white flex-1 sm:flex-none" onClick={() => setAddDialogOpen(true)}>
@@ -712,8 +712,8 @@ export default function OperationPage() {
                         <Badge
                           className={
                             reservation.transportType === "Privado"
-                              ? "bg-gray-200 text-gray-900 hover:bg-gray-200"
-                              : "bg-gray-100 text-gray-700 hover:bg-gray-100"
+                              ? "bg-gray-200 text-gray-900 dark:text-gray-100 hover:bg-gray-200"
+                              : "bg-gray-100 text-gray-700 dark:text-gray-300 hover:bg-gray-100"
                           }
                         >
                           <Car className="w-3 h-3 mr-1" />
@@ -825,7 +825,7 @@ export default function OperationPage() {
           </DialogHeader>
 
           {selectedReservation && (
-            <div className="rounded-lg border p-3 bg-gray-50 space-y-1 text-sm">
+            <div className="rounded-lg border p-3 bg-gray-50 dark:bg-gray-900 space-y-1 text-sm">
               <p className="font-medium text-gray-900">{selectedReservation.customerName}</p>
               <p className="text-gray-600">{selectedReservation.hotel} — {selectedReservation.location}</p>
               <p className="text-gray-600">{selectedReservation.date} · {selectedReservation.timeslot} · Recogida {selectedReservation.pickupTime}</p>
@@ -840,7 +840,7 @@ export default function OperationPage() {
                 Cargando choferes...
               </div>
             ) : choferes.length === 0 ? (
-              <div className="text-sm text-gray-500 py-4 text-center">
+              <div className="text-sm text-gray-500 dark:text-gray-400 py-4 text-center">
                 No hay choferes registrados. Agrega choferes desde el panel de usuarios.
               </div>
             ) : (
@@ -852,7 +852,7 @@ export default function OperationPage() {
                     className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-colors ${
                       selectedChofer === chofer.id
                         ? "border-blue-500 bg-blue-50"
-                        : "border-gray-200 hover:bg-gray-50"
+                        : "border-gray-200 dark:border-gray-800 hover:bg-gray-50"
                     }`}
                   >
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
@@ -863,7 +863,7 @@ export default function OperationPage() {
                       {chofer.name.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900 text-sm">{chofer.name}</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{chofer.name}</p>
                       {chofer.phone && (
                         <p className="text-xs text-gray-500">{chofer.phone}</p>
                       )}

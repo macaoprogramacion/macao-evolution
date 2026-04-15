@@ -174,7 +174,7 @@ export default function RepresentativesAnalyticsPage() {
         {/* Header */}
         <div>
           <h1 className="text-2xl md:text-3xl font-title text-gray-900">Representantes — Analytics</h1>
-          <p className="text-sm md:text-base text-gray-600 mt-1">
+          <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">
             Rendimiento de ventas por representantes. Gestión de reservas en{" "}
             <a
               href="http://localhost:3002"
@@ -334,7 +334,7 @@ export default function RepresentativesAnalyticsPage() {
         {/* Top Reps Ranking & Hotels */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Top Representatives */}
-          <Card className="border-gray-200 lg:col-span-2">
+          <Card className="border-gray-200 dark:border-gray-800 lg:col-span-2">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Crown className="w-4 h-4 text-red-500" />
@@ -428,10 +428,10 @@ export default function RepresentativesAnalyticsPage() {
                   return (
                     <div key={hotel.name} className="space-y-1">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium text-gray-700 truncate max-w-[160px]">
+                        <span className="font-medium text-gray-700 dark:text-gray-300 truncate max-w-[160px]">
                           {index + 1}. {hotel.name}
                         </span>
-                        <span className="text-gray-500 whitespace-nowrap ml-2">
+                        <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap ml-2">
                           {hotel.bookings} — ${hotel.revenue.toLocaleString()}
                         </span>
                       </div>

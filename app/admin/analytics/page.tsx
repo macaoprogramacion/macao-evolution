@@ -158,7 +158,7 @@ export default function AnalyticsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-title text-gray-900">Analytics</h1>
-            <p className="text-gray-600 mt-1">Analisis detallado de ventas, trafico y conversiones</p>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">Analisis detallado de ventas, trafico y conversiones</p>
           </div>
           <div className="flex items-center gap-3">
             <Select value={timeRange} onValueChange={(value) => setTimeRange(value as "daily" | "weekly" | "monthly")}>
@@ -194,9 +194,9 @@ export default function AnalyticsPage() {
                     {kpi.change}
                   </div>
                 </div>
-                <div className="text-2xl font-semibold text-gray-900 mb-1">{kpi.value}</div>
+                <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-1">{kpi.value}</div>
                 <div className="text-sm text-gray-600">{kpi.title}</div>
-                <div className="text-xs text-gray-500 mt-1">{kpi.description}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{kpi.description}</div>
               </CardContent>
             </Card>
           ))}
@@ -382,7 +382,7 @@ export default function AnalyticsPage() {
             <CardContent>
               <div className="space-y-4">
                 {trafficSources.map((source, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-medium text-gray-900">{source.name}</span>
@@ -414,10 +414,10 @@ export default function AnalyticsPage() {
             <CardContent>
               <div className="space-y-4">
                 {topPages.map((page, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-gray-900 text-sm">{page.page}</span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{page.page}</span>
                         <Badge variant="secondary" className="bg-red-100 text-red-700">
                           {page.tasa}
                         </Badge>

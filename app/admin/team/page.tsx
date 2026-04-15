@@ -253,7 +253,7 @@ export default function TeamPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl md:text-3xl font-title text-gray-900">Equipo</h1>
-            <p className="text-sm md:text-base text-gray-600 mt-1">Gestión de usuarios y miembros del equipo</p>
+            <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">Gestión de usuarios y miembros del equipo</p>
           </div>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
@@ -322,7 +322,7 @@ export default function TeamPage() {
             <CardContent className="pt-6">
               <div className="text-center">
                 <p className="text-sm text-gray-600">Total Miembros</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{stats.total}</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-2">{stats.total}</p>
               </div>
             </CardContent>
           </Card>
@@ -336,13 +336,13 @@ export default function TeamPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-gray-200 col-span-2">
+          <Card className="border-gray-200 dark:border-gray-800 col-span-2">
             <CardContent className="pt-6">
               <div className="flex flex-wrap gap-3">
                 {stats.byPosition.map((stat) => (
                   <div
                     key={stat.label}
-                    className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg"
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-900 rounded-lg"
                   >
                     <span className="text-sm text-gray-600">{stat.label}:</span>
                     <span className="text-sm font-semibold text-gray-900">{stat.count}</span>
@@ -435,7 +435,7 @@ export default function TeamPage() {
                           className={
                             member.status === "active"
                               ? "bg-green-100 text-green-700 hover:bg-green-100"
-                              : "bg-gray-100 text-gray-700 hover:bg-gray-100"
+                              : "bg-gray-100 text-gray-700 dark:text-gray-300 hover:bg-gray-100"
                           }
                         >
                           {member.status === "active" ? "Activo" : "Inactivo"}

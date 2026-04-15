@@ -146,8 +146,8 @@ export default function Dashboard() {
       <div className="mb-6 md:mb-8">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-title text-gray-900">MACAO Dashboard</h1>
-            <p className="text-sm md:text-base text-gray-600 mt-1">Panel de control de ventas y gestión de experiencias</p>
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900 dark:text-gray-100 dark:text-gray-100">MACAO Dashboard</h1>
+            <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 dark:text-gray-400 mt-1">Panel de control de ventas y gestión de experiencias</p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <Tabs value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value as "daily" | "weekly" | "monthly")}>
@@ -157,7 +157,7 @@ export default function Dashboard() {
                 <TabsTrigger value="monthly">Mensual</TabsTrigger>
               </TabsList>
             </Tabs>
-            <Button variant="outline" className="bg-white w-full sm:w-auto">
+            <Button variant="outline" className="bg-white dark:bg-gray-950 dark:bg-gray-800 w-full sm:w-auto">
               <Download className="w-4 h-4 mr-2" />
               Exportar
             </Button>
@@ -168,7 +168,7 @@ export default function Dashboard() {
       {/* Metrics Overview */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {metricsData.map((metric, index) => (
-          <Card key={index} className="border-gray-200">
+          <Card key={index} className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
@@ -185,8 +185,8 @@ export default function Dashboard() {
                   {metric.change}
                 </div>
               </div>
-              <div className="text-2xl font-semibold text-gray-900 mb-1">{metric.value}</div>
-              <div className="text-sm text-gray-600">{metric.label}</div>
+              <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100 dark:text-gray-100 mb-1">{metric.value}</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 dark:text-gray-400">{metric.label}</div>
             </CardContent>
           </Card>
         ))}
@@ -196,7 +196,7 @@ export default function Dashboard() {
         {/* Main Content Area */}
         <div className="col-span-2 space-y-8">
           {/* Sales Chart */}
-          <Card className="border-gray-200">
+          <Card className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -214,10 +214,11 @@ export default function Dashboard() {
                     <YAxis stroke="#6b7280" fontSize={12} />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "white",
-                        border: "1px solid #e5e7eb",
+                        backgroundColor: "var(--background)",
+                        border: "1px solid var(--border)",
                         borderRadius: "8px",
                         boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                        color: "var(--foreground)",
                       }}
                     />
                     <Area
@@ -243,7 +244,7 @@ export default function Dashboard() {
           </Card>
 
           {/* Recent Sales Table */}
-          <Card className="border-gray-200">
+          <Card className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -261,23 +262,23 @@ export default function Dashboard() {
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-gray-50">
-                    <TableHead className="font-medium text-gray-700">ID Orden</TableHead>
-                    <TableHead className="font-medium text-gray-700">Cliente</TableHead>
-                    <TableHead className="font-medium text-gray-700">Tour</TableHead>
-                    <TableHead className="font-medium text-gray-700">Canal</TableHead>
-                    <TableHead className="font-medium text-gray-700">Monto</TableHead>
-                    <TableHead className="font-medium text-gray-700">Estado</TableHead>
-                    <TableHead className="font-medium text-gray-700">Hora</TableHead>
-                    <TableHead className="font-medium text-gray-700 w-12"></TableHead>
+                  <TableRow className="bg-gray-50 dark:bg-gray-900 dark:bg-gray-900">
+                    <TableHead className="font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300">ID Orden</TableHead>
+                    <TableHead className="font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300">Cliente</TableHead>
+                    <TableHead className="font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300">Tour</TableHead>
+                    <TableHead className="font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300">Canal</TableHead>
+                    <TableHead className="font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300">Monto</TableHead>
+                    <TableHead className="font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300">Estado</TableHead>
+                    <TableHead className="font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300">Hora</TableHead>
+                    <TableHead className="font-medium text-gray-700 dark:text-gray-300 w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {recentSales.map((sale) => (
-                    <TableRow key={sale.id} className="hover:bg-gray-50">
+                    <TableRow key={sale.id} className="hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800">
                       <TableCell className="font-mono text-sm">{sale.id}</TableCell>
                       <TableCell className="font-medium">{sale.customer}</TableCell>
-                      <TableCell className="text-gray-600">{sale.tour}</TableCell>
+                      <TableCell className="text-gray-600 dark:text-gray-400 dark:text-gray-400">{sale.tour}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="bg-red-100 text-red-700">
                           <Globe className="w-3 h-3 mr-1" />
@@ -299,7 +300,7 @@ export default function Dashboard() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-gray-600">{sale.time}</TableCell>
+                      <TableCell className="text-gray-600 dark:text-gray-400 dark:text-gray-400">{sale.time}</TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -324,7 +325,7 @@ export default function Dashboard() {
           </Card>
 
           {/* New Users Table */}
-          <Card className="border-gray-200">
+          <Card className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -340,18 +341,18 @@ export default function Dashboard() {
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-gray-50">
-                    <TableHead className="font-medium text-gray-700">Cliente</TableHead>
-                    <TableHead className="font-medium text-gray-700">Email</TableHead>
-                    <TableHead className="font-medium text-gray-700">Teléfono</TableHead>
-                    <TableHead className="font-medium text-gray-700">Tours</TableHead>
-                    <TableHead className="font-medium text-gray-700">Registro</TableHead>
-                    <TableHead className="font-medium text-gray-700 w-12"></TableHead>
+                  <TableRow className="bg-gray-50 dark:bg-gray-900 dark:bg-gray-900">
+                    <TableHead className="font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300">Cliente</TableHead>
+                    <TableHead className="font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300">Email</TableHead>
+                    <TableHead className="font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300">Teléfono</TableHead>
+                    <TableHead className="font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300">Tours</TableHead>
+                    <TableHead className="font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300">Registro</TableHead>
+                    <TableHead className="font-medium text-gray-700 dark:text-gray-300 w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {newUsers.map((user, index) => (
-                    <TableRow key={index} className="hover:bg-gray-50">
+                    <TableRow key={index} className="hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800">
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="w-8 h-8 bg-red-100">
@@ -379,7 +380,7 @@ export default function Dashboard() {
                           {user.tours} {user.tours === 1 ? "tour" : "tours"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-gray-600">{user.date}</TableCell>
+                      <TableCell className="text-gray-600 dark:text-gray-400 dark:text-gray-400">{user.date}</TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -405,7 +406,7 @@ export default function Dashboard() {
         {/* Right Sidebar */}
         <div className="space-y-6">
           {/* Top Products */}
-          <Card className="border-gray-200">
+          <Card className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg font-semibold">Tours Más Vendidos</CardTitle>
               <CardDescription>Experiencias más populares</CardDescription>
@@ -415,7 +416,7 @@ export default function Dashboard() {
                 {topProducts.map((product, index) => (
                   <div key={index} className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-900">{product.name}</span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100 dark:text-gray-100">{product.name}</span>
                       <span className="text-sm font-semibold text-red-600">{product.sold} vendidos</span>
                     </div>
                     <Progress value={product.percentage} className="h-2" />
@@ -430,7 +431,7 @@ export default function Dashboard() {
           </Card>
 
           {/* Product Distribution Chart */}
-          <Card className="border-gray-200">
+          <Card className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg font-semibold">Distribución de Ventas</CardTitle>
             </CardHeader>
@@ -460,7 +461,7 @@ export default function Dashboard() {
                 {topProducts.slice(0, 3).map((product, index) => (
                   <div key={index} className="flex items-center gap-2 text-xs">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index] }}></div>
-                    <span className="text-gray-600">{product.name}</span>
+                    <span className="text-gray-600 dark:text-gray-400 dark:text-gray-400">{product.name}</span>
                   </div>
                 ))}
               </div>
@@ -468,7 +469,7 @@ export default function Dashboard() {
           </Card>
 
           {/* Tours Catalog */}
-          <Card className="border-gray-200">
+          <Card className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg font-semibold">Catálogo de Tours</CardTitle>
               <CardDescription>Todos nuestros tours disponibles</CardDescription>
@@ -478,11 +479,11 @@ export default function Dashboard() {
                 {tours.map((tour, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-4 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                    className="flex items-center justify-between p-4 hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800 border-b border-gray-100 dark:border-gray-800 dark:border-gray-800 last:border-b-0"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-gray-900">{tour.name}</div>
-                      <div className="text-xs text-gray-600 mt-1">
+                      <div className="font-medium text-sm text-gray-900 dark:text-gray-100 dark:text-gray-100">{tour.name}</div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                         {tour.discount ? (
                           <div className="flex items-center gap-2">
                             <span className="line-through">${tour.price}</span>
@@ -503,13 +504,13 @@ export default function Dashboard() {
           </Card>
 
           {/* Live Stats */}
-          <Card className="border-gray-200">
+          <Card className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg font-semibold">Estadísticas en Vivo</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
                       <Eye className="w-5 h-5 text-red-600" />
@@ -521,7 +522,7 @@ export default function Dashboard() {
                   </div>
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 </div>
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
                       <Smartphone className="w-5 h-5 text-red-600" />
@@ -533,7 +534,7 @@ export default function Dashboard() {
                   </div>
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 </div>
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
                       <ShoppingCart className="w-5 h-5 text-red-600" />
@@ -549,7 +550,7 @@ export default function Dashboard() {
           </Card>
 
           {/* Sales Channels */}
-          <Card className="border-gray-200">
+          <Card className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg font-semibold">Canales de Venta</CardTitle>
               <CardDescription>Reservas por plataforma</CardDescription>
@@ -561,7 +562,7 @@ export default function Dashboard() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Globe className="w-4 h-4" style={{ color: channel.color }} />
-                        <span className="text-sm font-medium text-gray-900">{channel.name}</span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100 dark:text-gray-100">{channel.name}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-red-600">{channel.sales}</span>
@@ -591,7 +592,7 @@ export default function Dashboard() {
 
       {/* Sales Channels Performance Section */}
       <div className="mt-8">
-        <Card className="border-gray-200">
+        <Card className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
               <div>
@@ -634,7 +635,7 @@ export default function Dashboard() {
           </div>
           <div>
             <h2 className="text-lg font-title text-gray-900">Fotografia — Ventas en Tienda</h2>
-            <p className="text-gray-500 text-sm">Resumen de facturación presencial y ventas de fotos en línea</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Resumen de facturación presencial y ventas de fotos en línea</p>
           </div>
         </div>
 
@@ -645,9 +646,9 @@ export default function Dashboard() {
             { label: "Ventas Online (Fotos)", value: "$680", change: "+25.4%", trend: "up" },
             { label: "Devoluciones", value: "2", change: "-3.1%", trend: "down" },
           ].map((m, i) => (
-            <Card key={i} className="border-gray-200">
+            <Card key={i} className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
               <CardContent className="p-6">
-                <p className="text-sm text-gray-500 mb-1">{m.label}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{m.label}</p>
                 <p className="text-2xl font-bold text-gray-900">{m.value}</p>
                 <span className={`text-xs font-medium ${m.trend === "up" ? "text-green-600" : "text-red-500"}`}>
                   {m.change}
@@ -659,7 +660,7 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Photo Sales by Turno */}
-          <Card className="border-gray-200">
+          <Card className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold">Ventas por Turno</CardTitle>
               <CardDescription>Distribución de ventas de fotografía por turno</CardDescription>
@@ -678,7 +679,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-3">
                       <Progress value={t.pct} className="flex-1" />
-                      <span className="text-xs text-gray-500 w-16 text-right">{t.sales} ventas</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 w-16 text-right">{t.sales} ventas</span>
                     </div>
                   </div>
                 ))}
@@ -687,7 +688,7 @@ export default function Dashboard() {
           </Card>
 
           {/* Recent Photo Invoices */}
-          <Card className="border-gray-200">
+          <Card className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold">Facturas Recientes (Fotografía)</CardTitle>
               <CardDescription>Últimas facturas generadas en caja</CardDescription>

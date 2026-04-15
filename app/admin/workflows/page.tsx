@@ -210,10 +210,10 @@ export default function WorkflowsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-title text-gray-900">Automatizaciones</h1>
-            <p className="text-gray-600 mt-1">Gestiona y personaliza tus workflows automaticos</p>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">Gestiona y personaliza tus workflows automaticos</p>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" className="gap-2 bg-white">
+            <Button variant="outline" className="gap-2 bg-white dark:bg-gray-950">
               <Filter className="w-4 h-4" />
               Filtrar
             </Button>
@@ -329,12 +329,12 @@ export default function WorkflowsPage() {
         {/* Workflows Grid */}
         <div className="grid gap-6">
           {filteredWorkflows.map((workflow) => (
-            <Card key={workflow.id} className="border-gray-200 hover:shadow-md transition-shadow">
+            <Card key={workflow.id} className="border-gray-200 dark:border-gray-800 hover:shadow-md transition-shadow">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-semibold text-gray-900 text-lg">{workflow.name}</h3>
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">{workflow.name}</h3>
                       <Badge
                         variant="secondary"
                         className={
@@ -357,27 +357,27 @@ export default function WorkflowsPage() {
                         </Badge>
                       )}
                     </div>
-                    <p className="text-gray-600 text-sm mb-4">{workflow.description}</p>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">{workflow.description}</p>
 
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm mb-4">
                       <div>
-                        <span className="text-gray-500 block mb-1">Última Ejecución</span>
+                        <span className="text-gray-500 dark:text-gray-400 block mb-1">Última Ejecución</span>
                         <div className="font-medium text-gray-900">{workflow.lastRun}</div>
                       </div>
                       <div>
-                        <span className="text-gray-500 block mb-1">Próxima Ejecución</span>
+                        <span className="text-gray-500 dark:text-gray-400 block mb-1">Próxima Ejecución</span>
                         <div className="font-medium text-gray-900">{workflow.nextRun}</div>
                       </div>
                       <div>
-                        <span className="text-gray-500 block mb-1">Ejecuciones</span>
+                        <span className="text-gray-500 dark:text-gray-400 block mb-1">Ejecuciones</span>
                         <div className="font-medium text-gray-900">{workflow.runs}</div>
                       </div>
                       <div>
-                        <span className="text-gray-500 block mb-1">Tasa de Éxito</span>
+                        <span className="text-gray-500 dark:text-gray-400 block mb-1">Tasa de Éxito</span>
                         <div className="font-medium text-green-600">{workflow.successRate}%</div>
                       </div>
                       <div>
-                        <span className="text-gray-500 block mb-1">Duración Promedio</span>
+                        <span className="text-gray-500 dark:text-gray-400 block mb-1">Duración Promedio</span>
                         <div className="font-medium text-gray-900">{workflow.avgDuration}</div>
                       </div>
                     </div>
@@ -398,7 +398,7 @@ export default function WorkflowsPage() {
                     <Button 
                       size="sm" 
                       variant="outline" 
-                      className="gap-2 bg-white"
+                      className="gap-2 bg-white dark:bg-gray-950"
                       onClick={() => handleToggleStatus(workflow.id)}
                     >
                       {workflow.status === "active" ? (
@@ -461,8 +461,8 @@ export default function WorkflowsPage() {
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Search className="w-8 h-8 text-gray-400" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No se encontraron workflows</h3>
-              <p className="text-gray-600 mb-4">Intenta con otros términos de búsqueda</p>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No se encontraron workflows</h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">Intenta con otros términos de búsqueda</p>
             </CardContent>
           </Card>
         )}
@@ -476,7 +476,7 @@ export default function WorkflowsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-gray-700 mb-4">
+            <p className="text-gray-700 dark:text-gray-300 mb-4">
               Los workflows te permiten automatizar tareas repetitivas y mejorar la experiencia de tus clientes. 
               Crea workflows personalizados para:
             </p>

@@ -25,6 +25,7 @@ import BottomNav from '@/components/photographer/BottomNav';
 import { GlassCard, GlassButton } from '@/components/photographer/ui';
 import { updateSupabaseUser } from '@/lib/supabase-users';
 import { supabase } from '@/lib/supabase';
+import { useTheme } from 'next-themes';
 
 // Background image
 
@@ -63,6 +64,7 @@ const settingsSections = [
 
 export default function AjustesPage() {
   
+  const { theme, setTheme } = useTheme();
   const [activeSection, setActiveSection] = useState('profile');
   const [userId, setUserId] = useState(null);
   const [avatarUrl, setAvatarUrl] = useState(null);
@@ -327,6 +329,8 @@ export default function AjustesPage() {
         );
 
       case 'appearance':
+        const themeMap = { 'Oscuro': 'dark', 'Claro': 'light', 'Sistema': 'system' };
+        const reverseMap = { 'dark': 'Oscuro', 'light': 'Claro', 'system': 'Sistema' };
         return (
           <div className="space-y-6">
             <h2 className="text-xl font-title text-white">Apariencia</h2>
@@ -334,18 +338,19 @@ export default function AjustesPage() {
             <div>
               <p className="text-white/60 text-sm mb-3">Tema</p>
               <div className="grid grid-cols-3 gap-3">
-                {['Oscuro', 'Claro', 'Sistema'].map((theme) => (
+                {['Oscuro', 'Claro', 'Sistema'].map((t) => (
                   <motion.button
-                    key={theme}
+                    key={t}
+                    onClick={() => setTheme(themeMap[t])}
                     className={`p-4 rounded-2xl border-2 transition-colors ${
-                      theme === 'Oscuro' 
+                      theme === themeMap[t]
                         ? 'border-red-500 bg-red-500/20' 
                         : 'border-white/20 bg-black/30 hover:border-white/40'
                     }`}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                   >
-                    <p className="text-white font-medium">{theme}</p>
+                    <p className="text-white font-medium">{t}</p>
                   </motion.button>
                 ))}
               </div>

@@ -238,7 +238,7 @@ export default function ProductsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl md:text-3xl font-title text-gray-900">Gestion de Productos</h1>
-            <p className="text-sm md:text-base text-gray-600 mt-1">
+            <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">
               Administra precios, ofertas y fotos de tus experiencias
             </p>
           </div>
@@ -379,7 +379,7 @@ export default function ProductsPage() {
                           </div>
                           <div>
                             <div className="font-medium text-gray-900">{product.name}</div>
-                            <div className="text-sm text-gray-500 line-clamp-1">{product.description}</div>
+                            <div className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1">{product.description}</div>
                           </div>
                         </div>
                       </TableCell>
@@ -401,7 +401,7 @@ export default function ProductsPage() {
                         <div className="flex items-center gap-2">
                           <span className="text-lg font-semibold text-gray-900">${product.price}</span>
                           {product.hasDiscount && product.originalPrice && (
-                            <span className="text-sm text-gray-500 line-through">${product.originalPrice}</span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400 line-through">${product.originalPrice}</span>
                           )}
                         </div>
                       </TableCell>
@@ -547,7 +547,7 @@ export default function ProductsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
                   <div>
                     <Label htmlFor="has-discount" className="font-medium">
                       Activar Oferta
@@ -602,7 +602,7 @@ export default function ProductsPage() {
               </div>
 
               <div className="border-t pt-4">
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
                   <div>
                     <Label htmlFor="edit-active" className="font-medium">
                       Producto Activo

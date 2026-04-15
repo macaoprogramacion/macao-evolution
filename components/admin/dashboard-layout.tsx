@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft, Ship, Mountain } from "lucide-react"
+import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft, Ship, Mountain, Sun, Moon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -17,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
+import { useTheme } from "next-themes"
 
 const navigation = [
   { name: "Overview", href: "/admin", icon: Home },
@@ -66,6 +67,7 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
+  const { theme, setTheme } = useTheme()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
@@ -84,8 +86,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   // Don't render until we know the role
   if (userRole === null) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-gray-300 border-t-red-600 rounded-full animate-spin" />
+      <div className="min-h-screen bg-white dark:bg-gray-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-gray-300 dark:border-gray-600 border-t-red-600 rounded-full animate-spin" />
       </div>
     )
   }
@@ -94,9 +96,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const currentPageAllowed = hasAccess(userRole, pathname)
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-gray-950">
       {/* Header */}
-      <header className="h-16 border-b border-gray-200 bg-white px-3 md:px-6 flex items-center justify-between sticky top-0 z-30">
+      <header className="h-16 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 md:px-6 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-2 md:gap-4 min-w-0">
           {/* Mobile menu button */}
           <Button
@@ -115,9 +117,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               height={48}
               className="h-8 md:h-10 w-auto"
             />
-            <span className="font-title text-gray-900 hidden sm:inline">Dashboard</span>
+            <span className="font-title text-gray-900 dark:text-gray-100 hidden sm:inline">Dashboard</span>
           </Link>
-          <div className="text-sm text-gray-500 hidden md:block">
+          <div className="text-sm text-gray-500 dark:text-gray-400 hidden md:block">
             <span>Dashboard</span> <span className="mx-1">/</span>
             <span className="capitalize">{pathname === "/admin" ? "Overview" : pathname.replace("/admin/", "")}</span>
           </div>
@@ -128,9 +130,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
               placeholder="Search workflows, logs..."
-              className="pl-10 w-48 md:w-64 lg:w-80 bg-gray-50 border-gray-200 focus:bg-white"
+              className="pl-10 w-48 md:w-64 lg:w-80 bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 focus:bg-white dark:focus:bg-gray-800"
             />
           </div>
+          <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+            <Sun className="w-4 h-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute w-4 h-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            <span className="sr-only">Toggle theme</span>
+          </Button>
           <Button variant="ghost" size="icon" className="relative shrink-0">
             <Bell className="w-4 h-4" />
             <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
@@ -169,11 +176,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Sidebar */}
         <aside className={`${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } ${sidebarCollapsed ? "lg:-translate-x-full lg:w-0 lg:border-0" : "lg:translate-x-0 lg:w-60"} fixed lg:sticky top-16 left-0 z-20 w-60 shrink-0 border-r border-gray-200 bg-white h-[calc(100vh-4rem)] overflow-y-auto transition-all duration-200 ease-in-out`}>
+        } ${sidebarCollapsed ? "lg:-translate-x-full lg:w-0 lg:border-0" : "lg:translate-x-0 lg:w-60"} fixed lg:sticky top-16 left-0 z-20 w-60 shrink-0 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 h-[calc(100vh-4rem)] overflow-y-auto transition-all duration-200 ease-in-out`}>
           <div className="p-4">
             <div className="relative mb-6">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input placeholder="Search anything..." className="pl-10 bg-gray-50 border-gray-200 text-sm" />
+              <Input placeholder="Search anything..." className="pl-10 bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-sm" />
               <Button
                 size="icon"
                 variant="ghost"
@@ -199,7 +206,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     href={item.href}
                     onClick={() => setSidebarOpen(false)}
                     className={`flex items-center w-full justify-start px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                      isActive ? "bg-red-50 text-red-700 hover:bg-red-100" : "text-gray-600 hover:bg-gray-50"
+                      isActive ? "bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900" : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
                     }`}
                   >
                     <item.icon className="w-4 h-4 mr-3" />
@@ -212,7 +219,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-w-0 p-4 md:p-6 lg:p-8 bg-gray-50 overflow-x-auto">
+        <main className="flex-1 min-w-0 p-4 md:p-6 lg:p-8 bg-gray-50 dark:bg-gray-900 overflow-x-auto">
           {/* Desktop sidebar toggle */}
           <Button
             variant="ghost"
@@ -224,11 +231,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </Button>
           {currentPageAllowed ? children : (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <Lock className="w-8 h-8 text-gray-400" />
+              <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                <Lock className="w-8 h-8 text-gray-400 dark:text-gray-500" />
               </div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Acceso restringido</h2>
-              <p className="text-gray-500 max-w-sm mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Acceso restringido</h2>
+              <p className="text-gray-500 dark:text-gray-400 max-w-sm mb-6">
                 Tu rol de <span className="font-medium capitalize">{userRole}</span> no tiene permiso para acceder a esta sección.
               </p>
               <Button onClick={() => router.push("/admin")} variant="outline">
