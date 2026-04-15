@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import DashboardAuthGate from '@/components/photographer/DashboardAuthGate';
 import { 
@@ -23,6 +23,7 @@ import Navbar from '@/components/photographer/Navbar';
 import Sidebar from '@/components/photographer/Sidebar';
 import BottomNav from '@/components/photographer/BottomNav';
 import { GlassCard, GlassButton } from '@/components/photographer/ui';
+import { updateSupabaseUser } from '@/lib/supabase-users';
 
 // Background image
 
@@ -68,13 +69,61 @@ const settingsSections = [
 export default function AjustesPage() {
   
   const [activeSection, setActiveSection] = useState('profile');
+  const [userId, setUserId] = useState(null);
   const [profile, setProfile] = useState({
-    name: 'Carlos Méndez',
-    email: 'carlos.mendez@macao.com',
-    phone: '809-555-0100',
-    role: 'Fotógrafo Senior',
+    name: '',
+    email: '',
+    phone: '',
+    role: '',
     company: 'Macao Memories',
   });
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+
+  // Load real user data from session
+  useEffect(() => {
+    try {
+      const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || 'null');
+      if (session) {
+        setUserId(session.id);
+        setProfile(prev => ({
+          ...prev,
+          name: session.name || '',
+          email: session.email || '',
+          phone: session.phone || '',
+          role: session.role || '',
+        }));
+      }
+    } catch {}
+  }, []);
+
+  const handleSaveProfile = useCallback(async () => {
+    if (!userId || saving) return;
+    setSaving(true);
+    setSaveMessage('');
+    try {
+      await updateSupabaseUser(userId, {
+        name: profile.name,
+        email: profile.email,
+        phone: profile.phone,
+      });
+      // Update session with new data
+      const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || '{}');
+      sessionStorage.setItem('macao_auth_session', JSON.stringify({
+        ...session,
+        name: profile.name,
+        email: profile.email,
+        phone: profile.phone,
+      }));
+      setSaveMessage('Cambios guardados correctamente');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (err) {
+      setSaveMessage('Error al guardar los cambios');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } finally {
+      setSaving(false);
+    }
+  }, [userId, profile, saving]);
   const [notifications, setNotifications] = useState({
     email: true,
     push: true,
@@ -93,7 +142,7 @@ export default function AjustesPage() {
             <div className="flex items-center gap-6">
               <div className="relative">
                 <div className="w-24 h-24 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white text-3xl font-bold">
-                  CM
+                  {profile.name ? profile.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) : '??'}
                 </div>
                 <motion.button
                   className="absolute bottom-0 right-0 p-2 rounded-full bg-black/50 border border-white/20"
@@ -168,10 +217,17 @@ export default function AjustesPage() {
               </div>
             </div>
 
-            <GlassButton variant="primary" className="flex items-center gap-2">
-              <Save className="w-4 h-4" />
-              Guardar Cambios
-            </GlassButton>
+            <div className="flex items-center gap-4">
+              <GlassButton variant="primary" className="flex items-center gap-2" onClick={handleSaveProfile} disabled={saving}>
+                <Save className="w-4 h-4" />
+                {saving ? 'Guardando...' : 'Guardar Cambios'}
+              </GlassButton>
+              {saveMessage && (
+                <span className={`text-sm ${saveMessage.includes('Error') ? 'text-red-400' : 'text-green-400'}`}>
+                  {saveMessage}
+                </span>
+              )}
+            </div>
           </div>
         );
 
