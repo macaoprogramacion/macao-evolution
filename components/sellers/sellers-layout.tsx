@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import type React from "react"
 import Link from "next/link"
@@ -36,7 +36,7 @@ export function SellersLayout({ children, repName = "Representante", repInitials
         <div className="flex items-center gap-4">
           <Link href="/sellers/dashboard" className="flex items-center gap-2">
             <Image
-              src="/Logo%20PNG/MACAO%20LOGO_Mesa%20de%20trabajo%201.png"
+              src="/Logo PNG/MACAO LOGO_Mesa de trabajo 1.png"
               alt="MACAO Logo"
               width={160}
               height={48}

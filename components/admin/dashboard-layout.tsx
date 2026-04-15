@@ -111,7 +111,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </Button>
           <Link href="/admin" className="flex items-center gap-2 shrink-0">
             <Image
-              src="/Logo%20PNG/MACAO%20LOGO_Mesa%20de%20trabajo%201.png"
+              src="/Logo PNG/MACAO LOGO_Mesa de trabajo 1.png"
               alt="MACAO Logo"
               width={160}
               height={48}

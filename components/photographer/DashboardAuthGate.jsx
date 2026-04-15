@@ -171,7 +171,7 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
             {/* Logo */}
             <div className="flex justify-center mb-6">
               <Image
-                src="/Logo%20PNG/MACAO%20LOGO-04.png"
+                src="/Logo PNG/MACAO LOGO-04.png"
                 alt="MACAO"
                 width={140}
                 height={42}

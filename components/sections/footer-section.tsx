@@ -34,7 +34,7 @@ export function FooterSection() {
           <div className="col-span-2 md:col-span-1 lg:col-span-2">
             <Link href="/" className="inline-block">
               <Image
-                src="/Logo%20PNG/MACAO%20LOGO_Mesa%20de%20trabajo%201.png"
+                src="/Logo PNG/MACAO LOGO_Mesa de trabajo 1.png"
                 alt="Macao Logo"
                 width={140}
                 height={46}

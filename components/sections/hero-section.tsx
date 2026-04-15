@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import { useEffect, useRef } from "react";
@@ -7,26 +7,26 @@ const word = "MACAO";
 
 const sideImages = [
   {
-    src: "/images/hero-secction/hero-seccion%20(1).webp",
-    alt: "Hero sección imagen 1",
+    src: "/images/hero-secction/hero-seccion (1).webp",
+    alt: "Hero secciÃ³n imagen 1",
     position: "left",
     span: 1,
   },
   {
-    src: "/images/hero-secction/hero-seccion%20(2).webp",
-    alt: "Hero sección imagen 2",
+    src: "/images/hero-secction/hero-seccion (2).webp",
+    alt: "Hero secciÃ³n imagen 2",
     position: "left",
     span: 1,
   },
   {
-    src: "/images/hero-secction/hero-seccion%20(3).webp",
-    alt: "Hero sección imagen 3",
+    src: "/images/hero-secction/hero-seccion (3).webp",
+    alt: "Hero secciÃ³n imagen 3",
     position: "right",
     span: 1,
   },
   {
-    src: "/images/hero-secction/hero-seccion%20(4).webp",
-    alt: "Hero sección imagen 4",
+    src: "/images/hero-secction/hero-seccion (4).webp",
+    alt: "Hero secciÃ³n imagen 4",
     position: "right",
     span: 1,
   },
@@ -56,10 +56,10 @@ export function HeroSection() {
     const applyStyles = () => {
       if (!sectionRef.current) return;
 
-      // ── MOBILE: No animation at all — static hero image ──
+      // â”€â”€ MOBILE: No animation at all â€” static hero image â”€â”€
       if (isMobileRef.current) return;
 
-      // ── DESKTOP: scroll-driven slide-in animation ──
+      // â”€â”€ DESKTOP: scroll-driven slide-in animation â”€â”€
       const rect = sectionRef.current.getBoundingClientRect();
       const scrollableHeight = sectionRef.current.offsetHeight - window.innerHeight;
       const scrolled = -rect.top;
@@ -157,7 +157,7 @@ export function HeroSection() {
             style={{ gap: 0, padding: 0, paddingBottom: "60px" }}
           >
 
-            {/* Left Column — hidden on mobile */}
+            {/* Left Column â€” hidden on mobile */}
             <div
               ref={leftColRef}
               className="hidden md:flex flex-col will-change-transform"
@@ -224,7 +224,7 @@ export function HeroSection() {
               </div>
             </div>
 
-            {/* Right Column — hidden on mobile */}
+            {/* Right Column â€” hidden on mobile */}
             <div
               ref={rightColRef}
               className="hidden md:flex flex-col will-change-transform"
@@ -254,7 +254,7 @@ export function HeroSection() {
         </div>
       </div>
 
-      {/* Scroll space for desktop animation only — no extra scroll on mobile */}
+      {/* Scroll space for desktop animation only â€” no extra scroll on mobile */}
       <div className="h-0 md:h-[200vh]" />
     </section>
   );

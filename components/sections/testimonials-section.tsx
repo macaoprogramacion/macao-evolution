@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 
@@ -19,7 +19,7 @@ export function TestimonialsImage() {
     <section id="about" className="bg-background">
       <div className="relative aspect-[16/9] w-full">
         <Image
-          src="/images/Clientes/clientes%20(5).webp"
+          src="/images/Clientes/clientes (5).webp"
           alt="Clientes disfrutando la aventura en buggy"
           fill
           className="object-cover"

@@ -1,4 +1,4 @@
-import Image from "next/image";
+﻿import Image from "next/image";
 import Link from "next/link";
 import { Header } from "@/components/header";
 import { FooterSection } from "@/components/sections/footer-section";
@@ -25,7 +25,7 @@ export function StaticPageShell({
         <div className="mx-auto max-w-4xl">
           <div className="mb-6 flex items-center justify-center rounded-xl border border-border bg-secondary/40 px-4 py-5">
             <Image
-              src="/Logo%20PNG/MACAO%20LOGO_Mesa%20de%20trabajo%201.png"
+              src="/Logo PNG/MACAO LOGO_Mesa de trabajo 1.png"
               alt="Macao Logo"
               width={220}
               height={72}

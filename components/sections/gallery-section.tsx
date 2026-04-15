@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -14,21 +14,21 @@ export function GallerySection() {
   const transformRef = useRef<HTMLDivElement>(null);
 
   const images = [
-    { src: "/images/gallery-section/gallery%20(1).webp", alt: "Galería Macao 1" },
-    { src: "/images/gallery-section/gallery%20(2).webp", alt: "Galería Macao 2" },
-    { src: "/images/gallery-section/gallery%20(3).webp", alt: "Galería Macao 3" },
-    { src: "/images/gallery-section/gallery%20(4).webp", alt: "Galería Macao 4" },
-    { src: "/images/gallery-section/gallery%20(5).webp", alt: "Galería Macao 5" },
-    { src: "/images/gallery-section/gallery%20(6).webp", alt: "Galería Macao 6" },
-    { src: "/images/gallery-section/gallery%20(7).webp", alt: "Galería Macao 7" },
-    { src: "/images/gallery-section/gallery%20(8).webp", alt: "Galería Macao 8" },
-    { src: "/images/gallery-section/gallery%20(9).webp", alt: "Galería Macao 9" },
-    { src: "/images/gallery-section/gallery%20(10).webp", alt: "Galería Macao 10" },
-    { src: "/images/gallery-section/gallery%20(11).webp", alt: "Galería Macao 11" },
-    { src: "/images/gallery-section/gallery%20(12).webp", alt: "Galería Macao 12" },
-    { src: "/images/gallery-section/gallery%20(13).webp", alt: "Galería Macao 13" },
-    { src: "/images/gallery-section/gallery%20(14).webp", alt: "Galería Macao 14" },
-    { src: "/images/gallery-section/gallery%20(15).webp", alt: "Galería Macao 15" },
+    { src: "/images/gallery-section/gallery (1).webp", alt: "GalerÃ­a Macao 1" },
+    { src: "/images/gallery-section/gallery (2).webp", alt: "GalerÃ­a Macao 2" },
+    { src: "/images/gallery-section/gallery (3).webp", alt: "GalerÃ­a Macao 3" },
+    { src: "/images/gallery-section/gallery (4).webp", alt: "GalerÃ­a Macao 4" },
+    { src: "/images/gallery-section/gallery (5).webp", alt: "GalerÃ­a Macao 5" },
+    { src: "/images/gallery-section/gallery (6).webp", alt: "GalerÃ­a Macao 6" },
+    { src: "/images/gallery-section/gallery (7).webp", alt: "GalerÃ­a Macao 7" },
+    { src: "/images/gallery-section/gallery (8).webp", alt: "GalerÃ­a Macao 8" },
+    { src: "/images/gallery-section/gallery (9).webp", alt: "GalerÃ­a Macao 9" },
+    { src: "/images/gallery-section/gallery (10).webp", alt: "GalerÃ­a Macao 10" },
+    { src: "/images/gallery-section/gallery (11).webp", alt: "GalerÃ­a Macao 11" },
+    { src: "/images/gallery-section/gallery (12).webp", alt: "GalerÃ­a Macao 12" },
+    { src: "/images/gallery-section/gallery (13).webp", alt: "GalerÃ­a Macao 13" },
+    { src: "/images/gallery-section/gallery (14).webp", alt: "GalerÃ­a Macao 14" },
+    { src: "/images/gallery-section/gallery (15).webp", alt: "GalerÃ­a Macao 15" },
   ];
 
   // Calculate section height (desktop only)
@@ -98,7 +98,7 @@ export function GallerySection() {
       className="relative bg-background"
       style={{ height: sectionHeight }}
     >
-      {/* ── MOBILE: native horizontal scroll ── */}
+      {/* â”€â”€ MOBILE: native horizontal scroll â”€â”€ */}
       <div className="md:hidden overflow-x-auto scrollbar-hide py-6">
         <div className="flex gap-4 px-6" style={{ width: 'max-content' }}>
           {images.map((image, index) => (
@@ -121,7 +121,7 @@ export function GallerySection() {
         </div>
       </div>
 
-      {/* ── DESKTOP: scroll-hijack horizontal ── */}
+      {/* â”€â”€ DESKTOP: scroll-hijack horizontal â”€â”€ */}
       <div className="hidden md:block sticky top-0 h-screen overflow-hidden">
         <div className="flex h-full items-center">
           <div 

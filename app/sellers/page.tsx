@@ -87,7 +87,7 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center mb-4">
             <Image
-              src="/Logo%20PNG/MACAO%20LOGO_Mesa%20de%20trabajo%201.png"
+              src="/Logo PNG/MACAO LOGO_Mesa de trabajo 1.png"
               alt="MACAO Logo"
               width={260}
               height={80}

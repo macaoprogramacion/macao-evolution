@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
@@ -61,26 +61,26 @@ function ScrollRevealText({ text }: { text: string }) {
 
 const sideImages = [
   {
-    src: "/images/paradas/columna%20(1).webp",
-    alt: "Parada 1 de la excursión",
+    src: "/images/paradas/columna (1).webp",
+    alt: "Parada 1 de la excursiÃ³n",
     position: "left",
     span: 1,
   },
   {
-    src: "/images/paradas/columna%20(3).webp",
-    alt: "Parada 3 de la excursión",
+    src: "/images/paradas/columna (3).webp",
+    alt: "Parada 3 de la excursiÃ³n",
     position: "left",
     span: 1,
   },
   {
-    src: "/images/paradas/columna%20(2).webp",
-    alt: "Parada 2 de la excursión",
+    src: "/images/paradas/columna (2).webp",
+    alt: "Parada 2 de la excursiÃ³n",
     position: "right",
     span: 1,
   },
   {
-    src: "/images/paradas/columna%20(4).webp",
-    alt: "Parada 4 de la excursión",
+    src: "/images/paradas/columna (4).webp",
+    alt: "Parada 4 de la excursiÃ³n",
     position: "right",
     span: 1,
   },
@@ -136,7 +136,7 @@ export function TechnologySection() {
   // Image transforms start after title fades (0.2 to 1)
   const imageProgress = Math.max(0, Math.min(1, (scrollProgress - 0.2) / 0.8));
   
-  // Smooth interpolations — wider side images on mobile
+  // Smooth interpolations â€” wider side images on mobile
   const centerWidth = isMobile
     ? 100 - (imageProgress * 96) // mobile: 100% to 4%
     : 100 - (imageProgress * 58); // desktop: 100% to 42%
@@ -208,7 +208,7 @@ export function TechnologySection() {
             >
               <Image
                 src="/images/foto-con-dimecion-arreglada/imagen-cuadrada-alta-calidad.webp"
-                alt="Buggy aventura vista aérea"
+                alt="Buggy aventura vista aÃ©rea"
                 fill
                 className="object-cover"
                 sizes="(max-width: 768px) 100vw, 42vw"

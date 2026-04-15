@@ -9,7 +9,7 @@ export default function Navbar({ title = 'MACAO OFFROAD EXPERIENCE', mobileTitle
         {/* Logo + Title */}
         <div className="flex items-center gap-3">
           <Image
-            src="/Logo%20PNG/MACAO%20LOGO-04.png"
+            src="/Logo PNG/MACAO LOGO-04.png"
             alt="MACAO Logo"
             width={120}
             height={40}

@@ -177,7 +177,7 @@ export function PortfolioProvider({ children }) {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  // Add new portfolio
+  // Add new portfolio — saves to both localStorage (instant) and Supabase (persistent)
   const addPortfolio = useCallback((newPortfolio, photos, video = null) => {
     const id = Date.now();
     const today = new Date();
@@ -199,9 +199,27 @@ export function PortfolioProvider({ children }) {
       createdAt: today.getTime(),
     };
 
+    // Save to localStorage immediately (photographer's view)
     setPortfolios(prev => [portfolio, ...prev]);
     setClientPhotos(prev => ({ ...prev, [id]: photos }));
     if (video) { setClientVideos(prev => ({ ...prev, [id]: video })); }
+
+    // Persist to Supabase (so clients can access the gallery from their own devices)
+    fetch('/api/portfolios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clientName: newPortfolio.clientName,
+        phone: newPortfolio.phone,
+        invoiceCode: newPortfolio.invoiceCode || null,
+        source: newPortfolio.source || 'photographer',
+        turno: newPortfolio.turno || null,
+        photographerName: newPortfolio.photographerName || null,
+        photos,
+        video,
+      }),
+    }).catch(err => console.error('Error saving portfolio to Supabase:', err));
+
     return id;
   }, []);
 

@@ -34,7 +34,7 @@ export function Header() {
         {/* Logo */}
         <Link href="/" className="flex items-center">
           <Image
-            src="/Logo%20PNG/MACAO%20LOGO_Mesa%20de%20trabajo%201.png"
+            src="/Logo PNG/MACAO LOGO_Mesa de trabajo 1.png"
             alt="Macao Logo"
             width={160}
             height={48}

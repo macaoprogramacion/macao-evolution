@@ -5,8 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import PhotoCard from '@/components/photographer/PhotoCard';
 import { GlassCard, GlassButton } from '@/components/photographer/ui';
-import { CheckCircle, Package, Video, Download, Play, Receipt, ShieldCheck, AlertCircle, Phone, User } from 'lucide-react';
-import { usePortfolio } from '@/context/PortfolioContext';
+import { CheckCircle, Package, Video, Download, Play, Receipt, ShieldCheck, AlertCircle, Phone, User, Loader2 } from 'lucide-react';
 import { findInvoicesByPhone, findInvoiceByNumber, markInvoiceRedeemed, logActivity, addPhotoSale } from '@/lib/store';
 
 // Background image
@@ -33,33 +32,66 @@ export default function ClientGalleryPage() {
 function ClientGallery() {
   const searchParams = useSearchParams();
   const phone = searchParams.get('phone');
-  const { findByPhone, findAllByPhone, clientPhotos, clientVideos } = usePortfolio();
 
-  // Lookup invoices and portfolio by phone
+  // State for data fetched from Supabase
+  const [dbPortfolios, setDbPortfolios] = useState([]);
+  const [dbPhotos, setDbPhotos] = useState({});
+  const [dbVideos, setDbVideos] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
+
+  // Fetch portfolio data from Supabase via API
+  useEffect(() => {
+    if (!phone) {
+      setIsLoading(false);
+      return;
+    }
+
+    async function fetchPortfolios() {
+      try {
+        setIsLoading(true);
+        setFetchError(null);
+        const res = await fetch(`/api/portfolios?phone=${encodeURIComponent(phone)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setDbPortfolios(data.portfolios || []);
+        setDbPhotos(data.photos || {});
+        setDbVideos(data.videos || {});
+      } catch (err) {
+        console.error('Error fetching gallery:', err);
+        setFetchError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchPortfolios();
+  }, [phone]);
+
+  // Lookup invoices by phone (still from localStorage — these are for invoice verification)
   const phoneInvoices = useMemo(() => phone ? findInvoicesByPhone(phone) : [], [phone]);
   const hasInvoice = phoneInvoices.length > 0;
-  const portfolios = useMemo(() => phone ? findAllByPhone(phone) : [], [phone, findAllByPhone]);
 
-  // Build gallery photos from real portfolio data, fall back to demo
+  // Build gallery photos from Supabase data, fall back to demo
   const galleryPhotos = useMemo(() => {
     const realPhotos = [];
-    portfolios.forEach(p => {
-      const photos = clientPhotos[p.id] || [];
+    dbPortfolios.forEach(p => {
+      const photos = dbPhotos[p.id] || [];
       photos.forEach((img, i) => realPhotos.push({ id: `${p.id}_${i}`, image: img }));
     });
     if (realPhotos.length > 0) return realPhotos;
     return fallbackPhotos.map((img, i) => ({ id: i + 1, image: img }));
-  }, [portfolios, clientPhotos]);
+  }, [dbPortfolios, dbPhotos]);
 
   // Get video if any
   const portfolioVideo = useMemo(() => {
-    for (const p of portfolios) {
-      if (clientVideos[p.id]) return clientVideos[p.id];
+    for (const p of dbPortfolios) {
+      if (dbVideos[p.id]) return dbVideos[p.id];
     }
     return null;
-  }, [portfolios, clientVideos]);
+  }, [dbPortfolios, dbVideos]);
 
-  const clientName = portfolios[0]?.clientName || phoneInvoices[0]?.clientName || 'Cliente';
+  const clientName = dbPortfolios[0]?.clientName || phoneInvoices[0]?.clientName || 'Cliente';
 
   const [selectedIds, setSelectedIds] = useState([]);
   const [videoSelected, setVideoSelected] = useState(false);
@@ -233,6 +265,18 @@ function ClientGallery() {
     }
     logActivity('Descarga parcial', `${clientName} descargó ${selected.length} fotos`);
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-white animate-spin mx-auto mb-4" />
+          <p className="text-white/70 text-lg">Cargando tu galería...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen relative">

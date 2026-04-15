@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+﻿import { supabase } from "@/lib/supabase";
 
 export interface Product {
   id: string;
@@ -36,6 +36,11 @@ export interface Product {
   discountPercent?: number;
 }
 
+function decodeImageUrl(url: string): string {
+  if (!url) return url;
+  try { return decodeURIComponent(url); } catch { return url; }
+}
+
 function mapRowToProduct(row: any): Product {
   return {
     id: row.id,
@@ -43,10 +48,10 @@ function mapRowToProduct(row: any): Product {
     title: row.title,
     description: row.description || "",
     capacity: row.capacity || "",
-    image: row.image || "",
+    image: decodeImageUrl(row.image || ""),
     price: Number(row.price),
     originalPrice: row.original_price ? Number(row.original_price) : undefined,
-    gallery: row.gallery || [],
+    gallery: (row.gallery || []).map(decodeImageUrl),
     duration: row.duration || "",
     highlights: row.highlights || [],
     itinerary: row.itinerary || [],
@@ -101,7 +106,7 @@ export async function fetchProductBySlug(slug: string): Promise<Product | undefi
   return mapRowToProduct(data);
 }
 
-// Fallback estático — se usa solo si Supabase no está disponible
+// Fallback estÃ¡tico â€” se usa solo si Supabase no estÃ¡ disponible
 const fallbackProducts: Product[] = [
   {
     id: "product-elite-couple-experience",
@@ -109,14 +114,14 @@ const fallbackProducts: Product[] = [
     title: "Elite Couple Experience",
     description: "Couple",
     capacity: "2 people",
-    image: "/images/productos/producto%20(3).webp",
+    image: "/images/productos/producto (3).webp",
     price: 160,
     gallery: [
-      "/images/productos/producto%20(3).webp",
-      "/images/Buggies/buggie%20(1).webp",
-      "/images/Buggies/buggie%20(3).webp",
-      "/images/paradas/columna%20(1).webp",
-      "/images/paradas/columna%20(2).webp",
+      "/images/productos/producto (3).webp",
+      "/images/Buggies/buggie (1).webp",
+      "/images/Buggies/buggie (3).webp",
+      "/images/paradas/columna (1).webp",
+      "/images/paradas/columna (2).webp",
     ],
     duration: "4 hours",
     highlights: [
@@ -130,7 +135,7 @@ const fallbackProducts: Product[] = [
         title: "Pick-Up & City Tour",
         duration: "1.5 hrs",
         description:
-          "Begin your adventure with a scenic city tour in an open-air Safari truck. Enjoy panoramic views of Punta Cana's vibrant streets and lush landscapes as you head to the ranch base—no stops, just great sights.",
+          "Begin your adventure with a scenic city tour in an open-air Safari truck. Enjoy panoramic views of Punta Cana's vibrant streets and lush landscapes as you head to the ranch baseâ€”no stops, just great sights.",
       },
       {
         title: "Ranch Base Briefing",
@@ -144,17 +149,17 @@ const fallbackProducts: Product[] = [
         description:
           "Experience authentic local culture in a peaceful rural setting.",
         details: [
-          "Coffee, Cocoa & Tobacco — Explore the roots of traditional farming and savor authentic local products. Enjoy a unique experience as local artisans handcraft coffee, chocolate, cigars, and much more right before your eyes.",
+          "Coffee, Cocoa & Tobacco â€” Explore the roots of traditional farming and savor authentic local products. Enjoy a unique experience as local artisans handcraft coffee, chocolate, cigars, and much more right before your eyes.",
         ],
       },
       {
         title: "Macao Beach Stop",
         duration: "20 mins",
         description:
-          "Ride your buggy to the stunning Macao Beach, known for its white sands, turquoise waters, and peaceful vibe—perfect for relaxing or snapping photos.",
+          "Ride your buggy to the stunning Macao Beach, known for its white sands, turquoise waters, and peaceful vibeâ€”perfect for relaxing or snapping photos.",
       },
       {
-        title: "Cueva Taína — Cenote Cave",
+        title: "Cueva TaÃ­na â€” Cenote Cave",
         duration: "20 mins",
         description:
           "Explore a jungle cenote with crystal-clear waters and mystical cave formations.",
@@ -178,7 +183,7 @@ const fallbackProducts: Product[] = [
       duration: "4 hours",
       guide: "English, French, Portuguese, Spanish, Italian, German, Russian",
       pickupService:
-        "Pickup is available from hotels in Punta Cana, Bávaro, Uvero Alto, and Cabeza de Toro. Pickup time is typically 1-1.5 hours before the tour start time. You will be emailed the pickup location and time within 24 hours of booking. Please contact us the day before your tour if the information provided is unclear. Please wait outside the hotel 5 minutes before the pickup time, as the bus cannot park and wait.",
+        "Pickup is available from hotels in Punta Cana, BÃ¡varo, Uvero Alto, and Cabeza de Toro. Pickup time is typically 1-1.5 hours before the tour start time. You will be emailed the pickup location and time within 24 hours of booking. Please contact us the day before your tour if the information provided is unclear. Please wait outside the hotel 5 minutes before the pickup time, as the bus cannot park and wait.",
     },
   },
   {
@@ -187,14 +192,14 @@ const fallbackProducts: Product[] = [
     title: "Elite Family Experience",
     description: "FROM 3 TO 4 PEOPLE",
     capacity: "3-4 people",
-    image: "/images/productos/producto%20(4).webp",
+    image: "/images/productos/producto (4).webp",
     price: 200,
     gallery: [
-      "/images/productos/producto%20(4).webp",
-      "/images/Buggies/buggie%20(2).webp",
-      "/images/Buggies/buggie%20(4).webp",
-      "/images/paradas/columna%20(3).webp",
-      "/images/paradas/columna%20(4).webp",
+      "/images/productos/producto (4).webp",
+      "/images/Buggies/buggie (2).webp",
+      "/images/Buggies/buggie (4).webp",
+      "/images/paradas/columna (3).webp",
+      "/images/paradas/columna (4).webp",
     ],
     duration: "4 hours",
     highlights: [
@@ -208,7 +213,7 @@ const fallbackProducts: Product[] = [
         title: "Pick-Up & City Tour",
         duration: "1.5 hrs",
         description:
-          "Begin your adventure with a scenic city tour in an open-air Safari truck. Enjoy panoramic views of Punta Cana's vibrant streets and lush landscapes as you head to the ranch base—no stops, just great sights.",
+          "Begin your adventure with a scenic city tour in an open-air Safari truck. Enjoy panoramic views of Punta Cana's vibrant streets and lush landscapes as you head to the ranch baseâ€”no stops, just great sights.",
       },
       {
         title: "Ranch Base Briefing",
@@ -222,17 +227,17 @@ const fallbackProducts: Product[] = [
         description:
           "Experience authentic local culture in a peaceful rural setting.",
         details: [
-          "Coffee, Cocoa & Tobacco — Explore the roots of traditional farming and savor authentic local products.",
+          "Coffee, Cocoa & Tobacco â€” Explore the roots of traditional farming and savor authentic local products.",
         ],
       },
       {
         title: "Macao Beach Stop",
         duration: "20 mins",
         description:
-          "Ride your buggy to the stunning Macao Beach, known for its white sands, turquoise waters, and peaceful vibe—perfect for relaxing or snapping photos.",
+          "Ride your buggy to the stunning Macao Beach, known for its white sands, turquoise waters, and peaceful vibeâ€”perfect for relaxing or snapping photos.",
       },
       {
-        title: "Cueva Taína — Cenote Cave",
+        title: "Cueva TaÃ­na â€” Cenote Cave",
         duration: "20 mins",
         description:
           "Explore a jungle cenote with crystal-clear waters and mystical cave formations.",
@@ -256,7 +261,7 @@ const fallbackProducts: Product[] = [
       duration: "4 hours",
       guide: "English, French, Portuguese, Spanish, Italian, German, Russian",
       pickupService:
-        "Pickup is available from hotels in Punta Cana, Bávaro, Uvero Alto, and Cabeza de Toro. Pickup time is typically 1-1.5 hours before the tour start time. You will be emailed the pickup location and time within 24 hours of booking. Please contact us the day before your tour if the information provided is unclear. Please wait outside the hotel 5 minutes before the pickup time, as the bus cannot park and wait.",
+        "Pickup is available from hotels in Punta Cana, BÃ¡varo, Uvero Alto, and Cabeza de Toro. Pickup time is typically 1-1.5 hours before the tour start time. You will be emailed the pickup location and time within 24 hours of booking. Please contact us the day before your tour if the information provided is unclear. Please wait outside the hotel 5 minutes before the pickup time, as the bus cannot park and wait.",
     },
   },
   {
@@ -265,14 +270,14 @@ const fallbackProducts: Product[] = [
     title: "APEX PREDACTOR",
     description: "COUPLE",
     capacity: "2 people",
-    image: "/images/productos/producto%20(1).webp",
+    image: "/images/productos/producto (1).webp",
     price: 130,
     gallery: [
-      "/images/productos/producto%20(1).webp",
-      "/images/Buggies/buggie%20(5).webp",
-      "/images/Buggies/buggie%20(6).webp",
-      "/images/paradas/columna%20(1).webp",
-      "/images/paradas/columna%20(3).webp",
+      "/images/productos/producto (1).webp",
+      "/images/Buggies/buggie (5).webp",
+      "/images/Buggies/buggie (6).webp",
+      "/images/paradas/columna (1).webp",
+      "/images/paradas/columna (3).webp",
     ],
     duration: "4 hours",
     highlights: [
@@ -300,7 +305,7 @@ const fallbackProducts: Product[] = [
         description:
           "Experience authentic local culture in a peaceful rural setting.",
         details: [
-          "Coffee, Cocoa & Tobacco — Explore the roots of traditional farming and savor authentic local products.",
+          "Coffee, Cocoa & Tobacco â€” Explore the roots of traditional farming and savor authentic local products.",
         ],
       },
       {
@@ -310,7 +315,7 @@ const fallbackProducts: Product[] = [
           "Ride your buggy to the stunning Macao Beach for relaxing or snapping photos.",
       },
       {
-        title: "Cueva Taína — Cenote Cave",
+        title: "Cueva TaÃ­na â€” Cenote Cave",
         duration: "20 mins",
         description:
           "Explore a jungle cenote with crystal-clear waters and mystical cave formations.",
@@ -334,7 +339,7 @@ const fallbackProducts: Product[] = [
       duration: "4 hours",
       guide: "English, French, Portuguese, Spanish, Italian, German, Russian",
       pickupService:
-        "Pickup is available from hotels in Punta Cana, Bávaro, Uvero Alto, and Cabeza de Toro. Pickup time is typically 1-1.5 hours before the tour start time.",
+        "Pickup is available from hotels in Punta Cana, BÃ¡varo, Uvero Alto, and Cabeza de Toro. Pickup time is typically 1-1.5 hours before the tour start time.",
     },
   },
   {
@@ -343,14 +348,14 @@ const fallbackProducts: Product[] = [
     title: "PREDATORY FAMILY EXPERIENCE",
     description: "FROM 3 TO 4 PEOPLE",
     capacity: "3-4 people",
-    image: "/images/productos/producto%20(2).webp",
+    image: "/images/productos/producto (2).webp",
     price: 145,
     gallery: [
-      "/images/productos/producto%20(2).webp",
-      "/images/Buggies/buggie%20(7).webp",
-      "/images/Buggies/buggie%20(8).webp",
-      "/images/paradas/columna%20(2).webp",
-      "/images/paradas/columna%20(4).webp",
+      "/images/productos/producto (2).webp",
+      "/images/Buggies/buggie (7).webp",
+      "/images/Buggies/buggie (8).webp",
+      "/images/paradas/columna (2).webp",
+      "/images/paradas/columna (4).webp",
     ],
     duration: "4 hours",
     highlights: [
@@ -378,7 +383,7 @@ const fallbackProducts: Product[] = [
         description:
           "Experience authentic local culture in a peaceful rural setting.",
         details: [
-          "Coffee, Cocoa & Tobacco — Explore the roots of traditional farming and savor authentic local products.",
+          "Coffee, Cocoa & Tobacco â€” Explore the roots of traditional farming and savor authentic local products.",
         ],
       },
       {
@@ -388,7 +393,7 @@ const fallbackProducts: Product[] = [
           "Ride your buggy to the stunning Macao Beach.",
       },
       {
-        title: "Cueva Taína — Cenote Cave",
+        title: "Cueva TaÃ­na â€” Cenote Cave",
         duration: "20 mins",
         description:
           "Explore a jungle cenote with crystal-clear waters.",
@@ -412,7 +417,7 @@ const fallbackProducts: Product[] = [
       duration: "4 hours",
       guide: "English, French, Portuguese, Spanish, Italian, German, Russian",
       pickupService:
-        "Pickup is available from hotels in Punta Cana, Bávaro, Uvero Alto, and Cabeza de Toro.",
+        "Pickup is available from hotels in Punta Cana, BÃ¡varo, Uvero Alto, and Cabeza de Toro.",
     },
   },
   {
@@ -421,15 +426,15 @@ const fallbackProducts: Product[] = [
     title: "FLINTSTONE ERA",
     description: "COUPLE",
     capacity: "2 people",
-    image: "/images/productos/producto%20(5).webp",
+    image: "/images/productos/producto (5).webp",
     price: 85,
     originalPrice: 100,
     gallery: [
-      "/images/productos/producto%20(5).webp",
-      "/images/Buggies/buggie%20(9).webp",
-      "/images/Buggies/buggie%20(10).webp",
-      "/images/paradas/columna%20(1).webp",
-      "/images/paradas/columna%20(3).webp",
+      "/images/productos/producto (5).webp",
+      "/images/Buggies/buggie (9).webp",
+      "/images/Buggies/buggie (10).webp",
+      "/images/paradas/columna (1).webp",
+      "/images/paradas/columna (3).webp",
     ],
     duration: "4 hours",
     highlights: [
@@ -457,7 +462,7 @@ const fallbackProducts: Product[] = [
         description:
           "Experience authentic local culture in a peaceful rural setting.",
         details: [
-          "Coffee, Cocoa & Tobacco — Explore the roots of traditional farming.",
+          "Coffee, Cocoa & Tobacco â€” Explore the roots of traditional farming.",
         ],
       },
       {
@@ -467,7 +472,7 @@ const fallbackProducts: Product[] = [
           "Ride your buggy to the stunning Macao Beach.",
       },
       {
-        title: "Cueva Taína — Cenote Cave",
+        title: "Cueva TaÃ­na â€” Cenote Cave",
         duration: "20 mins",
         description:
           "Explore a jungle cenote with crystal-clear waters.",
@@ -491,7 +496,7 @@ const fallbackProducts: Product[] = [
       duration: "4 hours",
       guide: "English, French, Portuguese, Spanish, Italian, German, Russian",
       pickupService:
-        "Pickup is available from hotels in Punta Cana, Bávaro, Uvero Alto, and Cabeza de Toro.",
+        "Pickup is available from hotels in Punta Cana, BÃ¡varo, Uvero Alto, and Cabeza de Toro.",
     },
   },
   {
@@ -500,15 +505,15 @@ const fallbackProducts: Product[] = [
     title: "THE FLINTSTONES FAMILY",
     description: "From 3 to 4 people",
     capacity: "3-4 people",
-    image: "/images/productos/producto%20(6).webp",
+    image: "/images/productos/producto (6).webp",
     price: 100,
     originalPrice: 125,
     gallery: [
-      "/images/productos/producto%20(6).webp",
-      "/images/Buggies/buggie%20(1).webp",
-      "/images/Buggies/buggie%20(5).webp",
-      "/images/paradas/columna%20(2).webp",
-      "/images/paradas/columna%20(4).webp",
+      "/images/productos/producto (6).webp",
+      "/images/Buggies/buggie (1).webp",
+      "/images/Buggies/buggie (5).webp",
+      "/images/paradas/columna (2).webp",
+      "/images/paradas/columna (4).webp",
     ],
     duration: "4 hours",
     highlights: [
@@ -536,7 +541,7 @@ const fallbackProducts: Product[] = [
         description:
           "Experience authentic local culture in a peaceful rural setting.",
         details: [
-          "Coffee, Cocoa & Tobacco — Explore the roots of traditional farming.",
+          "Coffee, Cocoa & Tobacco â€” Explore the roots of traditional farming.",
         ],
       },
       {
@@ -546,7 +551,7 @@ const fallbackProducts: Product[] = [
           "Ride your buggy to the stunning Macao Beach.",
       },
       {
-        title: "Cueva Taína — Cenote Cave",
+        title: "Cueva TaÃ­na â€” Cenote Cave",
         duration: "20 mins",
         description:
           "Explore a jungle cenote with crystal-clear waters.",
@@ -570,7 +575,7 @@ const fallbackProducts: Product[] = [
       duration: "4 hours",
       guide: "English, French, Portuguese, Spanish, Italian, German, Russian",
       pickupService:
-        "Pickup is available from hotels in Punta Cana, Bávaro, Uvero Alto, and Cabeza de Toro.",
+        "Pickup is available from hotels in Punta Cana, BÃ¡varo, Uvero Alto, and Cabeza de Toro.",
     },
   },
   {
@@ -579,15 +584,15 @@ const fallbackProducts: Product[] = [
     title: "ATV QUAD EXPERIENCE",
     description: "SINGLE",
     capacity: "1 person",
-    image: "/images/productos/producto%20(7).webp",
+    image: "/images/productos/producto (7).webp",
     price: 90,
     originalPrice: 110,
     gallery: [
-      "/images/productos/producto%20(7).webp",
-      "/images/Buggies/buggie%20(3).webp",
-      "/images/Buggies/buggie%20(6).webp",
-      "/images/paradas/columna%20(1).webp",
-      "/images/paradas/columna%20(2).webp",
+      "/images/productos/producto (7).webp",
+      "/images/Buggies/buggie (3).webp",
+      "/images/Buggies/buggie (6).webp",
+      "/images/paradas/columna (1).webp",
+      "/images/paradas/columna (2).webp",
     ],
     duration: "4 hours",
     highlights: [
@@ -615,7 +620,7 @@ const fallbackProducts: Product[] = [
         description:
           "Experience authentic local culture in a peaceful rural setting.",
         details: [
-          "Coffee, Cocoa & Tobacco — Explore the roots of traditional farming.",
+          "Coffee, Cocoa & Tobacco â€” Explore the roots of traditional farming.",
         ],
       },
       {
@@ -625,7 +630,7 @@ const fallbackProducts: Product[] = [
           "Ride to the stunning Macao Beach.",
       },
       {
-        title: "Cueva Taína — Cenote Cave",
+        title: "Cueva TaÃ­na â€” Cenote Cave",
         duration: "20 mins",
         description:
           "Explore a jungle cenote with crystal-clear waters.",
@@ -649,7 +654,7 @@ const fallbackProducts: Product[] = [
       duration: "4 hours",
       guide: "English, French, Portuguese, Spanish, Italian, German, Russian",
       pickupService:
-        "Pickup is available from hotels in Punta Cana, Bávaro, Uvero Alto, and Cabeza de Toro.",
+        "Pickup is available from hotels in Punta Cana, BÃ¡varo, Uvero Alto, and Cabeza de Toro.",
     },
   },
   {
@@ -658,15 +663,15 @@ const fallbackProducts: Product[] = [
     title: "THE COMBINED",
     description: "SINGLE",
     capacity: "1 person",
-    image: "/images/productos/producto%20(8).webp",
+    image: "/images/productos/producto (8).webp",
     price: 110,
     originalPrice: 130,
     gallery: [
-      "/images/productos/producto%20(8).webp",
-      "/images/Buggies/buggie%20(4).webp",
-      "/images/Buggies/buggie%20(7).webp",
-      "/images/paradas/columna%20(3).webp",
-      "/images/paradas/columna%20(4).webp",
+      "/images/productos/producto (8).webp",
+      "/images/Buggies/buggie (4).webp",
+      "/images/Buggies/buggie (7).webp",
+      "/images/paradas/columna (3).webp",
+      "/images/paradas/columna (4).webp",
     ],
     duration: "4 hours",
     highlights: [
@@ -694,7 +699,7 @@ const fallbackProducts: Product[] = [
         description:
           "Experience authentic local culture in a peaceful rural setting.",
         details: [
-          "Coffee, Cocoa & Tobacco — Explore the roots of traditional farming.",
+          "Coffee, Cocoa & Tobacco â€” Explore the roots of traditional farming.",
         ],
       },
       {
@@ -704,7 +709,7 @@ const fallbackProducts: Product[] = [
           "Ride to the stunning Macao Beach.",
       },
       {
-        title: "Cueva Taína — Cenote Cave",
+        title: "Cueva TaÃ­na â€” Cenote Cave",
         duration: "20 mins",
         description:
           "Explore a jungle cenote with crystal-clear waters.",
@@ -728,7 +733,7 @@ const fallbackProducts: Product[] = [
       duration: "4 hours",
       guide: "English, French, Portuguese, Spanish, Italian, German, Russian",
       pickupService:
-        "Pickup is available from hotels in Punta Cana, Bávaro, Uvero Alto, and Cabeza de Toro.",
+        "Pickup is available from hotels in Punta Cana, BÃ¡varo, Uvero Alto, and Cabeza de Toro.",
     },
   },
   {
@@ -737,15 +742,15 @@ const fallbackProducts: Product[] = [
     title: "FULL RIDE EXPERIENCE",
     description: "SINGLE",
     capacity: "1 person",
-    image: "/images/productos/producto%20(9).webp",
+    image: "/images/productos/producto (9).webp",
     price: 60,
     originalPrice: 75,
     gallery: [
-      "/images/productos/producto%20(9).webp",
-      "/images/Buggies/buggie%20(8).webp",
-      "/images/Buggies/buggie%20(2).webp",
-      "/images/paradas/columna%20(1).webp",
-      "/images/paradas/columna%20(4).webp",
+      "/images/productos/producto (9).webp",
+      "/images/Buggies/buggie (8).webp",
+      "/images/Buggies/buggie (2).webp",
+      "/images/paradas/columna (1).webp",
+      "/images/paradas/columna (4).webp",
     ],
     duration: "4 hours",
     highlights: [
@@ -773,7 +778,7 @@ const fallbackProducts: Product[] = [
         description:
           "Experience authentic local culture in a peaceful rural setting.",
         details: [
-          "Coffee, Cocoa & Tobacco — Explore the roots of traditional farming.",
+          "Coffee, Cocoa & Tobacco â€” Explore the roots of traditional farming.",
         ],
       },
       {
@@ -783,7 +788,7 @@ const fallbackProducts: Product[] = [
           "Ride to the stunning Macao Beach.",
       },
       {
-        title: "Cueva Taína — Cenote Cave",
+        title: "Cueva TaÃ­na â€” Cenote Cave",
         duration: "20 mins",
         description:
           "Explore a jungle cenote with crystal-clear waters.",
@@ -807,7 +812,7 @@ const fallbackProducts: Product[] = [
       duration: "4 hours",
       guide: "English, French, Portuguese, Spanish, Italian, German, Russian",
       pickupService:
-        "Pickup is available from hotels in Punta Cana, Bávaro, Uvero Alto, and Cabeza de Toro.",
+        "Pickup is available from hotels in Punta Cana, BÃ¡varo, Uvero Alto, and Cabeza de Toro.",
     },
   },
 ];
