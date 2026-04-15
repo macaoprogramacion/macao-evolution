@@ -334,6 +334,8 @@ export default function PhotographerDashboard() {
   const [uploadedPhotos, setUploadedPhotos] = useState([]); // {file: File, previewUrl: string}[]
   const [uploadedVideo, setUploadedVideo] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState('');
   const fileInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const dropZoneRef = useRef(null);
@@ -394,16 +396,33 @@ export default function PhotographerDashboard() {
     }
 
     setIsUploading(true);
+    setUploadProgress(0);
+    setUploadStatus('Subiendo fotos...');
     try {
       // Upload photos to Supabase Storage for permanent URLs
       const photoFiles = uploadedPhotos.map(p => p.file);
-      const photoUrls = await uploadMultipleFiles(photoFiles, 'photos');
+      const totalSteps = photoFiles.length + (uploadedVideo?.file ? 1 : 0);
+      let completedSteps = 0;
+
+      const photoUrls = await uploadMultipleFiles(photoFiles, 'photos', (progress) => {
+        // Photos are the first portion of total progress
+        const photoWeight = photoFiles.length / totalSteps;
+        setUploadProgress(Math.round(progress * photoWeight));
+      });
+      completedSteps = photoFiles.length;
 
       // Upload video if present
       let videoUrl = null;
       if (uploadedVideo?.file) {
-        videoUrl = await uploadFileToStorage(uploadedVideo.file, 'videos');
+        setUploadStatus('Subiendo video...');
+        videoUrl = await uploadFileToStorage(uploadedVideo.file, 'videos', (progress) => {
+          const photoWeight = photoFiles.length / totalSteps;
+          const videoWeight = 1 / totalSteps;
+          setUploadProgress(Math.round((photoWeight * 100) + (progress * videoWeight)));
+        });
       }
+      setUploadProgress(100);
+      setUploadStatus('¡Listo!');
 
       addPortfolio(uploadForm, photoUrls, videoUrl);
 
@@ -423,6 +442,8 @@ export default function PhotographerDashboard() {
       alert('Error subiendo archivos. Verifica que el bucket "portfolio-media" exista en Supabase Storage.');
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
+      setUploadStatus('');
     }
   };
 
@@ -770,8 +791,24 @@ export default function PhotographerDashboard() {
                   </div>
                 )}
 
+                {/* Upload Progress */}
+                {isUploading && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-white/80">{uploadStatus}</span>
+                      <span className="text-red-400 font-semibold">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-red-500 to-red-600 rounded-full transition-all duration-300 ease-out"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <GlassButton variant="primary" className="w-full" onClick={handleSubmitPortfolio} disabled={isUploading}>
-                  {isUploading ? 'Subiendo...' : 'Subir y Asignar'}
+                  {isUploading ? `Subiendo... ${uploadProgress}%` : 'Subir y Asignar'}
                 </GlassButton>
               </GlassCard>
 
