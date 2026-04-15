@@ -336,6 +336,7 @@ export default function PhotographerDashboard() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState('');
+  const [showMobileUpload, setShowMobileUpload] = useState(false);
   const fileInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const dropZoneRef = useRef(null);
@@ -528,7 +529,8 @@ export default function PhotographerDashboard() {
           {/* Upload new portfolio button (mobile) */}
           <GlassButton 
             variant="secondary" 
-            className="w-full mb-6 lg:hidden flex items-center justify-center gap-2"
+            className="w-full mb-6 xl:hidden flex items-center justify-center gap-2"
+            onClick={() => setShowMobileUpload(true)}
           >
             <Upload className="w-5 h-5" />
             Subir Nuevo Portafolio
@@ -893,6 +895,186 @@ export default function PhotographerDashboard() {
           />
         )}
       </AnimatePresence>
+      {/* Mobile Upload Modal */}
+      <AnimatePresence>
+        {showMobileUpload && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 xl:hidden"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowMobileUpload(false); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-md max-h-[90vh] overflow-y-auto"
+            >
+              <GlassCard className="p-6" hover={false}>
+                <h3 className="text-lg font-bold text-white text-center mb-4 font-title">
+                  Subir Nuevo Portafolio
+                </h3>
+                
+                {/* Client Name */}
+                <div className="mb-3">
+                  <label className="block text-white/60 text-xs mb-1">Nombre del Cliente</label>
+                  <input
+                    type="text"
+                    placeholder="Nombre completo"
+                    value={uploadForm.clientName}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, clientName: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-black/30 rounded-xl border border-white/20 
+                              text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                  />
+                </div>
+
+                {/* Phone */}
+                <div className="mb-3">
+                  <label className="block text-white/60 text-xs mb-1">Número de Teléfono</label>
+                  <input
+                    type="tel"
+                    placeholder="809-000-0000"
+                    value={uploadForm.phone}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, phone: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-black/30 rounded-xl border border-white/20 
+                              text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                  />
+                </div>
+
+                {/* Date */}
+                <div className="mb-3">
+                  <label className="block text-white/60 text-xs mb-1">Fecha</label>
+                  <input
+                    type="date"
+                    value={uploadForm.date}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, date: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-black/30 rounded-xl border border-white/20 
+                              text-white focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                  />
+                </div>
+
+                {/* Invoice Code */}
+                <div className="mb-4">
+                  <label className="block text-white/60 text-xs mb-1">Código Factura (Opcional)</label>
+                  <input
+                    type="text"
+                    placeholder="FAC-000"
+                    value={uploadForm.invoiceCode}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, invoiceCode: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-black/30 rounded-xl border border-white/20 
+                              text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                  />
+                </div>
+
+                {/* Photo drop zone */}
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-white/40 rounded-2xl p-4 text-center mb-3 hover:border-red-500/60 transition-colors cursor-pointer"
+                >
+                  <Image className="w-6 h-6 mx-auto text-white/60 mb-1" />
+                  <p className="text-white/70 text-sm">Arrastrar y Soltar Fotos Aquí</p>
+                  <p className="text-white/50 text-xs mt-1">o haz clic para seleccionar</p>
+                </div>
+
+                {/* Video upload zone */}
+                <div 
+                  onClick={() => videoInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-2xl p-4 text-center mb-4 transition-colors cursor-pointer ${uploadedVideo ? 'border-red-500 bg-red-500/10' : 'border-white/40 hover:border-red-500/60'}`}
+                >
+                  <Video className={`w-6 h-6 mx-auto mb-1 ${uploadedVideo ? 'text-red-500' : 'text-white/60'}`} />
+                  <p className={`text-sm ${uploadedVideo ? 'text-red-400' : 'text-white/70'}`}>
+                    {uploadedVideo ? 'Video Seleccionado' : 'Subir Video (Opcional)'}
+                  </p>
+                  <p className="text-white/50 text-xs mt-1">
+                    {uploadedVideo ? uploadedVideo.name : 'MP4, MOV, AVI'}
+                  </p>
+                </div>
+
+                {/* Video preview */}
+                {uploadedVideo && (
+                  <div className="mb-4">
+                    <div className="relative rounded-lg overflow-hidden">
+                      <video src={uploadedVideo.url} className="w-full h-32 object-cover" />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                          <Play className="w-5 h-5 text-white ml-0.5" fill="currentColor" />
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removeUploadedVideo(); }}
+                        className="absolute top-2 right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-sm hover:bg-red-600"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Photo previews */}
+                {uploadedPhotos.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-white/60 text-xs mb-2">{uploadedPhotos.length} foto(s) seleccionada(s)</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {uploadedPhotos.map((photo, idx) => (
+                        <div key={idx} className="relative aspect-square">
+                          <img src={photo.previewUrl} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover rounded-lg" />
+                          <button
+                            onClick={() => removeUploadedPhoto(idx)}
+                            className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Upload Progress */}
+                {isUploading && (
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-white/80">{uploadStatus}</span>
+                      <span className="text-red-400 font-semibold">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-red-500 to-red-600 rounded-full transition-all duration-300 ease-out"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Buttons */}
+                <div className="flex gap-3">
+                  <GlassButton 
+                    variant="secondary" 
+                    className="flex-1" 
+                    onClick={() => setShowMobileUpload(false)}
+                    disabled={isUploading}
+                  >
+                    Cancelar
+                  </GlassButton>
+                  <GlassButton 
+                    variant="primary" 
+                    className="flex-1" 
+                    onClick={async () => {
+                      await handleSubmitPortfolio();
+                      if (!isUploading) setShowMobileUpload(false);
+                    }}
+                    disabled={isUploading}
+                  >
+                    {isUploading ? `Subiendo... ${uploadProgress}%` : 'Subir y Asignar'}
+                  </GlassButton>
+                </div>
+              </GlassCard>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
     </DashboardAuthGate>
   );
