@@ -516,7 +516,7 @@ function ClientGallery() {
                 {/* Video Thumbnail Preview */}
                 <div className="relative mb-4 rounded-lg overflow-hidden group">
                   <img 
-                    src={photo1} 
+                    src={galleryPhotos[0]?.image || '/photographer/photos/bubble-photos (1).png'} 
                     alt="Video preview" 
                     className="w-full h-40 object-cover rounded-lg"
                   />
