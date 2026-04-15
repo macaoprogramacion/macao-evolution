@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import DashboardAuthGate from '@/components/photographer/DashboardAuthGate';
 import { 
@@ -24,6 +25,7 @@ import Sidebar from '@/components/photographer/Sidebar';
 import BottomNav from '@/components/photographer/BottomNav';
 import { GlassCard, GlassButton } from '@/components/photographer/ui';
 import { updateSupabaseUser } from '@/lib/supabase-users';
+import { supabase } from '@/lib/supabase';
 
 // Background image
 
@@ -70,6 +72,9 @@ export default function AjustesPage() {
   
   const [activeSection, setActiveSection] = useState('profile');
   const [userId, setUserId] = useState(null);
+  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef(null);
   const [profile, setProfile] = useState({
     name: '',
     email: '',
@@ -86,6 +91,7 @@ export default function AjustesPage() {
       const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || 'null');
       if (session) {
         setUserId(session.id);
+        if (session.avatar_url) setAvatarUrl(session.avatar_url);
         setProfile(prev => ({
           ...prev,
           name: session.name || '',
@@ -96,6 +102,49 @@ export default function AjustesPage() {
       }
     } catch {}
   }, []);
+
+  const handleAvatarUpload = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+    if (!file.type.startsWith('image/')) {
+      setSaveMessage('Solo se permiten imágenes');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setSaveMessage('La imagen no puede superar 5MB');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
+    setUploadingAvatar(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const filePath = `avatars/${userId}.${ext}`;
+      // Upload (upsert to overwrite previous avatar)
+      const { error: uploadErr } = await supabase.storage
+        .from('portfolio-media')
+        .upload(filePath, file, { cacheControl: '3600', upsert: true });
+      if (uploadErr) throw uploadErr;
+      const { data: urlData } = supabase.storage
+        .from('portfolio-media')
+        .getPublicUrl(filePath);
+      const publicUrl = urlData.publicUrl + '?t=' + Date.now();
+      // Save URL to database
+      await updateSupabaseUser(userId, { avatar_url: publicUrl });
+      setAvatarUrl(publicUrl);
+      // Update session
+      const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || '{}');
+      sessionStorage.setItem('macao_auth_session', JSON.stringify({ ...session, avatar_url: publicUrl }));
+      setSaveMessage('Foto de perfil actualizada');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (err) {
+      setSaveMessage('Error al subir la imagen: ' + (err.message || ''));
+      setTimeout(() => setSaveMessage(''), 4000);
+    } finally {
+      setUploadingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  }, [userId]);
 
   const handleSaveProfile = useCallback(async () => {
     if (!userId || saving) return;
@@ -141,15 +190,36 @@ export default function AjustesPage() {
             {/* Avatar */}
             <div className="flex items-center gap-6">
               <div className="relative">
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white text-3xl font-bold">
-                  {profile.name ? profile.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) : '??'}
-                </div>
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Avatar"
+                    className="w-24 h-24 rounded-full object-cover border-2 border-white/20"
+                  />
+                ) : (
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white text-3xl font-bold">
+                    {profile.name ? profile.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) : '??'}
+                  </div>
+                )}
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarUpload}
+                />
                 <motion.button
                   className="absolute bottom-0 right-0 p-2 rounded-full bg-black/50 border border-white/20"
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={uploadingAvatar}
                 >
-                  <Camera className="w-4 h-4 text-white" />
+                  {uploadingAvatar ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Camera className="w-4 h-4 text-white" />
+                  )}
                 </motion.button>
               </div>
               <div>

@@ -101,7 +101,7 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
     const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles]
     if (!roles.includes(user.role) && user.role !== 'both' && user.role !== 'admin') {
       // User is valid but doesn't have access to THIS dashboard — redirect to correct one
-      sessionStorage.setItem('macao_auth_session', JSON.stringify({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, active: true }))
+      sessionStorage.setItem('macao_auth_session', JSON.stringify({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, avatar_url: user.avatar_url || null, active: true }))
       const roleRoutes = {
         admin: '/admin',
         both: '/admin',
@@ -118,7 +118,7 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
     // Authenticated
     setAuthed(true)
     setUserName(user.name)
-    sessionStorage.setItem('macao_auth_session', JSON.stringify({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, active: true }))
+    sessionStorage.setItem('macao_auth_session', JSON.stringify({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, avatar_url: user.avatar_url || null, active: true }))
     // Redirect restricted roles to their specific page after login
     const roleDefaultPage = {
       operaciones: '/admin/operation',
