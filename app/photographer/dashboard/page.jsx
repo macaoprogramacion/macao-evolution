@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Upload, X, Trash2, Edit, Phone, Calendar, User, Plus, Check, Image, Video, Play, Receipt, Clock } from 'lucide-react';
+import { Search, Filter, Upload, X, Trash2, Edit, Phone, Calendar, User, Plus, Check, Image, Video, Play, Receipt, Clock, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import DashboardAuthGate from '@/components/photographer/DashboardAuthGate';
 import Navbar from '@/components/photographer/Navbar';
 import Sidebar from '@/components/photographer/Sidebar';
@@ -333,13 +333,20 @@ export default function PhotographerDashboard() {
   });
   const [uploadedPhotos, setUploadedPhotos] = useState([]); // {file: File, previewUrl: string}[]
   const [uploadedVideo, setUploadedVideo] = useState(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState('');
+  // Background upload queue — allows parallel uploads
+  const [activeUploads, setActiveUploads] = useState([]); // {id, clientName, progress, status, error}[]
   const [showMobileUpload, setShowMobileUpload] = useState(false);
   const fileInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const dropZoneRef = useRef(null);
+
+  // Clean completed uploads after 5 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveUploads(prev => prev.filter(u => u.status !== 'done' || (Date.now() - u.doneAt) < 5000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Get only the last 6 portfolios for dashboard with expiration info
   const latestPortfolios = getLatestPortfolios(6).map(getPortfolioWithExpiration);
@@ -390,64 +397,74 @@ export default function PhotographerDashboard() {
     setUploadedVideo(null);
   };
 
-  const handleSubmitPortfolio = async () => {
+  const handleSubmitPortfolio = useCallback(async () => {
     if (!uploadForm.clientName || !uploadForm.phone || uploadedPhotos.length === 0) {
       alert('Por favor complete el nombre, teléfono y suba al menos una foto');
       return;
     }
 
-    setIsUploading(true);
-    setUploadProgress(0);
-    setUploadStatus('Subiendo fotos...');
-    try {
-      // Upload photos to Supabase Storage for permanent URLs
-      const photoFiles = uploadedPhotos.map(p => p.file);
-      const totalSteps = photoFiles.length + (uploadedVideo?.file ? 1 : 0);
-      let completedSteps = 0;
+    // Capture current form data and files before resetting
+    const formData = { ...uploadForm };
+    const photoFiles = uploadedPhotos.map(p => p.file);
+    const videoFile = uploadedVideo?.file || null;
+    const uploadId = Date.now().toString();
 
+    // Reset form immediately so photographer can start next client
+    setUploadForm({
+      clientName: '',
+      phone: '',
+      date: new Date().toISOString().split('T')[0],
+      invoiceCode: '',
+    });
+    uploadedPhotos.forEach(p => URL.revokeObjectURL(p.previewUrl));
+    setUploadedPhotos([]);
+    removeUploadedVideo();
+    setShowMobileUpload(false);
+
+    // Add to active uploads tracker
+    setActiveUploads(prev => [...prev, {
+      id: uploadId,
+      clientName: formData.clientName,
+      progress: 0,
+      status: 'uploading',
+      statusText: 'Subiendo fotos...',
+      error: null,
+      doneAt: null,
+    }]);
+
+    const updateUpload = (updates) => {
+      setActiveUploads(prev => prev.map(u => u.id === uploadId ? { ...u, ...updates } : u));
+    };
+
+    try {
+      const totalSteps = photoFiles.length + (videoFile ? 1 : 0);
+
+      // Upload photos
       const photoUrls = await uploadMultipleFiles(photoFiles, 'photos', (progress) => {
-        // Photos are the first portion of total progress
         const photoWeight = photoFiles.length / totalSteps;
-        setUploadProgress(Math.round(progress * photoWeight));
+        updateUpload({ progress: Math.round(progress * photoWeight) });
       });
-      completedSteps = photoFiles.length;
 
       // Upload video if present
       let videoUrl = null;
-      if (uploadedVideo?.file) {
-        setUploadStatus('Subiendo video...');
-        videoUrl = await uploadFileToStorage(uploadedVideo.file, 'videos', (progress) => {
+      if (videoFile) {
+        updateUpload({ statusText: 'Subiendo video...' });
+        videoUrl = await uploadFileToStorage(videoFile, 'videos', (progress) => {
           const photoWeight = photoFiles.length / totalSteps;
           const videoWeight = 1 / totalSteps;
-          setUploadProgress(Math.round((photoWeight * 100) + (progress * videoWeight)));
+          updateUpload({ progress: Math.round((photoWeight * 100) + (progress * videoWeight)) });
         });
       }
-      setUploadProgress(100);
-      setUploadStatus('¡Listo!');
 
-      addPortfolio(uploadForm, photoUrls, videoUrl);
-
-      // Reset form
-      setUploadForm({
-        clientName: '',
-        phone: '',
-        date: new Date().toISOString().split('T')[0],
-        invoiceCode: '',
-      });
-      // Revoke preview URLs
-      uploadedPhotos.forEach(p => URL.revokeObjectURL(p.previewUrl));
-      setUploadedPhotos([]);
-      removeUploadedVideo();
+      // Save portfolio
+      addPortfolio(formData, photoUrls, videoUrl);
+      updateUpload({ progress: 100, status: 'done', statusText: '¡Listo!', doneAt: Date.now() });
     } catch (err) {
       console.error('Error uploading files:', err);
       const errorMsg = err?.message || String(err);
-      alert(`Error subiendo archivos: ${errorMsg}\n\nSi el error menciona bucket, verifica que "portfolio-media" exista en Supabase Storage.`);
-    } finally {
-      setIsUploading(false);
-      setUploadProgress(0);
-      setUploadStatus('');
+      updateUpload({ status: 'error', statusText: errorMsg, error: errorMsg });
     }
-  };
+  }, [uploadForm, uploadedPhotos, uploadedVideo, addPortfolio]);
 
   const removeUploadedPhoto = (index) => {
     setUploadedPhotos(prev => {
@@ -794,24 +811,10 @@ export default function PhotographerDashboard() {
                   </div>
                 )}
 
-                {/* Upload Progress */}
-                {isUploading && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-white/80">{uploadStatus}</span>
-                      <span className="text-red-400 font-semibold">{uploadProgress}%</span>
-                    </div>
-                    <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-red-500 to-red-600 rounded-full transition-all duration-300 ease-out"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
+                {/* Upload Progress - removed, now in floating tracker */}
 
-                <GlassButton variant="primary" className="w-full" onClick={handleSubmitPortfolio} disabled={isUploading}>
-                  {isUploading ? `Subiendo... ${uploadProgress}%` : 'Subir y Asignar'}
+                <GlassButton variant="primary" className="w-full" onClick={handleSubmitPortfolio}>
+                  Subir y Asignar
                 </GlassButton>
               </GlassCard>
 
@@ -1031,46 +1034,82 @@ export default function PhotographerDashboard() {
                   </div>
                 )}
 
-                {/* Upload Progress */}
-                {isUploading && (
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-white/80">{uploadStatus}</span>
-                      <span className="text-red-400 font-semibold">{uploadProgress}%</span>
-                    </div>
-                    <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-red-500 to-red-600 rounded-full transition-all duration-300 ease-out"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-
                 {/* Buttons */}
                 <div className="flex gap-3">
                   <GlassButton 
                     variant="secondary" 
                     className="flex-1" 
                     onClick={() => setShowMobileUpload(false)}
-                    disabled={isUploading}
                   >
                     Cancelar
                   </GlassButton>
                   <GlassButton 
                     variant="primary" 
                     className="flex-1" 
-                    onClick={async () => {
-                      await handleSubmitPortfolio();
-                      if (!isUploading) setShowMobileUpload(false);
-                    }}
-                    disabled={isUploading}
+                    onClick={handleSubmitPortfolio}
                   >
-                    {isUploading ? `Subiendo... ${uploadProgress}%` : 'Subir y Asignar'}
+                    Subir y Asignar
                   </GlassButton>
                 </div>
               </GlassCard>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Upload Tracker */}
+      <AnimatePresence>
+        {activeUploads.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 100 }}
+            className="fixed bottom-20 lg:bottom-6 right-4 lg:right-6 z-40 w-80 max-w-[calc(100vw-2rem)] space-y-2"
+          >
+            {activeUploads.map((upload) => (
+              <motion.div
+                key={upload.id}
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="bg-black/80 backdrop-blur-xl border border-white/20 rounded-2xl p-4 shadow-2xl"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  {upload.status === 'uploading' && (
+                    <Loader2 className="w-5 h-5 text-red-400 animate-spin flex-shrink-0" />
+                  )}
+                  {upload.status === 'done' && (
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                  )}
+                  {upload.status === 'error' && (
+                    <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-white text-sm font-medium truncate">{upload.clientName}</p>
+                    <p className="text-white/60 text-xs truncate">{upload.statusText}</p>
+                  </div>
+                  {(upload.status === 'done' || upload.status === 'error') && (
+                    <button
+                      onClick={() => setActiveUploads(prev => prev.filter(u => u.id !== upload.id))}
+                      className="p-1 rounded-lg hover:bg-white/10 transition-colors"
+                    >
+                      <X className="w-4 h-4 text-white/60" />
+                    </button>
+                  )}
+                </div>
+                {upload.status === 'uploading' && (
+                  <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                    <motion.div
+                      className="h-full bg-gradient-to-r from-red-500 to-red-600 rounded-full"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${upload.progress}%` }}
+                      transition={{ duration: 0.3 }}
+                    />
+                  </div>
+                )}
+              </motion.div>
+            ))}
           </motion.div>
         )}
       </AnimatePresence>
