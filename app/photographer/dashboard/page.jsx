@@ -439,7 +439,8 @@ export default function PhotographerDashboard() {
       removeUploadedVideo();
     } catch (err) {
       console.error('Error uploading files:', err);
-      alert('Error subiendo archivos. Verifica que el bucket "portfolio-media" exista en Supabase Storage.');
+      const errorMsg = err?.message || String(err);
+      alert(`Error subiendo archivos: ${errorMsg}\n\nSi el error menciona bucket, verifica que "portfolio-media" exista en Supabase Storage.`);
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
