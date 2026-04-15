@@ -7,7 +7,6 @@ import DashboardAuthGate from '@/components/photographer/DashboardAuthGate';
 import { 
   User, 
   Camera,
-  Lock,
   Bell,
   Palette,
   Globe,
@@ -35,12 +34,6 @@ const settingsSections = [
     icon: User,
     title: 'Perfil',
     description: 'Información personal y foto de perfil',
-  },
-  {
-    id: 'security',
-    icon: Lock,
-    title: 'Seguridad',
-    description: 'Contraseña y autenticación',
   },
   {
     id: 'notifications',
@@ -298,50 +291,6 @@ export default function AjustesPage() {
                 </span>
               )}
             </div>
-          </div>
-        );
-
-      case 'security':
-        return (
-          <div className="space-y-6">
-            <h2 className="text-xl font-title text-white">Seguridad</h2>
-            
-            <GlassCard className="p-4" hover={false}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-white font-medium">Cambiar Contraseña</p>
-                  <p className="text-white/60 text-sm">Última actualización hace 30 días</p>
-                </div>
-                <GlassButton variant="secondary" className="text-sm">
-                  Cambiar
-                </GlassButton>
-              </div>
-            </GlassCard>
-
-            <GlassCard className="p-4" hover={false}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-white font-medium">Autenticación de dos factores</p>
-                  <p className="text-white/60 text-sm">Agrega una capa extra de seguridad</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" />
-                  <div className="w-11 h-6 bg-white/20 peer-focus:ring-2 peer-focus:ring-red-500 rounded-full peer peer-checked:bg-red-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
-                </label>
-              </div>
-            </GlassCard>
-
-            <GlassCard className="p-4" hover={false}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-white font-medium">Sesiones activas</p>
-                  <p className="text-white/60 text-sm">2 dispositivos conectados</p>
-                </div>
-                <GlassButton variant="secondary" className="text-sm">
-                  Ver
-                </GlassButton>
-              </div>
-            </GlassCard>
           </div>
         );
 
