@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabase";
+
 export interface Product {
   id: string;
   slug: string;
@@ -25,9 +27,82 @@ export interface Product {
     guide: string;
     pickupService: string;
   };
+  category?: string;
+  website?: string;
+  websiteLabel?: string;
+  websiteColor?: string;
+  active?: boolean;
+  hasDiscount?: boolean;
+  discountPercent?: number;
 }
 
-export const products: Product[] = [
+function mapRowToProduct(row: any): Product {
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    description: row.description || "",
+    capacity: row.capacity || "",
+    image: row.image || "",
+    price: Number(row.price),
+    originalPrice: row.original_price ? Number(row.original_price) : undefined,
+    gallery: row.gallery || [],
+    duration: row.duration || "",
+    highlights: row.highlights || [],
+    itinerary: row.itinerary || [],
+    generalInfo: row.general_info || {},
+    category: row.category,
+    website: row.website,
+    websiteLabel: row.website_label,
+    websiteColor: row.website_color,
+    active: row.active,
+    hasDiscount: row.has_discount,
+    discountPercent: row.discount_percent ? Number(row.discount_percent) : 0,
+  };
+}
+
+export async function fetchProducts(): Promise<Product[]> {
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("active", true)
+    .order("created_at", { ascending: true });
+
+  if (error || !data) {
+    console.error("Error fetching products:", error);
+    return fallbackProducts;
+  }
+  return data.map(mapRowToProduct);
+}
+
+export async function fetchAllProducts(): Promise<Product[]> {
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  if (error || !data) {
+    console.error("Error fetching all products:", error);
+    return fallbackProducts;
+  }
+  return data.map(mapRowToProduct);
+}
+
+export async function fetchProductBySlug(slug: string): Promise<Product | undefined> {
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("slug", slug)
+    .single();
+
+  if (error || !data) {
+    return fallbackProducts.find((p) => p.slug === slug);
+  }
+  return mapRowToProduct(data);
+}
+
+// Fallback estático — se usa solo si Supabase no está disponible
+const fallbackProducts: Product[] = [
   {
     id: "product-elite-couple-experience",
     slug: "elite-couple-experience",
@@ -737,6 +812,9 @@ export const products: Product[] = [
   },
 ];
 
+// Legacy sync exports (fallback data for static rendering)
+export const products = fallbackProducts;
+
 export function getProductBySlug(slug: string): Product | undefined {
-  return products.find((p) => p.slug === slug);
+  return fallbackProducts.find((p) => p.slug === slug);
 }

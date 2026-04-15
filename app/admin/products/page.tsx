@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   Search,
   Plus,
@@ -13,6 +13,7 @@ import {
   X,
   Upload,
   Globe,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -46,6 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
+import { supabase } from "@/lib/supabase"
 
 // Webs disponibles (sin Viator ni GetYourGuide)
 const websites = [
@@ -55,8 +57,9 @@ const websites = [
 ]
 
 interface Product {
-  id: number
+  id: string
   name: string
+  slug: string
   website: string
   websiteLabel: string
   websiteColor: string
@@ -70,134 +73,54 @@ interface Product {
   category: string
 }
 
+function mapRowToAdminProduct(row: any): Product {
+  return {
+    id: row.id,
+    name: row.title,
+    slug: row.slug,
+    website: row.website || "",
+    websiteLabel: row.website_label || "",
+    websiteColor: row.website_color || "",
+    price: Number(row.price),
+    originalPrice: row.original_price ? Number(row.original_price) : null,
+    hasDiscount: row.has_discount || false,
+    discountPercent: row.discount_percent ? Number(row.discount_percent) : 0,
+    description: row.description || "",
+    image: row.image || "",
+    active: row.active,
+    category: row.category || "",
+  }
+}
+
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: 1,
-      name: "Elite Couple",
-      website: "macaooffroad",
-      websiteLabel: "Macao Off Road",
-      websiteColor: "#dc2626",
-      price: 160,
-      originalPrice: null,
-      hasDiscount: false,
-      discountPercent: 0,
-      description: "Experiencia exclusiva para parejas en buggies de alta gama",
-      image: "/tours/elite-couple.jpg",
-      active: true,
-      category: "Elite",
-    },
-    {
-      id: 2,
-      name: "Elite Family",
-      website: "macaooffroad",
-      websiteLabel: "Macao Off Road",
-      websiteColor: "#dc2626",
-      price: 200,
-      originalPrice: null,
-      hasDiscount: false,
-      discountPercent: 0,
-      description: "Aventura familiar premium con espacio para toda la familia",
-      image: "/tours/elite-family.jpg",
-      active: true,
-      category: "Elite",
-    },
-    {
-      id: 3,
-      name: "Apex Predator",
-      website: "caribebuggy",
-      websiteLabel: "Caribe Buggy",
-      websiteColor: "#3b82f6",
-      price: 130,
-      originalPrice: null,
-      hasDiscount: false,
-      discountPercent: 0,
-      description: "Tour extremo para los amantes de la adrenalina",
-      image: "/tours/apex-predator.jpg",
-      active: true,
-      category: "Adventure",
-    },
-    {
-      id: 4,
-      name: "Predator Family",
-      website: "caribebuggy",
-      websiteLabel: "Caribe Buggy",
-      websiteColor: "#3b82f6",
-      price: 145,
-      originalPrice: null,
-      hasDiscount: false,
-      discountPercent: 0,
-      description: "Aventura familiar en buggy todo terreno",
-      image: "/tours/predator-family.jpg",
-      active: true,
-      category: "Adventure",
-    },
-    {
-      id: 5,
-      name: "Flintstone Era",
-      website: "saonaisland",
-      websiteLabel: "Saona Island",
-      websiteColor: "#10b981",
-      price: 85,
-      originalPrice: 100,
-      hasDiscount: true,
-      discountPercent: 15,
-      description: "Viaje en el tiempo con caballos y naturaleza",
-      image: "/tours/flintstone-era.jpg",
-      active: true,
-      category: "Nature",
-    },
-    {
-      id: 6,
-      name: "Flintstone Family",
-      website: "saonaisland",
-      websiteLabel: "Saona Island",
-      websiteColor: "#10b981",
-      price: 100,
-      originalPrice: 125,
-      hasDiscount: true,
-      discountPercent: 20,
-      description: "Experiencia natural para toda la familia",
-      image: "/tours/flintstone-family.jpg",
-      active: true,
-      category: "Nature",
-    },
-    {
-      id: 7,
-      name: "ATV QUAD",
-      website: "macaooffroad",
-      websiteLabel: "Macao Off Road",
-      websiteColor: "#dc2626",
-      price: 90,
-      originalPrice: 110,
-      hasDiscount: true,
-      discountPercent: 18,
-      description: "Adrenalina pura en cuatrimoto individual",
-      image: "/tours/atv-quad.jpg",
-      active: true,
-      category: "ATV",
-    },
-    {
-      id: 8,
-      name: "THE COMBINED",
-      website: "caribebuggy",
-      websiteLabel: "Caribe Buggy",
-      websiteColor: "#3b82f6",
-      price: 90,
-      originalPrice: 110,
-      hasDiscount: true,
-      discountPercent: 18,
-      description: "Combinación perfecta de aventuras múltiples",
-      image: "/tours/the-combined.jpg",
-      active: true,
-      category: "Combo",
-    },
-  ])
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
 
   const [searchQuery, setSearchQuery] = useState("")
   const [websiteFilter, setWebsiteFilter] = useState("all")
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+
+  // Fetch products from Supabase
+  const loadProducts = useCallback(async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .order("created_at", { ascending: true })
+
+    if (error) {
+      console.error("Error loading products:", error)
+    } else if (data) {
+      setProducts(data.map(mapRowToAdminProduct))
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    loadProducts()
+  }, [loadProducts])
 
   // Form state
   const [formData, setFormData] = useState({
@@ -234,52 +157,71 @@ export default function ProductsPage() {
     setIsEditDialogOpen(true)
   }
 
-  const handleSaveProduct = () => {
+  const handleSaveProduct = async () => {
     if (!editingProduct) return
+    setSaving(true)
 
     const websiteData = websites.find((w) => w.value === formData.website)
     const discountPercent = formData.hasDiscount && formData.originalPrice > 0
       ? Math.round(((formData.originalPrice - formData.price) / formData.originalPrice) * 100)
       : 0
 
-    setProducts(
-      products.map((product) =>
-        product.id === editingProduct.id
-          ? {
-              ...product,
-              name: formData.name,
-              website: formData.website,
-              websiteLabel: websiteData?.label || "",
-              websiteColor: websiteData?.color || "",
-              price: formData.price,
-              originalPrice: formData.hasDiscount ? formData.originalPrice : null,
-              hasDiscount: formData.hasDiscount,
-              discountPercent: discountPercent,
-              description: formData.description,
-              image: formData.image,
-              active: formData.active,
-              category: formData.category,
-            }
-          : product
-      )
-    )
+    const { error } = await supabase
+      .from("products")
+      .update({
+        title: formData.name,
+        description: formData.description,
+        price: formData.price,
+        original_price: formData.hasDiscount ? formData.originalPrice : null,
+        has_discount: formData.hasDiscount,
+        discount_percent: discountPercent,
+        image: formData.image,
+        active: formData.active,
+        category: formData.category,
+        website: formData.website,
+        website_label: websiteData?.label || "",
+        website_color: websiteData?.color || "",
+      })
+      .eq("id", editingProduct.id)
 
+    if (error) {
+      console.error("Error updating product:", error)
+      alert("Error al guardar: " + error.message)
+    } else {
+      await loadProducts()
+    }
+
+    setSaving(false)
     setIsEditDialogOpen(false)
     setEditingProduct(null)
   }
 
-  const handleDeleteProduct = (id: number) => {
-    if (confirm("¿Estás seguro de que deseas eliminar este producto?")) {
-      setProducts(products.filter((product) => product.id !== id))
+  const handleDeleteProduct = async (id: string) => {
+    if (!confirm("¿Estás seguro de que deseas eliminar este producto?")) return
+
+    const { error } = await supabase.from("products").delete().eq("id", id)
+    if (error) {
+      console.error("Error deleting product:", error)
+      alert("Error al eliminar: " + error.message)
+    } else {
+      await loadProducts()
     }
   }
 
-  const handleToggleActive = (id: number) => {
-    setProducts(
-      products.map((product) =>
-        product.id === id ? { ...product, active: !product.active } : product
-      )
-    )
+  const handleToggleActive = async (id: string) => {
+    const product = products.find((p) => p.id === id)
+    if (!product) return
+
+    const { error } = await supabase
+      .from("products")
+      .update({ active: !product.active })
+      .eq("id", id)
+
+    if (error) {
+      console.error("Error toggling active:", error)
+    } else {
+      await loadProducts()
+    }
   }
 
   const stats = {
@@ -408,6 +350,12 @@ export default function ProductsPage() {
             </div>
           </CardHeader>
           <CardContent>
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                <span className="ml-3 text-gray-500">Cargando productos...</span>
+              </div>
+            ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -502,8 +450,9 @@ export default function ProductsPage() {
                 </TableBody>
               </Table>
             </div>
+            )}
 
-            {filteredProducts.length === 0 && (
+            {filteredProducts.length === 0 && !loading && (
               <div className="text-center py-12">
                 <div className="text-gray-400 mb-2">
                   <Search className="w-12 h-12 mx-auto" />
@@ -678,9 +627,14 @@ export default function ProductsPage() {
               <Button
                 className="bg-red-600 hover:bg-red-700 text-white"
                 onClick={handleSaveProduct}
+                disabled={saving}
               >
-                <Save className="w-4 h-4 mr-2" />
-                Guardar Cambios
+                {saving ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
+                {saving ? "Guardando..." : "Guardar Cambios"}
               </Button>
             </DialogFooter>
           </DialogContent>

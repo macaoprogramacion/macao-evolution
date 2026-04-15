@@ -167,10 +167,12 @@ function ClientGallery() {
     }, 500);
   };
 
-  // Download a single image by creating a temporary link
+  // Download a single file by creating a temporary link
   const downloadImage = async (src, filename) => {
     try {
-      const response = await fetch(src);
+      // Use no-cors fetch to get the file as a blob for same-origin download
+      const response = await fetch(src, { mode: 'cors' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -179,10 +181,24 @@ function ClientGallery() {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Delay revoking the blob URL so the browser has time to start the download,
+      // especially important for large video files.
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch {
-      // Fallback: open in new tab
-      window.open(src, '_blank');
+      // Fallback: proxy the download through our own API to avoid CORS issues
+      // and ensure the Content-Disposition header triggers a download
+      try {
+        const proxyUrl = `/api/download?url=${encodeURIComponent(src)}&filename=${encodeURIComponent(filename)}`;
+        const a = document.createElement('a');
+        a.href = proxyUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch {
+        // Last resort: open in new tab
+        window.open(src, '_blank');
+      }
     }
   };
 

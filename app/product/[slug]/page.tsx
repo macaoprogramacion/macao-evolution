@@ -3,7 +3,7 @@
 import { use, useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { getProductBySlug } from "@/lib/products";
+import { getProductBySlug, fetchProductBySlug, type Product } from "@/lib/products";
 import { useCart } from "@/context/cart-context";
 import {
   ArrowLeft,
@@ -26,11 +26,19 @@ function ProductDetailContent({
 }: {
   slug: string;
 }) {
-  const product = getProductBySlug(slug);
+  // Start with sync fallback, then hydrate from Supabase
+  const [product, setProduct] = useState<Product | undefined>(() => getProductBySlug(slug));
   const { addItem, hasServiceSelected, items } = useCart();
   const [currentImage, setCurrentImage] = useState(0);
   const [isAdded, setIsAdded] = useState(false);
   const galleryRef = useRef<HTMLDivElement>(null);
+
+  // Fetch from Supabase on mount
+  useEffect(() => {
+    fetchProductBySlug(slug).then((data) => {
+      if (data) setProduct(data);
+    });
+  }, [slug]);
 
   // Touch handling for gallery swipe
   const touchStartX = useRef(0);

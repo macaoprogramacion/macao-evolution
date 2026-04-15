@@ -6,12 +6,20 @@ import { ShoppingCart, Check, AlertCircle, ArrowRight } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { products } from "@/lib/products";
+import { products as fallbackProducts, fetchProducts, type Product } from "@/lib/products";
 
 export function FeaturedProductsSection() {
   const { addItem, hasServiceSelected } = useCart();
   const [addedId, setAddedId] = useState<string | null>(null);
   const [showServiceWarning, setShowServiceWarning] = useState(false);
+  const [productList, setProductList] = useState<Product[]>(fallbackProducts);
+
+  // Fetch products from Supabase on mount
+  useEffect(() => {
+    fetchProducts().then((data) => {
+      if (data.length > 0) setProductList(data);
+    });
+  }, []);
 
   // Auto-hide warning when service is selected
   useEffect(() => {
@@ -20,7 +28,7 @@ export function FeaturedProductsSection() {
     }
   }, [hasServiceSelected]);
 
-  const handleAddProduct = (feature: typeof products[0]) => {
+  const handleAddProduct = (feature: Product) => {
     // Check if a service is selected first
     if (!hasServiceSelected) {
       // Scroll to service section
@@ -78,7 +86,7 @@ export function FeaturedProductsSection() {
 
       {/* Features Grid */}
       <div className={`grid grid-cols-1 gap-4 px-6 pb-20 md:grid-cols-3 md:px-12 lg:px-20 transition-opacity duration-300 ${!hasServiceSelected ? 'opacity-60' : 'opacity-100'}`}>
-        {products.map((feature) => {
+        {productList.map((feature) => {
           const productId = feature.id;
           const isAdded = addedId === productId;
           return (

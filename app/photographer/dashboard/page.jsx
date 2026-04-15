@@ -11,6 +11,7 @@ import PortfolioCard from '@/components/photographer/PortfolioCard';
 import { GlassCard, GlassButton, GlassInput } from '@/components/photographer/ui';
 import { usePortfolio } from '@/context/PortfolioContext';
 import { getBillingClients } from '@/lib/store';
+import { uploadMultipleFiles, uploadFileToStorage } from '@/lib/supabase-storage';
 
 // Background image
 
@@ -330,8 +331,9 @@ export default function PhotographerDashboard() {
     date: new Date().toISOString().split('T')[0],
     invoiceCode: '',
   });
-  const [uploadedPhotos, setUploadedPhotos] = useState([]);
+  const [uploadedPhotos, setUploadedPhotos] = useState([]); // {file: File, previewUrl: string}[]
   const [uploadedVideo, setUploadedVideo] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const dropZoneRef = useRef(null);
@@ -341,7 +343,7 @@ export default function PhotographerDashboard() {
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
-    const newPhotos = files.map(file => URL.createObjectURL(file));
+    const newPhotos = files.map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
     setUploadedPhotos(prev => [...prev, ...newPhotos]);
   };
 
@@ -363,7 +365,7 @@ export default function PhotographerDashboard() {
     dropZoneRef.current?.classList.remove('border-red-500');
     
     const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-    const newPhotos = files.map(file => URL.createObjectURL(file));
+    const newPhotos = files.map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
     setUploadedPhotos(prev => [...prev, ...newPhotos]);
   };
 
@@ -385,27 +387,51 @@ export default function PhotographerDashboard() {
     setUploadedVideo(null);
   };
 
-  const handleSubmitPortfolio = () => {
+  const handleSubmitPortfolio = async () => {
     if (!uploadForm.clientName || !uploadForm.phone || uploadedPhotos.length === 0) {
       alert('Por favor complete el nombre, teléfono y suba al menos una foto');
       return;
     }
 
-    addPortfolio(uploadForm, uploadedPhotos, uploadedVideo?.url);
-    
-    // Reset form
-    setUploadForm({
-      clientName: '',
-      phone: '',
-      date: new Date().toISOString().split('T')[0],
-      invoiceCode: '',
-    });
-    setUploadedPhotos([]);
-    removeUploadedVideo();
+    setIsUploading(true);
+    try {
+      // Upload photos to Supabase Storage for permanent URLs
+      const photoFiles = uploadedPhotos.map(p => p.file);
+      const photoUrls = await uploadMultipleFiles(photoFiles, 'photos');
+
+      // Upload video if present
+      let videoUrl = null;
+      if (uploadedVideo?.file) {
+        videoUrl = await uploadFileToStorage(uploadedVideo.file, 'videos');
+      }
+
+      addPortfolio(uploadForm, photoUrls, videoUrl);
+
+      // Reset form
+      setUploadForm({
+        clientName: '',
+        phone: '',
+        date: new Date().toISOString().split('T')[0],
+        invoiceCode: '',
+      });
+      // Revoke preview URLs
+      uploadedPhotos.forEach(p => URL.revokeObjectURL(p.previewUrl));
+      setUploadedPhotos([]);
+      removeUploadedVideo();
+    } catch (err) {
+      console.error('Error uploading files:', err);
+      alert('Error subiendo archivos. Verifica que el bucket "portfolio-media" exista en Supabase Storage.');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const removeUploadedPhoto = (index) => {
-    setUploadedPhotos(prev => prev.filter((_, i) => i !== index));
+    setUploadedPhotos(prev => {
+      const removed = prev[index];
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   return (
@@ -731,7 +757,7 @@ export default function PhotographerDashboard() {
                     <div className="grid grid-cols-3 gap-2">
                       {uploadedPhotos.map((photo, idx) => (
                         <div key={idx} className="relative aspect-square">
-                          <img src={photo} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover rounded-lg" />
+                          <img src={photo.previewUrl} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover rounded-lg" />
                           <button
                             onClick={() => removeUploadedPhoto(idx)}
                             className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-600"
@@ -744,8 +770,8 @@ export default function PhotographerDashboard() {
                   </div>
                 )}
 
-                <GlassButton variant="primary" className="w-full" onClick={handleSubmitPortfolio}>
-                  Subir y Asignar
+                <GlassButton variant="primary" className="w-full" onClick={handleSubmitPortfolio} disabled={isUploading}>
+                  {isUploading ? 'Subiendo...' : 'Subir y Asignar'}
                 </GlassButton>
               </GlassCard>
 
@@ -794,10 +820,15 @@ export default function PhotographerDashboard() {
             onDeletePhoto={(indices) => {
               deletePhotosFromPortfolio(selectedClient.id, indices);
             }}
-            onUploadPhotos={(e) => {
+            onUploadPhotos={async (e) => {
               const files = Array.from(e.target.files);
-              const newUrls = files.map(file => URL.createObjectURL(file));
-              addPhotosToPortfolio(selectedClient.id, newUrls);
+              try {
+                const urls = await uploadMultipleFiles(files, 'photos');
+                addPhotosToPortfolio(selectedClient.id, urls);
+              } catch (err) {
+                console.error('Error uploading photos:', err);
+                alert('Error subiendo fotos. Verifica el bucket "portfolio-media" en Supabase.');
+              }
             }}
             onEditClient={(editForm) => {
               updatePortfolio(selectedClient.id, { clientName: editForm.clientName, phone: editForm.phone });
@@ -809,10 +840,16 @@ export default function PhotographerDashboard() {
             onDeleteVideo={() => {
               deleteVideoFromPortfolio(selectedClient.id);
             }}
-            onUploadVideo={(e) => {
+            onUploadVideo={async (e) => {
               const file = e.target.files[0];
               if (file && file.type.startsWith('video/')) {
-                addVideoToPortfolio(selectedClient.id, URL.createObjectURL(file));
+                try {
+                  const url = await uploadFileToStorage(file, 'videos');
+                  addVideoToPortfolio(selectedClient.id, url);
+                } catch (err) {
+                  console.error('Error uploading video:', err);
+                  alert('Error subiendo video. Verifica el bucket "portfolio-media" en Supabase.');
+                }
               }
             }}
           />
