@@ -1610,6 +1610,7 @@ function POSReceipt({ invoice, onClose }) {
 
 export default function BillingPage() {
   const [activeTab, setActiveTab] = useState('nueva');
+  const [showMobileSummary, setShowMobileSummary] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState([]);
   const [turno, setTurno] = useState('');
@@ -1828,9 +1829,9 @@ export default function BillingPage() {
         <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
       </div>
 
-      {/* Left Sidebar */}
+      {/* Left Sidebar — hidden on mobile */}
       <aside className="relative z-10 w-20 lg:w-24 bg-black/30 backdrop-blur-xl border-r border-white/20 
-                        flex flex-col items-center py-6 gap-2">
+                        hidden lg:flex flex-col items-center py-6 gap-2">
         {/* Logo */}
         <div className="mb-6">
           <img src="/photographer/branding/macao-logo.png" alt="Macao" className="w-12 h-12 object-contain" />
@@ -1865,14 +1866,35 @@ export default function BillingPage() {
         </nav>
       </aside>
 
+      {/* Mobile Bottom Tab Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-black/60 backdrop-blur-xl border-t border-white/20">
+        <div className="flex justify-around items-center py-2 px-1">
+          {sidebarItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-colors
+                  ${isActive ? 'text-red-500' : 'text-white/60'}`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[9px] font-medium">{item.label.split(' ')[0]}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
       {/* Conditional Content Based on Active Tab */}
       {activeTab === 'nueva' && (
         <>
           {/* Main Content - Products Grid */}
-          <main className="relative z-10 flex-1 flex flex-col p-4 lg:p-6 overflow-hidden">
+          <main className="relative z-10 flex-1 flex flex-col p-4 lg:p-6 overflow-hidden pb-20 lg:pb-6">
             {/* Header with Search */}
             <div className="mb-6">
-              <h1 className="font-title text-3xl lg:text-4xl text-white mb-4">
+              <h1 className="font-title text-2xl lg:text-4xl text-white mb-3 lg:mb-4">
                 Facturacion
               </h1>
               
@@ -1905,7 +1927,7 @@ export default function BillingPage() {
 
             {/* Products Grid */}
             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4">
                 <AnimatePresence mode="popLayout">
                   {filteredProducts.map((product) => (
                     <ProductCard key={product.id} product={product} onAdd={addToCart} onEdit={setEditingProduct} />
@@ -1921,11 +1943,39 @@ export default function BillingPage() {
                 </div>
               )}
             </div>
+
+            {/* Mobile floating cart button */}
+            <motion.button
+              onClick={() => setShowMobileSummary(true)}
+              className="lg:hidden fixed bottom-20 right-4 z-30 w-14 h-14 rounded-full bg-[#DC2626] text-white
+                        shadow-lg shadow-red-600/40 flex items-center justify-center"
+              whileTap={{ scale: 0.9 }}
+            >
+              <Receipt className="w-6 h-6" />
+              {cart.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-white text-red-600 text-xs font-bold flex items-center justify-center">
+                  {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                </span>
+              )}
+            </motion.button>
           </main>
 
           {/* Right Sidebar - Sale Summary */}
-          <aside className="relative z-10 w-[35%] min-w-[320px] max-w-[450px] bg-black/25 backdrop-blur-xl 
-                            border-l border-white/20 flex flex-col">
+          <aside className={`
+            fixed inset-0 z-40 lg:relative lg:inset-auto
+            lg:w-[35%] lg:min-w-[320px] lg:max-w-[450px]
+            bg-black/90 lg:bg-black/25 backdrop-blur-xl 
+            lg:border-l border-white/20 flex flex-col
+            transition-transform duration-300
+            ${showMobileSummary ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
+          `}>
+            {/* Mobile close button */}
+            <button
+              onClick={() => setShowMobileSummary(false)}
+              className="lg:hidden absolute top-4 right-4 z-10 p-2 rounded-full bg-white/10 text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
             {/* Header */}
             <div className="p-5 border-b border-white/15">
               <h2 className="font-title text-2xl text-white">Resumen de Venta</h2>
@@ -2101,31 +2151,31 @@ export default function BillingPage() {
       )}
 
       {activeTab === 'usuario' && (
-        <main className="relative z-10 flex-1 p-4 lg:p-6 overflow-auto">
+        <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
           <UsuarioPanel />
         </main>
       )}
 
       {activeTab === 'devolucion' && (
-        <main className="relative z-10 flex-1 p-4 lg:p-6 overflow-auto">
+        <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
           <DevolucionPanel invoices={invoices} />
         </main>
       )}
 
       {activeTab === 'turnos' && (
-        <main className="relative z-10 flex-1 p-4 lg:p-6 overflow-auto">
+        <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
           <VentasTurnoPanel invoices={invoices} />
         </main>
       )}
 
       {activeTab === 'cierre-turno' && (
-        <main className="relative z-10 flex-1 p-4 lg:p-6 overflow-auto">
+        <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
           <CierreTurnoPanel invoices={invoices} />
         </main>
       )}
 
       {activeTab === 'cierre-dia' && (
-        <main className="relative z-10 flex-1 p-4 lg:p-6 overflow-auto">
+        <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
           <CierreDiaPanel invoices={invoices} />
         </main>
       )}
