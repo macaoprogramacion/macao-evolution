@@ -102,6 +102,19 @@ function ClientGallery() {
   const [verificationError, setVerificationError] = useState('');
   const [verifiedInvoice, setVerifiedInvoice] = useState(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(4);
+  const LOAD_MORE_COUNT = 12;
+
+  const visiblePhotos = galleryPhotos.slice(0, visibleCount);
+  const hasMorePhotos = visibleCount < galleryPhotos.length;
+
+  const handleLoadMore = () => {
+    setVisibleCount(prev => Math.min(prev + LOAD_MORE_COUNT, galleryPhotos.length));
+  };
+
+  const handleShowAll = () => {
+    setVisibleCount(galleryPhotos.length);
+  };
 
   const toggleSelect = (id) => {
     setSelectedIds(prev => 
@@ -465,21 +478,62 @@ function ClientGallery() {
         transition={{ delay: 0.3 }}
       >
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {galleryPhotos.map((photo, index) => (
+          {visiblePhotos.map((photo, index) => (
             <motion.div
               key={photo.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
+              transition={{ delay: Math.min(index * 0.05, 0.5) }}
+              className="relative"
             >
               <PhotoCard
                 image={photo.image}
                 isSelected={selectedIds.includes(photo.id)}
                 onSelect={() => toggleSelect(photo.id)}
               />
+              {/* "Ver más" overlay on the 4th photo */}
+              {index === 3 && hasMorePhotos && visibleCount === 4 && (
+                <motion.button
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  onClick={handleLoadMore}
+                  className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl cursor-pointer z-10"
+                >
+                  <span className="text-white text-3xl font-bold">+{galleryPhotos.length - 4}</span>
+                  <span className="text-white text-sm font-medium mt-1">Ver más</span>
+                </motion.button>
+              )}
             </motion.div>
           ))}
         </div>
+
+        {/* Load more / Show all buttons */}
+        {hasMorePhotos && visibleCount > 4 && (
+          <motion.div
+            className="flex justify-center gap-4 mt-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <GlassButton variant="secondary" onClick={handleLoadMore} className="px-6">
+              Ver más ({Math.min(LOAD_MORE_COUNT, galleryPhotos.length - visibleCount)} fotos)
+            </GlassButton>
+            <GlassButton variant="primary" onClick={handleShowAll} className="px-6">
+              Ver todas ({galleryPhotos.length - visibleCount} restantes)
+            </GlassButton>
+          </motion.div>
+        )}
+
+        {hasMorePhotos && visibleCount === 4 && (
+          <motion.div
+            className="flex justify-center mt-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <GlassButton variant="primary" onClick={handleShowAll} className="px-8">
+              Ver todas las fotos ({galleryPhotos.length})
+            </GlassButton>
+          </motion.div>
+        )}
 
         {/* Plans section — only show if NO paid invoice for this phone */}
         {!hasInvoice && !isVerified && (
