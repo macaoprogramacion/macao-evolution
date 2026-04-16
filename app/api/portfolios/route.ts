@@ -13,11 +13,12 @@ export async function GET(request: Request) {
   // Normalize phone: strip non-digits
   const normalizedPhone = phone.replace(/\D/g, '')
 
-  // Fetch portfolios matching this phone
+  // Fetch portfolios matching this phone (exclude expired)
   const { data: portfolios, error: portError } = await supabase
     .from('portfolios')
     .select('*')
     .or(`phone.eq.${normalizedPhone},phone.eq.${phone}`)
+    .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false })
 
   if (portError) {
@@ -66,20 +67,27 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    portfolios: portfolios.map(p => ({
-      id: p.id,
-      image: p.image,
-      clientName: p.client_name,
-      phone: p.phone,
-      status: p.status,
-      commission: Number(p.commission),
-      date: p.date,
-      invoiceCode: p.invoice_code,
-      source: p.source,
-      turno: p.turno,
-      photographerName: p.photographer_name,
-      createdAt: new Date(p.created_at).getTime(),
-    })),
+    portfolios: portfolios.map(p => {
+      const expiresAt = new Date(p.expires_at)
+      const now = new Date()
+      const remainingDays = Math.max(0, Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+
+      return {
+        id: p.id,
+        image: p.image,
+        clientName: p.client_name,
+        phone: p.phone,
+        status: p.status,
+        commission: Number(p.commission),
+        date: p.date,
+        invoiceCode: p.invoice_code,
+        source: p.source,
+        turno: p.turno,
+        photographerName: p.photographer_name,
+        createdAt: new Date(p.created_at).getTime(),
+        remainingDays,
+      }
+    }),
     photos: photosMap,
     videos: videosMap,
   })
@@ -102,9 +110,9 @@ export async function POST(request: Request) {
       day: '2-digit', month: '2-digit', year: 'numeric'
     })
 
-    // Calculate expiration (30 days from now)
+    // Calculate expiration (15 days from now)
     const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + 30)
+    expiresAt.setDate(expiresAt.getDate() + 15)
 
     // Insert portfolio
     const { data: portfolio, error: portError } = await supabase

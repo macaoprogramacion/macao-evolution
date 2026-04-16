@@ -47,7 +47,7 @@ const seedClientPhotos = {
 };
 
 // Portfolio duration in days
-const PORTFOLIO_DURATION_DAYS = 30;
+const PORTFOLIO_DURATION_DAYS = 15;
 
 // Helper to calculate remaining days
 const calculateRemainingDays = (createdAt) => {

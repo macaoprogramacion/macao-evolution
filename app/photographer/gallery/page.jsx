@@ -312,6 +312,31 @@ function ClientGallery() {
             Galería de <span className="font-semibold">{clientName}</span>
           </p>
         </GlassCard>
+
+        {/* Expiration warning */}
+        {dbPortfolios.length > 0 && (() => {
+          const minDays = Math.min(...dbPortfolios.map(p => p.remainingDays ?? 15));
+          if (minDays <= 0) return null;
+          const urgent = minDays <= 3;
+          const warning = minDays <= 7;
+          return (
+            <motion.div
+              className={`mt-4 inline-block px-6 py-2 rounded-xl text-sm font-medium ${
+                urgent ? 'bg-red-600/80 text-white' :
+                warning ? 'bg-yellow-500/80 text-black' :
+                'bg-white/10 text-white/70'
+              }`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              {urgent
+                ? `⚠️ Tu galería expira en ${minDays} día${minDays !== 1 ? 's' : ''}. ¡Descarga tus fotos ahora!`
+                : `📅 Tienes ${minDays} días para descargar tus fotos y videos`
+              }
+            </motion.div>
+          );
+        })()}
       </motion.div>
 
       {/* Invoice Verification Section */}
