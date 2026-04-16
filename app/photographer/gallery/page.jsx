@@ -321,13 +321,13 @@ function ClientGallery() {
           const warning = minDays <= 7;
           return (
             <motion.div
-              className={`mt-4 inline-block px-6 py-2 rounded-xl text-sm font-medium ${
-                urgent ? 'bg-red-600/80 text-white' :
-                warning ? 'bg-yellow-500/80 text-black' :
-                'bg-white/10 text-white/70'
+              className={`mt-4 block mx-auto w-fit px-8 py-3 rounded-xl text-base font-bold tracking-wide ${
+                urgent ? 'bg-red-600 text-white shadow-lg shadow-red-600/40' :
+                warning ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/30' :
+                'bg-white/20 backdrop-blur-sm text-white border border-white/30'
               }`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
               {urgent
