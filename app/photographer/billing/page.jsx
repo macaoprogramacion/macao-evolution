@@ -1993,9 +1993,9 @@ export default function BillingPage() {
                 options={(() => {
                   const h = new Date().getHours();
                   return [
-                    { value: 'Turno 9:00', label: 'Turno 9:00 AM', disabled: h >= 10 },
-                    { value: 'Turno 12:00', label: 'Turno 12:00 PM', disabled: h >= 13 },
-                    { value: 'Turno 3:00', label: 'Turno 3:00 PM', disabled: h >= 16 },
+                    { value: 'Turno 9:00', label: 'Turno 9:00 AM', disabled: h >= 12 },
+                    { value: 'Turno 12:00', label: 'Turno 12:00 PM', disabled: h >= 15 },
+                    { value: 'Turno 3:00', label: 'Turno 3:00 PM', disabled: h >= 18 },
                   ];
                 })()}
               />
