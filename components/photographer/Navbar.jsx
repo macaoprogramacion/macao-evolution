@@ -1,8 +1,29 @@
+"use client"
+
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { User, Bell, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
 export default function Navbar({ title = 'MACAO OFFROAD EXPERIENCE', mobileTitle = 'Panel del Fotógrafo' }) {
+  const router = useRouter();
+  const [userName, setUserName] = useState('');
+
+  useEffect(() => {
+    try {
+      const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || 'null');
+      if (session && session.active) {
+        setUserName(session.name);
+      }
+    } catch {}
+  }, []);
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('macao_auth_session');
+    router.push('/photographer');
+  };
+
   return (
     <header className="bg-black/30 backdrop-blur-xl border-b border-white/20">
       <div className="px-6 py-4 flex items-center justify-between">
@@ -21,36 +42,24 @@ export default function Navbar({ title = 'MACAO OFFROAD EXPERIENCE', mobileTitle
           </h1>
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-4">
-          <motion.button
-            className="p-2 rounded-full bg-black/30 hover:bg-black/40 transition-colors relative"
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-          >
-            <User className="w-5 h-5 text-white" />
-          </motion.button>
-
-          <motion.button
-            className="p-2 rounded-full bg-black/30 hover:bg-black/40 transition-colors relative"
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-          >
-            <Bell className="w-5 h-5 text-white" />
-            {/* Notification badge */}
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center">
-              3
-            </span>
-          </motion.button>
-
-          <motion.button
-            className="p-2 rounded-full bg-black/30 hover:bg-black/40 transition-colors"
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-          >
-            <LogOut className="w-5 h-5 text-white" />
-          </motion.button>
-        </div>
+        {/* User Badge + Logout */}
+        {userName && (
+          <div className="flex items-center gap-2">
+            <div className="bg-black/40 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-xs flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              <span className="font-medium">{userName}</span>
+            </div>
+            <motion.button
+              onClick={handleLogout}
+              className="p-2 rounded-full bg-black/30 hover:bg-red-600/60 transition-colors"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              title="Cerrar sesión"
+            >
+              <LogOut className="w-4 h-4 text-white" />
+            </motion.button>
+          </div>
+        )}
       </div>
     </header>
   );

@@ -256,24 +256,6 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
     )
   }
 
-  // Authenticated — render children with logout button context
-  return (
-    <div className="relative">
-      {/* Floating user badge */}
-      <div className="fixed top-3 right-4 z-50 flex items-center gap-2">
-        <div className="bg-black/60 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-xs flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          {userName}
-          <button
-            onClick={handleLogout}
-            className="ml-1 p-1 hover:bg-white/20 rounded-full transition-colors"
-            title="Cerrar sesión"
-          >
-            <LogOut className="w-3 h-3" />
-          </button>
-        </div>
-      </div>
-      {children}
-    </div>
-  )
+  // Authenticated — render children (user badge is rendered by each page's header/navbar)
+  return children
 }

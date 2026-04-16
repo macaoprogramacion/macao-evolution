@@ -1621,6 +1621,20 @@ export default function BillingPage() {
   const [currency, setCurrency] = useState('USD');
   const [products, setProducts] = useState(DEFAULT_PRODUCTS);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [billingUserName, setBillingUserName] = useState('');
+
+  // Read user from session
+  useEffect(() => {
+    try {
+      const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || 'null');
+      if (session && session.active) setBillingUserName(session.name);
+    } catch {}
+  }, []);
+
+  const handleBillingLogout = () => {
+    sessionStorage.removeItem('macao_auth_session');
+    window.location.reload();
+  };
 
   // Load products from localStorage
   useEffect(() => {
@@ -1864,6 +1878,23 @@ export default function BillingPage() {
             );
           })}
         </nav>
+
+        {/* User badge + Logout at bottom of sidebar */}
+        {billingUserName && (
+          <div className="flex flex-col items-center gap-2 pb-4">
+            <div className="text-[9px] text-white/60 flex items-center gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              <span className="hidden lg:inline">{billingUserName}</span>
+            </div>
+            <button
+              onClick={handleBillingLogout}
+              className="w-10 h-10 rounded-xl bg-black/30 hover:bg-red-600/60 transition-colors flex items-center justify-center"
+              title="Cerrar sesión"
+            >
+              <LogOut className="w-4 h-4 text-white/60 hover:text-white" />
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Mobile Bottom Tab Bar */}
@@ -1884,6 +1915,14 @@ export default function BillingPage() {
               </button>
             );
           })}
+          {/* Logout button in mobile nav */}
+          <button
+            onClick={handleBillingLogout}
+            className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl text-white/60"
+          >
+            <LogOut className="w-5 h-5" />
+            <span className="text-[9px] font-medium">Salir</span>
+          </button>
         </div>
       </nav>
 
