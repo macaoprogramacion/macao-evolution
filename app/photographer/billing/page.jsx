@@ -1610,6 +1610,9 @@ function POSReceipt({ invoice, onClose }) {
             <!-- Footer -->
             <div class="footer">
               <div class="thanks">¡GRACIAS POR SU COMPRA!</div>
+              <div style="font-size: 11px; font-weight: bold; margin: 8px 0; padding: 6px; border: 1px solid #000; text-align: center;">
+                📅 Tiene 15 días para descargar sus fotos y videos
+              </div>
               <div class="footer-note">Conserve este recibo para cualquier reclamación</div>
               <div class="footer-note">www.macaooffroad.com</div>
             </div>
@@ -1721,6 +1724,9 @@ function POSReceipt({ invoice, onClose }) {
           {/* Footer */}
           <div className="text-center mt-4 pt-3 border-t border-dashed border-gray-400">
             <div className="font-bold text-xs mb-1">¡GRACIAS POR SU COMPRA!</div>
+            <div className="text-[10px] font-bold border border-gray-800 rounded px-2 py-1.5 mx-2 my-2">
+              📅 Tiene 15 días para descargar sus fotos y videos
+            </div>
             <div className="text-[9px] text-gray-500">Conserve este recibo para cualquier reclamación</div>
             <div className="text-[9px] text-gray-500">www.macaooffroad.com</div>
           </div>
