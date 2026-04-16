@@ -575,7 +575,8 @@ function ClientGallery() {
             })}
           </div>
 
-          {/* Video Section */}
+          {/* Video Section — only show if photographer uploaded a video */}
+          {portfolioVideo && (
           <motion.div
             className="mt-12"
             initial={{ opacity: 0 }}
@@ -643,6 +644,7 @@ function ClientGallery() {
               </GlassCard>
             </div>
           </motion.div>
+          )}
         </motion.div>
         )}
 
