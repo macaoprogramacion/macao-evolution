@@ -14,7 +14,6 @@ export default function PortfolioCard({
   image, 
   clientName, 
   status, 
-  commission, 
   date, 
   dateLabel = 'Subido el',
   remainingDays,
@@ -56,9 +55,6 @@ export default function PortfolioCard({
               </p>
               <p className="text-white/80 text-sm truncate">
                 Estado: {status}
-              </p>
-              <p className="text-white/80 text-sm">
-                Comisión: ${commission}
               </p>
               <p className="text-white/60 text-xs">
                 {dateLabel}: {date}

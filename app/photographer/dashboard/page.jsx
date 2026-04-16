@@ -828,33 +828,6 @@ export default function PhotographerDashboard() {
                   Subir y Asignar
                 </GlassButton>
               </GlassCard>
-
-              {/* Finances chart */}
-              <GlassCard className="p-6" hover={false}>
-                <h3 className="text-lg font-medium text-white text-center mb-4">
-                  Finanzas
-                </h3>
-                {/* Simple chart placeholder */}
-                <div className="h-32 flex items-end justify-around gap-1">
-                  {[200, 400, 300, 600, 800, 400].map((height, i) => (
-                    <motion.div
-                      key={i}
-                      className="w-8 bg-gradient-to-t from-rose-400/60 to-rose-300/40 rounded-t-lg"
-                      initial={{ height: 0 }}
-                      animate={{ height: `${(height / 800) * 100}%` }}
-                      transition={{ delay: i * 0.1, duration: 0.5 }}
-                    />
-                  ))}
-                </div>
-                <div className="flex justify-around text-xs text-white/60 mt-2">
-                  <span>Jan</span>
-                  <span>Feb</span>
-                  <span>Mar</span>
-                  <span>Apr</span>
-                  <span>May</span>
-                  <span>Jun</span>
-                </div>
-              </GlassCard>
             </div>
           </div>
         </main>

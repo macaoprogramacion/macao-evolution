@@ -5,7 +5,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import { 
   Home, 
   FolderOpen, 
-  DollarSign, 
   Users, 
   Settings 
 } from 'lucide-react';
@@ -14,7 +13,6 @@ import GlassCard from '@/components/photographer/ui/GlassCard';
 const menuItems = [
   { icon: Home, label: 'Inicio', path: '/photographer/dashboard' },
   { icon: FolderOpen, label: 'Portafolios', path: '/photographer/portfolios' },
-  { icon: DollarSign, label: 'Finanzas', path: '/photographer/finances' },
   { icon: Users, label: 'Clientes', path: '/photographer/clients' },
   { icon: Settings, label: 'Ajustes', path: '/photographer/settings' },
 ];

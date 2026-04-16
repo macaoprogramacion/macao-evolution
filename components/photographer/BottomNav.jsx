@@ -2,12 +2,11 @@
 
 import { motion } from 'framer-motion';
 import { useRouter, usePathname } from 'next/navigation';
-import { Home, FolderOpen, DollarSign, Users, Settings } from 'lucide-react';
+import { Home, FolderOpen, Users, Settings } from 'lucide-react';
 
 const navItems = [
   { icon: Home, label: 'Inicio', path: '/photographer/dashboard' },
   { icon: FolderOpen, label: 'Portafolios', path: '/photographer/portfolios' },
-  { icon: DollarSign, label: 'Finanzas', path: '/photographer/finances' },
   { icon: Users, label: 'Clientes', path: '/photographer/clients' },
   { icon: Settings, label: 'Ajustes', path: '/photographer/settings' },
 ];

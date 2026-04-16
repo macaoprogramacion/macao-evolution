@@ -50,7 +50,6 @@ import {
   addReturn,
   logActivity,
   getActivity,
-  calculateFinanceStats,
   calculateSalesByTurno,
 } from '@/lib/store';
 
@@ -116,158 +115,12 @@ const persistProducts = (products) => {
 // Sidebar menu items
 const sidebarItems = [
   { id: 'nueva', icon: FileText, label: 'Nueva Factura' },
-  { id: 'finanzas', icon: TrendingUp, label: 'Finanzas' },
   { id: 'usuario', icon: User, label: 'Usuario' },
   { id: 'devolucion', icon: RotateCcw, label: 'Devolucion' },
   { id: 'turnos', icon: Clock, label: 'Ventas por Turno' },
   { id: 'cierre-turno', icon: ClipboardList, label: 'Cierre Turno' },
   { id: 'cierre-dia', icon: Sun, label: 'Cierre del Dia' },
 ];
-
-// Generate dynamic finance stats from invoices — now includes real returns
-const generateFinanceStats = (stats) => [
-  { label: 'Ventas Hoy', value: `US$ ${stats.salesToday.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, change: '+0%', positive: true, icon: DollarSign },
-  { label: 'Ventas Semana', value: `US$ ${stats.salesWeek.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, change: '+0%', positive: true, icon: TrendingUp },
-  { label: 'Ventas Mes', value: `US$ ${stats.salesMonth.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, change: '+0%', positive: true, icon: CreditCard },
-  { label: 'Devoluciones', value: `US$ ${stats.returnsTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, change: '0%', positive: stats.returnsTotal === 0, icon: RotateCcw },
-];
-
-// Finanzas Panel Component
-function FinanzasPanel({ invoices }) {
-  const returns = getReturns();
-  const stats = calculateFinanceStats(invoices, returns);
-  const financeStats = generateFinanceStats(stats);
-  
-  // Get recent transactions from invoices
-  const recentTx = invoices.slice(-10).reverse().map(inv => ({
-    id: inv.id,
-    client: inv.clientName || 'Cliente General',
-    amount: inv.total,
-    type: 'venta',
-    date: new Date(inv.timestamp).toLocaleString('es-DO'),
-    status: 'completada',
-  }));
-  
-  return (
-    <div className="flex-1 flex flex-col lg:flex-row gap-6">
-      {/* Main Stats Area */}
-      <div className="flex-1 flex flex-col">
-        <h1 className="font-title text-3xl lg:text-4xl text-white mb-6">Finanzas</h1>
-        
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {financeStats.map((stat, index) => {
-            const Icon = stat.icon;
-            return (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-2xl bg-[#DC2626]/20 flex items-center justify-center">
-                    <Icon className="w-5 h-5 text-[#DC2626]" />
-                  </div>
-                  <div className={`flex items-center gap-1 text-xs font-medium ${stat.positive ? 'text-green-500' : 'text-red-400'}`}>
-                    {stat.positive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                    {stat.change}
-                  </div>
-                </div>
-                <p className="text-white font-semibold text-lg">{stat.value}</p>
-                <p className="text-white/70 text-xs">{stat.label}</p>
-              </motion.div>
-            );
-          })}
-        </div>
-
-        {/* Transactions Table */}
-        <div className="flex-1 bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20 overflow-hidden">
-          <h3 className="text-white font-semibold mb-4">Transacciones Recientes</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-white/70 text-xs border-b border-white/10">
-                  <th className="text-left py-3 px-2">Cliente</th>
-                  <th className="text-left py-3 px-2">Tipo</th>
-                  <th className="text-right py-3 px-2">Monto</th>
-                  <th className="text-left py-3 px-2">Fecha</th>
-                  <th className="text-center py-3 px-2">Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentTx.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-white/50">
-                      No hay transacciones registradas
-                    </td>
-                  </tr>
-                ) : (
-                  recentTx.map((tx) => (
-                    <tr key={tx.id} className="border-b border-white/5 hover:bg-black/10 transition-colors">
-                      <td className="py-3 px-2 text-white text-sm">{tx.client}</td>
-                      <td className="py-3 px-2">
-                        <span className={`text-xs px-2 py-1 rounded-full ${tx.type === 'venta' ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'}`}>
-                          {tx.type}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2 text-right text-white text-sm font-medium">
-                        US$ {tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3 px-2 text-white/70 text-sm">{tx.date}</td>
-                      <td className="py-3 px-2 text-center">
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          tx.status === 'completada' ? 'bg-green-500/20 text-green-400' :
-                          tx.status === 'pendiente' ? 'bg-yellow-500/20 text-yellow-400' :
-                          'bg-blue-500/20 text-blue-400'
-                        }`}>
-                          {tx.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* Right Summary */}
-      <div className="lg:w-80 bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20">
-        <h3 className="text-white font-semibold mb-4">Resumen del Día</h3>
-        <div className="space-y-4">
-          <div className="p-4 bg-black/15 rounded-2xl">
-            <p className="text-white/70 text-xs mb-1">Total Facturado</p>
-            <p className="text-white text-2xl font-bold">US$ {stats.salesToday.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-          </div>
-          <div className="p-4 bg-black/15 rounded-2xl">
-            <p className="text-white/70 text-xs mb-1">Facturas Emitidas</p>
-            <p className="text-white text-2xl font-bold">{stats.invoicesToday}</p>
-          </div>
-          <div className="p-4 bg-black/15 rounded-2xl">
-            <p className="text-white/70 text-xs mb-1">Ticket Promedio</p>
-            <p className="text-white text-2xl font-bold">US$ {stats.ticketPromedio.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-          </div>
-          <div className="p-4 bg-[#DC2626]/20 rounded-2xl">
-            <p className="text-white/70 text-xs mb-1">Meta Diaria</p>
-            <div className="flex items-center justify-between">
-              <p className="text-white text-xl font-bold">{Math.min(100, Math.round((stats.salesToday / 1000) * 100))}%</p>
-              <p className="text-white/70 text-xs">US$ 1,000.00</p>
-            </div>
-            <div className="w-full h-2 bg-black/20 rounded-full mt-2">
-              <div 
-                className="h-full bg-[#DC2626] rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, (stats.salesToday / 1000) * 100)}%` }}
-              ></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // Usuario Panel Component
 function UsuarioPanel() {
@@ -2245,12 +2098,6 @@ export default function BillingPage() {
             </div>
           </aside>
         </>
-      )}
-
-      {activeTab === 'finanzas' && (
-        <main className="relative z-10 flex-1 p-4 lg:p-6 overflow-auto">
-          <FinanzasPanel invoices={invoices} />
-        </main>
       )}
 
       {activeTab === 'usuario' && (
