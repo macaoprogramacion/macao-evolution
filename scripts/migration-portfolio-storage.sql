@@ -4,13 +4,13 @@
 -- ============================================================
 
 -- 1. Create the storage bucket (public so clients can download)
---    500MB limit for large videos, restricted MIME types
+--    20GB limit for high-quality videos, restricted MIME types
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
   'portfolio-media',
   'portfolio-media',
   true,
-  524288000,
+  21474836480,
   ARRAY['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','video/mp4','video/quicktime','video/x-msvideo','video/webm','video/mpeg']
 )
 ON CONFLICT (id) DO UPDATE SET
