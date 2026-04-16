@@ -27,7 +27,10 @@ export default function BottomNav() {
             return (
               <motion.button
                 key={item.path}
-                onClick={() => router.push(item.path)}
+                onClick={() => {
+                  if (window.__uploadInProgress && !confirm('Hay un video subiéndose. Si sales se cancelará la subida. ¿Salir de todos modos?')) return;
+                  router.push(item.path);
+                }}
                 className={`
                   flex flex-col items-center gap-1 px-4 py-2 rounded-xl
                   transition-colors duration-200

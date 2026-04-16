@@ -340,6 +340,17 @@ export default function PhotographerDashboard() {
   const videoInputRef = useRef(null);
   const dropZoneRef = useRef(null);
 
+  // Track upload-in-progress globally so navigation components can warn
+  const hasActiveUpload = activeUploads.some(u => u.status === 'uploading');
+  useEffect(() => {
+    window.__uploadInProgress = hasActiveUpload;
+    if (hasActiveUpload) {
+      const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
+      window.addEventListener('beforeunload', handler);
+      return () => window.removeEventListener('beforeunload', handler);
+    }
+  }, [hasActiveUpload]);
+
   // Clean completed uploads after 5 seconds
   useEffect(() => {
     const timer = setInterval(() => {
