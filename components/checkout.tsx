@@ -1192,6 +1192,13 @@ export function CheckoutModal({
                 </div>
               </div>
 
+              {/* Upsell / Recommendations */}
+              <ConfirmationUpsell
+                hasPrivateTransport={hasPrivateTransport}
+                cartItems={items}
+                addItem={addItem}
+              />
+
               {/* Pay button */}
               <button
                 type="button"
@@ -1306,13 +1313,6 @@ export function CheckoutModal({
                   )}
                 </div>
               </div>
-
-              {/* Upsell / Recommendations */}
-              <ConfirmationUpsell
-                hasPrivateTransport={hasPrivateTransport}
-                cartItems={items}
-                addItem={addItem}
-              />
 
               <button
                 type="button"
