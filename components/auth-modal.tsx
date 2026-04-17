@@ -288,7 +288,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           {tab === "login" && (
             <div className="px-8 py-8">
               <h2 className="text-xl font-title text-foreground mb-1">
-                Bienvenido de vuelta
+                {loginRole === "cliente" ? "Iniciar sesión" : "Bienvenido de vuelta"}
               </h2>
               <p className="text-sm text-muted-foreground mb-6">
                 Ingresa tus credenciales para acceder

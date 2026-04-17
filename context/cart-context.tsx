@@ -23,6 +23,8 @@ interface CartContextType {
   totalItems: number;
   totalPrice: number;
   hasServiceSelected: boolean;
+  getConflictingService: (id: string) => CartItem | null;
+  replaceService: (oldId: string, newItem: Omit<CartItem, "quantity">) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -83,6 +85,28 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems([]);
   }, []);
 
+  const SERVICE_IDS = ["service-colectivo", "service-privado"];
+
+  const getConflictingService = useCallback((id: string): CartItem | null => {
+    if (!SERVICE_IDS.includes(id)) return null;
+    const otherId = id === "service-colectivo" ? "service-privado" : "service-colectivo";
+    return items.find((item) => item.id === otherId) || null;
+  }, [items]);
+
+  const replaceService = useCallback((oldId: string, newItem: Omit<CartItem, "quantity">) => {
+    setItems((prev) => {
+      const filtered = prev.filter((item) => item.id !== oldId);
+      const existing = filtered.find((item) => item.id === newItem.id);
+      if (existing) {
+        return filtered.map((item) =>
+          item.id === newItem.id ? { ...item, quantity: item.quantity + 1 } : item
+        );
+      }
+      return [...filtered, { ...newItem, quantity: 1 }];
+    });
+    setIsOpen(true);
+  }, []);
+
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = items.reduce(
     (sum, item) => sum + item.price * item.quantity,
@@ -105,6 +129,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         totalItems,
         totalPrice,
         hasServiceSelected,
+        getConflictingService,
+        replaceService,
       }}
     >
       {children}

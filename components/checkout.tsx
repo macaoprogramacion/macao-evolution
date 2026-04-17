@@ -2,7 +2,9 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { useCart } from "@/context/cart-context";
+import { products } from "@/lib/products";
 import {
   X,
   CreditCard,
@@ -23,6 +25,9 @@ import {
   Clock,
   CalendarDays,
   Calendar as CalendarIcon,
+  Zap,
+  ShoppingCart,
+  Star,
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 
@@ -228,7 +233,7 @@ export function CheckoutModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
-  const { items, totalPrice, clearCart } = useCart();
+  const { items, totalPrice, clearCart, addItem } = useCart();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [customer, setCustomer] = useState<CustomerInfo>({
     name: "",
@@ -473,7 +478,7 @@ export function CheckoutModal({
                 </div>
               </div>
               <div className="flex justify-between text-[11px] text-muted-foreground px-1">
-                <span>Registro</span>
+                <span>Datos</span>
                 {!hasPrivateTransport && <span>Recogida</span>}
                 <span>Pago</span>
               </div>
@@ -484,10 +489,10 @@ export function CheckoutModal({
           {step === 1 && (
             <div className="px-8 pb-8 pt-4">
               <h2 className="text-xl font-title text-foreground mb-1">
-                Crear tu cuenta
+                Tus datos
               </h2>
               <p className="text-sm text-muted-foreground mb-6">
-                Regístrate para completar tu reserva
+                Completa tu información para continuar
               </p>
 
               <div className="space-y-4">
@@ -1301,6 +1306,14 @@ export function CheckoutModal({
                   )}
                 </div>
               </div>
+
+              {/* Upsell / Recommendations */}
+              <ConfirmationUpsell
+                hasPrivateTransport={hasPrivateTransport}
+                cartItems={items}
+                addItem={addItem}
+              />
+
               <button
                 type="button"
                 onClick={handleFinish}
@@ -1313,5 +1326,147 @@ export function CheckoutModal({
         </div>
       </div>
     </>
+  );
+}
+
+/* ─── Upsell / Recommendations after confirmation ─── */
+
+function ConfirmationUpsell({
+  hasPrivateTransport,
+  cartItems,
+  addItem,
+}: {
+  hasPrivateTransport: boolean;
+  cartItems: { id: string; name: string }[];
+  addItem: (item: { id: string; name: string; price: number; originalPrice?: number; image: string; type: "service" | "product" }) => void;
+}) {
+  const [added, setAdded] = useState(false);
+
+  // Get the main activity name (the service, not products/transport)
+  const mainActivity = cartItems.find(
+    (i) => i.id === "service-colectivo" || i.id === "service-privado"
+  )?.name || "esta experiencia";
+
+  // If no private transport → flash offer
+  if (!hasPrivateTransport && !added) {
+    const originalPrice = 75;
+    const discountedPrice = originalPrice * 0.8;
+
+    return (
+      <div className="mb-6 rounded-xl border-2 border-amber-400/60 bg-amber-50/80 dark:bg-amber-950/20 p-4 text-left relative overflow-hidden">
+        <div className="absolute top-0 right-0 bg-amber-400 text-amber-950 text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-bl-lg">
+          <Zap size={10} className="inline mr-1" />
+          Oferta flash
+        </div>
+        <div className="flex gap-3 items-start mt-2">
+          <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg">
+            <Image
+              src="/images/service-section/private-transportation.webp"
+              alt="Transporte Privado"
+              fill
+              className="object-cover"
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">Transporte Privado</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Ida y vuelta desde tu hotel directo a la aventura
+            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-xs text-muted-foreground line-through">${originalPrice.toFixed(2)}</span>
+              <span className="text-sm font-bold text-amber-600 dark:text-amber-400">${discountedPrice.toFixed(2)}</span>
+              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-200/50 dark:bg-amber-800/30 px-1.5 py-0.5 rounded-full">-20%</span>
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            addItem({
+              id: "private-transport",
+              name: "Private Transport — Oferta Flash (20% OFF)",
+              price: discountedPrice,
+              originalPrice,
+              image: "/images/service-section/private-transportation.webp",
+              type: "service",
+            });
+            setAdded(true);
+          }}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-amber-500 hover:bg-amber-600 py-2.5 text-sm font-semibold text-white transition-colors"
+        >
+          <ShoppingCart size={14} />
+          Agregar a mi reserva
+        </button>
+      </div>
+    );
+  }
+
+  // If added the flash offer, show success
+  if (!hasPrivateTransport && added) {
+    return (
+      <div className="mb-6 rounded-xl border border-green-300/50 bg-green-50/80 dark:bg-green-950/20 p-4 text-center">
+        <Check size={20} className="mx-auto text-green-500 mb-1" />
+        <p className="text-sm font-medium text-green-700 dark:text-green-400">
+          Transporte privado agregado con 20% de descuento
+        </p>
+      </div>
+    );
+  }
+
+  // Has private transport → show random product recommendations
+  const cartIds = new Set(cartItems.map((i) => i.id));
+  const available = products.filter((p) => !cartIds.has(p.id));
+  if (available.length === 0) return null;
+
+  // Pick up to 2 random recommendations
+  const shuffled = [...available].sort(() => Math.random() - 0.5);
+  const recommendations = shuffled.slice(0, 2);
+
+  return (
+    <div className="mb-6 text-left">
+      <div className="flex items-center gap-2 mb-3">
+        <Star size={14} className="text-amber-500" />
+        <p className="text-xs font-medium text-muted-foreground">
+          Clientes que compraron <span className="text-foreground font-semibold">{mainActivity}</span> también reservaron
+        </p>
+      </div>
+      <div className="space-y-2">
+        {recommendations.map((product) => (
+          <div
+            key={product.id}
+            className="flex items-center gap-3 rounded-xl border border-border bg-secondary/30 p-3"
+          >
+            <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg">
+              <Image
+                src={product.image}
+                alt={product.title}
+                fill
+                className="object-cover"
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">{product.title}</p>
+              <p className="text-xs text-muted-foreground">${product.price.toFixed(2)}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                addItem({
+                  id: product.id,
+                  name: product.title,
+                  price: product.price,
+                  originalPrice: product.originalPrice,
+                  image: product.image,
+                  type: "product",
+                });
+              }}
+              className="flex-shrink-0 rounded-full bg-foreground/10 hover:bg-foreground/20 p-2 transition-colors"
+            >
+              <ShoppingCart size={14} className="text-foreground" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

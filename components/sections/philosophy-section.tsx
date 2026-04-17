@@ -9,7 +9,7 @@ export function PhilosophySection() {
   const sectionRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   const isMobileRef = useRef(false);
-  const { addItem } = useCart();
+  const { addItem, getConflictingService, replaceService } = useCart();
   const [addedColectivo, setAddedColectivo] = useState(false);
   const [addedPrivado, setAddedPrivado] = useState(false);
 
@@ -18,26 +18,42 @@ export function PhilosophySection() {
   const colectivoRef = useRef<HTMLDivElement>(null);
   const privadoRef = useRef<HTMLDivElement>(null);
 
+  const colectivoItem = {
+    id: "service-colectivo",
+    name: "Servicio Colectivo",
+    price: 0,
+    image: "/images/service-section/servicio-colective.webp",
+    type: "service" as const,
+  };
+
+  const privadoItem = {
+    id: "service-privado",
+    name: "Servicio Privado",
+    price: 100,
+    image: "/images/service-section/servicio-private.webp",
+    type: "service" as const,
+  };
+
   const handleAddColectivo = () => {
-    addItem({
-      id: "service-colectivo",
-      name: "Servicio Colectivo",
-      price: 0,
-      image: "/images/service-section/servicio-colective.webp",
-      type: "service",
-    });
+    const conflict = getConflictingService("service-colectivo");
+    if (conflict) {
+      if (!confirm(`Ya tienes "${conflict.name}" en tu carrito. ¿Deseas cambiarlo por "Servicio Colectivo"?`)) return;
+      replaceService(conflict.id, colectivoItem);
+    } else {
+      addItem(colectivoItem);
+    }
     setAddedColectivo(true);
     setTimeout(() => setAddedColectivo(false), 1500);
   };
 
   const handleAddPrivado = () => {
-    addItem({
-      id: "service-privado",
-      name: "Servicio Privado",
-      price: 100,
-      image: "/images/service-section/servicio-private.webp",
-      type: "service",
-    });
+    const conflict = getConflictingService("service-privado");
+    if (conflict) {
+      if (!confirm(`Ya tienes "${conflict.name}" en tu carrito. ¿Deseas cambiarlo por "Servicio Privado"?`)) return;
+      replaceService(conflict.id, privadoItem);
+    } else {
+      addItem(privadoItem);
+    }
     setAddedPrivado(true);
     setTimeout(() => setAddedPrivado(false), 1500);
   };
