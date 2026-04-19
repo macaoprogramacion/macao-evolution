@@ -349,9 +349,37 @@ export function CheckoutModal({
     if (!validateStep2()) return;
     setIsProcessing(true);
     // Simulate payment processing
-    setTimeout(() => {
+    setTimeout(async () => {
       setIsProcessing(false);
       setStep(4);
+
+      // Send confirmation email
+      try {
+        await fetch("/api/send-confirmation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customer,
+            items: items.map((i) => ({ name: i.name, price: i.price, quantity: i.quantity })),
+            totalPaid: amountToPay,
+            totalPrice,
+            paymentMethod,
+            paymentOption,
+            remainingAmount: paymentOption === "partial" ? remainingAmount : undefined,
+            pickup: !hasPrivateTransport
+              ? {
+                  hotel: pickupHotel || undefined,
+                  custom: pickupCustom || undefined,
+                  date: pickupDate ? formatDateDisplay(pickupDate) : undefined,
+                  time: pickupTimeSlot !== null ? `${activeTimes[pickupTimeSlot].time} (${activeTimes[pickupTimeSlot].label})` : undefined,
+                  point: activePickupPoint || undefined,
+                }
+              : undefined,
+          }),
+        });
+      } catch {
+        // Email sending failed silently — reservation is still confirmed
+      }
     }, 2000);
   }
 

@@ -98,29 +98,64 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         })),
       }
 
+      // Build tiered prices if configured
+      const tieredPricesByCategory = product.tieredPrices?.length
+        ? {
+            tieredRetailPrices: product.tieredPrices.map((tp) => ({
+              category: tp.category,
+              tiers: tp.tiers.map((t) => ({
+                minParticipants: t.minParticipants,
+                maxParticipants: t.maxParticipants,
+                price: t.price,
+              })),
+            })),
+          }
+        : undefined
+
+      // Build per-category or aggregated vacancies
+      const hasVacanciesByCategory = product.vacanciesByCategory && product.vacanciesByCategory.length > 0
+
       if (product.type === "time_period" && product.openingTimes && product.openingTimes.length > 0) {
         // Time period entry: T00:00:00 with openingTimes
         const timePeriodDateTime = `${dateStr}T00:00:00${product.timezone}`
-        availabilities.push({
+        const item: any = {
           productId: product.id,
           dateTime: timePeriodDateTime,
-          vacancies,
           cutoffSeconds: product.cutoffSeconds,
           openingTimes: product.openingTimes,
           currency: product.currency,
           pricesByCategory,
-        })
+          ...(tieredPricesByCategory ? { tieredPricesByCategory } : {}),
+        }
+        if (hasVacanciesByCategory) {
+          item.vacanciesByCategory = product.vacanciesByCategory!.map((vc) => ({
+            category: vc.category,
+            vacancies: dateStr < todayStr ? 0 : Math.max(0, vc.defaultVacancies - booked),
+          }))
+        } else {
+          item.vacancies = vacancies
+        }
+        availabilities.push(item)
       } else {
         // Time point entry: specific departure time (e.g. 07:30 AM)
         const timePointDateTime = `${dateStr}T07:30:00${product.timezone}`
-        availabilities.push({
+        const item: any = {
           productId: product.id,
           dateTime: timePointDateTime,
-          vacancies,
           cutoffSeconds: product.cutoffSeconds,
           currency: product.currency,
           pricesByCategory,
-        })
+          ...(tieredPricesByCategory ? { tieredPricesByCategory } : {}),
+        }
+        if (hasVacanciesByCategory) {
+          item.vacanciesByCategory = product.vacanciesByCategory!.map((vc) => ({
+            category: vc.category,
+            vacancies: dateStr < todayStr ? 0 : Math.max(0, vc.defaultVacancies - booked),
+          }))
+        } else {
+          item.vacancies = vacancies
+        }
+        availabilities.push(item)
       }
 
       current.setDate(current.getDate() + 1)

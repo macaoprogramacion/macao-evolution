@@ -7,6 +7,9 @@ import cancelReservationHandler from "./cancel-reservation"
 import bookHandler from "./book"
 import cancelBookingHandler from "./cancel-booking"
 import notifyHandler from "./notify"
+import productListHandler from "./product-list"
+import productDetailsHandler from "./product-details"
+import addonsHandler from "./addons"
 
 /* ────────────────────────────────────────────────────────────────
    GYG Supplier API – Path-based Router
@@ -18,6 +21,9 @@ import notifyHandler from "./notify"
      POST /api/gyg/1/book/
      POST /api/gyg/1/cancel-booking/
      POST /api/gyg/1/notify/
+     GET  /api/gyg/1/suppliers/{supplierId}/products/
+     GET  /api/gyg/1/products/{productId}
+     GET  /api/gyg/1/products/{productId}/addons/
    ──────────────────────────────────────────────────────────────── */
 
 const routeMap: Record<string, (req: NextApiRequest, res: NextApiResponse) => Promise<void>> = {
@@ -43,9 +49,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     )
   }
 
-  // slugs[0] = "1" (API version), slugs[1] = endpoint name
+  // slugs[0] = "1" (API version), slugs[1+] = endpoint segments
   const version = slugs[0]
-  const endpoint = slugs[1]
 
   if (version !== "1") {
     return res.status(200).json(
@@ -53,6 +58,63 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     )
   }
 
+  // ── Multi-segment routes ──────────────────────────────────────────────
+  // GET /1/suppliers/{supplierId}/products/
+  if (slugs[1] === "suppliers" && slugs.length >= 4 && slugs[3] === "products") {
+    req.query.supplierId = slugs[2]
+    const shouldLog = req.method === "POST"
+    const logId = shouldLog ? await logWebhookRequest("suppliers/products", req) : null
+    const origJson = res.json.bind(res)
+    let capturedBody: any
+    res.json = (body: any) => { capturedBody = body; return origJson(body) }
+    try {
+      await productListHandler(req, res)
+      if (logId) { capturedBody?.errorCode ? markWebhookFailed(logId, capturedBody, capturedBody.errorMessage) : markWebhookSuccess(logId, capturedBody) }
+    } catch (err: any) {
+      if (logId) markWebhookFailed(logId, capturedBody, err.message)
+      if (!res.headersSent) return res.status(200).json(gygError("INTERNAL_SYSTEM_FAILURE", err.message || "Unexpected error."))
+    }
+    return
+  }
+
+  // GET /1/products/{productId}/addons/
+  if (slugs[1] === "products" && slugs.length >= 4 && slugs[3] === "addons") {
+    req.query.productId = slugs[2]
+    const shouldLog = req.method === "POST"
+    const logId = shouldLog ? await logWebhookRequest("products/addons", req) : null
+    const origJson = res.json.bind(res)
+    let capturedBody: any
+    res.json = (body: any) => { capturedBody = body; return origJson(body) }
+    try {
+      await addonsHandler(req, res)
+      if (logId) { capturedBody?.errorCode ? markWebhookFailed(logId, capturedBody, capturedBody.errorMessage) : markWebhookSuccess(logId, capturedBody) }
+    } catch (err: any) {
+      if (logId) markWebhookFailed(logId, capturedBody, err.message)
+      if (!res.headersSent) return res.status(200).json(gygError("INTERNAL_SYSTEM_FAILURE", err.message || "Unexpected error."))
+    }
+    return
+  }
+
+  // GET /1/products/{productId}
+  if (slugs[1] === "products" && slugs.length >= 3) {
+    req.query.productId = slugs[2]
+    const shouldLog = req.method === "POST"
+    const logId = shouldLog ? await logWebhookRequest("products/details", req) : null
+    const origJson = res.json.bind(res)
+    let capturedBody: any
+    res.json = (body: any) => { capturedBody = body; return origJson(body) }
+    try {
+      await productDetailsHandler(req, res)
+      if (logId) { capturedBody?.errorCode ? markWebhookFailed(logId, capturedBody, capturedBody.errorMessage) : markWebhookSuccess(logId, capturedBody) }
+    } catch (err: any) {
+      if (logId) markWebhookFailed(logId, capturedBody, err.message)
+      if (!res.headersSent) return res.status(200).json(gygError("INTERNAL_SYSTEM_FAILURE", err.message || "Unexpected error."))
+    }
+    return
+  }
+
+  // ── Simple single-segment routes ──────────────────────────────────────
+  const endpoint = slugs[1]
   const routeHandler = routeMap[endpoint]
   if (!routeHandler) {
     return res.status(200).json(

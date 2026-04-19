@@ -4,7 +4,7 @@ import type React from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, Plus, ClipboardList, LogOut, User } from "lucide-react"
+import { LayoutDashboard, Plus, ClipboardList, LogOut, User, History } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
@@ -12,6 +12,7 @@ const navigation = [
   { name: "Dashboard", href: "/sellers/dashboard", icon: LayoutDashboard },
   { name: "Nueva Reserva", href: "/sellers/dashboard/new-booking", icon: Plus },
   { name: "Mis Reservas", href: "/sellers/dashboard/bookings", icon: ClipboardList },
+  { name: "Historial", href: "/sellers/dashboard/history", icon: History },
 ]
 
 interface SellersLayoutProps {

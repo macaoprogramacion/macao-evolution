@@ -1,6 +1,6 @@
 import type { NextApiRequest } from "next"
 import { timingSafeEqual } from "crypto"
-import type { GygError, GygErrorCode } from "./types"
+import type { GygError, GygErrorCode, AddonType, TicketCategory } from "./types"
 
 // ─── Authentication ─────────────────────────────────────────────────────────
 
@@ -46,17 +46,35 @@ export function authError() {
 
 export type DestinationTable = "saona_reservations" | "samana_reservations"
 
+export interface AddonConfig {
+  addonType: AddonType
+  retailPrice: number
+  currency: string
+  addonDescription?: string
+}
+
+export interface TieredPriceConfig {
+  category: TicketCategory
+  tiers: { minParticipants: number; maxParticipants: number; price: number }[]
+}
+
 export interface ProductConfig {
   id: string
   name: string
+  description: string
   type: "time_point" | "time_period"
   timezone: string // UTC offset, e.g. "-04:00" for Dominican Republic (AST)
   destinationTable: DestinationTable
+  destinationLocation: { city: string; country: string }
   defaultVacancies: number
+  /** Per-category vacancy limits; if set, availability is reported per category */
+  vacanciesByCategory?: { category: TicketCategory; defaultVacancies: number }[]
   minParticipants: number
   maxParticipants: number
   currency: string
   prices: { category: string; price: number }[]
+  tieredPrices?: TieredPriceConfig[]
+  addons?: AddonConfig[]
   openingTimes?: { fromTime: string; toTime: string }[]
   cutoffSeconds: number
   reserveHoldMinutes: number
@@ -64,14 +82,19 @@ export interface ProductConfig {
   extraInsertFields?: Record<string, any>
 }
 
+export const SUPPLIER_ID = process.env.GYG_SUPPLIER_ID || "macao-tours"
+export const SUPPLIER_NAME = process.env.GYG_SUPPLIER_NAME || "Macao Tours"
+
 export const PRODUCTS: Record<string, ProductConfig> = {
   // ─── SAONA (GYG product 909291) ─────────────────────────────────
   "909291": {
     id: "909291",
     name: "Saona Island Tour",
+    description: "Full-day excursion to Saona Island with catamaran ride, lunch, and drinks included. Enjoy pristine beaches and natural pools in one of the most beautiful Caribbean destinations.",
     type: "time_point",
     timezone: "-04:00",
     destinationTable: "saona_reservations",
+    destinationLocation: { city: "Punta Cana", country: "DOM" },
     defaultVacancies: 50,
     minParticipants: 1,
     maxParticipants: 30,
@@ -79,6 +102,11 @@ export const PRODUCTS: Record<string, ProductConfig> = {
     prices: [
       { category: "ADULT", price: 9500 },  // $95.00
       { category: "CHILD", price: 6500 },  // $65.00
+    ],
+    addons: [
+      { addonType: "FOOD", retailPrice: 1500, currency: "USD", addonDescription: "Premium lunch upgrade" },
+      { addonType: "DRINKS", retailPrice: 1000, currency: "USD", addonDescription: "Premium drink package" },
+      { addonType: "TRANSPORT", retailPrice: 2500, currency: "USD", addonDescription: "Hotel pickup shuttle" },
     ],
     openingTimes: [
       { fromTime: "06:00", toTime: "18:00" },
@@ -96,9 +124,11 @@ export const PRODUCTS: Record<string, ProductConfig> = {
   "1068932": {
     id: "1068932",
     name: "Samaná Tour",
+    description: "Full-day adventure to the Samaná Peninsula including visits to Limón waterfall, whale watching (seasonal), and the charming town of Las Terrenas.",
     type: "time_point",
     timezone: "-04:00",
     destinationTable: "samana_reservations",
+    destinationLocation: { city: "Punta Cana", country: "DOM" },
     defaultVacancies: 40,
     minParticipants: 1,
     maxParticipants: 25,
@@ -106,6 +136,10 @@ export const PRODUCTS: Record<string, ProductConfig> = {
     prices: [
       { category: "ADULT", price: 11500 }, // $115.00
       { category: "CHILD", price: 7500 },  // $75.00
+    ],
+    addons: [
+      { addonType: "FOOD", retailPrice: 1500, currency: "USD", addonDescription: "Premium lunch upgrade" },
+      { addonType: "TRANSPORT", retailPrice: 3000, currency: "USD", addonDescription: "Hotel pickup shuttle" },
     ],
     openingTimes: [
       { fromTime: "06:00", toTime: "19:00" },

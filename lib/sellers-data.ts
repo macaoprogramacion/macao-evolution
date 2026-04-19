@@ -337,3 +337,66 @@ export function getRepById(id: string) {
 export function getBookingsByRep(repId: string) {
   return mockBookings.filter((b) => b.repId === repId)
 }
+
+// ─── History helpers ───────────────────────────────────────────────
+
+/** Get all unique dates that have bookings for this rep, sorted descending */
+export function getBookingDatesByRep(repId: string): string[] {
+  const bookings = getBookingsByRep(repId)
+  const dates = [...new Set(bookings.map((b) => b.date))]
+  return dates.sort((a, b) => b.localeCompare(a))
+}
+
+/** Get bookings for a specific rep + date */
+export function getBookingsByRepAndDate(repId: string, date: string): Booking[] {
+  return mockBookings.filter((b) => b.repId === repId && b.date === date)
+}
+
+/** Daily summary (cierre) for a rep on a given date */
+export interface DailySummary {
+  date: string
+  totalBookings: number
+  totalGuests: number
+  totalSales: number
+  totalCollected: number
+  totalPending: number
+  commission: number
+  commissionPercent: number
+  byStatus: Record<string, number>
+  byExperience: Record<string, { count: number; revenue: number }>
+}
+
+export function getDailySummary(repId: string, date: string): DailySummary | null {
+  const rep = getRepById(repId)
+  if (!rep) return null
+  const bookings = getBookingsByRepAndDate(repId, date)
+  if (bookings.length === 0) return null
+
+  const totalSales = bookings.reduce((s, b) => s + b.salePrice, 0)
+  const totalCollected = bookings.reduce((s, b) => s + b.amountPaid, 0)
+  const totalPending = bookings.reduce((s, b) => s + b.amountPending, 0)
+  const totalGuests = bookings.reduce((s, b) => s + b.guestCount, 0)
+
+  const byStatus: Record<string, number> = {}
+  const byExperience: Record<string, { count: number; revenue: number }> = {}
+
+  for (const b of bookings) {
+    byStatus[b.status] = (byStatus[b.status] || 0) + 1
+    if (!byExperience[b.experience]) byExperience[b.experience] = { count: 0, revenue: 0 }
+    byExperience[b.experience].count++
+    byExperience[b.experience].revenue += b.salePrice
+  }
+
+  return {
+    date,
+    totalBookings: bookings.length,
+    totalGuests,
+    totalSales,
+    totalCollected,
+    totalPending,
+    commission: totalSales * (rep.commissionPercent / 100),
+    commissionPercent: rep.commissionPercent,
+    byStatus,
+    byExperience,
+  }
+}

@@ -24,6 +24,9 @@ import cancelReservationHandler from "./cancel-reservation"
 import bookHandler from "./book"
 import cancelBookingHandler from "./cancel-booking"
 import notifyHandler from "./notify"
+import productListHandler from "./product-list"
+import productDetailsHandler from "./product-details"
+import addonsHandler from "./addons"
 
 const handlers: Record<string, (req: NextApiRequest, res: NextApiResponse) => Promise<void>> = {
   "get-availabilities": availabilityHandler,
@@ -33,6 +36,9 @@ const handlers: Record<string, (req: NextApiRequest, res: NextApiResponse) => Pr
   book: bookHandler,
   "cancel-booking": cancelBookingHandler,
   notify: notifyHandler,
+  "product-list": productListHandler,
+  "product-details": productDetailsHandler,
+  addons: addonsHandler,
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

@@ -69,12 +69,16 @@ export interface RetailPrice {
 export interface AvailabilityItem {
   productId: string
   dateTime: string
-  vacancies: number
+  vacancies?: number
+  vacanciesByCategory?: { category: TicketCategory; vacancies: number }[]
   cutoffSeconds?: number
   openingTimes?: OpeningTime[]
   currency?: string
   pricesByCategory?: {
     retailPrices: RetailPrice[]
+  }
+  tieredPricesByCategory?: {
+    tieredRetailPrices: TieredPrice[]
   }
 }
 
@@ -176,6 +180,71 @@ export interface BookingCancellationRequest {
     gygBookingReference: string
     productId: string
   }
+}
+
+// ─── Product List ───────────────────────────────────────────────────────────
+export interface SupplierProduct {
+  productId: string
+  productTitle: string
+}
+
+export interface SupplierProductsResponse {
+  data: {
+    supplierId: string
+    supplierName: string
+    products: SupplierProduct[]
+  }
+}
+
+// ─── Product Details ────────────────────────────────────────────────────────
+export interface ProductDetailsResponse {
+  data: {
+    supplierId: string
+    productTitle: string
+    productDescription: string
+    destinationLocation: {
+      city: string
+      country: string
+    }
+    configuration: {
+      participantsConfiguration: {
+        min: number
+        max: number
+      }
+    }
+  }
+}
+
+// ─── Addons ─────────────────────────────────────────────────────────────────
+export type AddonType = "FOOD" | "DRINKS" | "SAFETY" | "TRANSPORT" | "DONATION" | "OTHERS"
+
+export interface Addon {
+  addonType: AddonType
+  retailPrice: number
+  currency: string
+  addonDescription?: string
+}
+
+export interface AddonsResponse {
+  data: {
+    addons: Addon[]
+  }
+}
+
+// ─── Tiered Pricing ─────────────────────────────────────────────────────────
+export interface TieredPrice {
+  category: TicketCategory
+  tiers: {
+    minParticipants: number
+    maxParticipants: number
+    price: number
+  }[]
+}
+
+// ─── Availability By Ticket Category ────────────────────────────────────────
+export interface VacancyByCategory {
+  category: TicketCategory
+  vacancies: number
 }
 
 // ─── Empty Success ──────────────────────────────────────────────────────────
