@@ -136,16 +136,26 @@ function fmtMoney(amount: number, currency = "USD") {
   return `${symbols[currency] || "$"} ${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
 }
 
-function fmtDate(ts: string) {
-  return new Date(ts).toLocaleDateString("es-DO", {
+function parseSafeDate(value?: string | null) {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function fmtDate(ts?: string | null) {
+  const date = parseSafeDate(ts)
+  if (!date) return "—"
+  return date.toLocaleDateString("es-DO", {
     day: "numeric",
     month: "short",
     year: "numeric",
   })
 }
 
-function fmtTime(ts: string) {
-  return new Date(ts).toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" })
+function fmtTime(ts?: string | null) {
+  const date = parseSafeDate(ts)
+  if (!date) return "—"
+  return date.toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" })
 }
 
 const statusBadge = (status: string) => {
@@ -232,8 +242,8 @@ export default function PhotographyPage() {
               total: parseFloat(inv.total) || 0,
               currency: inv.currency || "USD",
               status: inv.status || "active",
-              date: new Date(inv.created_at).toLocaleDateString("es-DO"),
-              timestamp: inv.created_at,
+              date: fmtDate(inv.created_at),
+              timestamp: inv.created_at || "",
             }))
           )
         }
@@ -253,8 +263,8 @@ export default function PhotographyPage() {
               amount: parseFloat(r.amount) || 0,
               reason: r.reason || "",
               status: r.status || "pendiente",
-              date: new Date(r.created_at).toLocaleDateString("es-DO"),
-              timestamp: r.created_at,
+              date: fmtDate(r.created_at),
+              timestamp: r.created_at || "",
             }))
           )
         }
@@ -333,10 +343,16 @@ export default function PhotographyPage() {
     const todayInvoices = activeInvoices.filter((i) => i.date === todayStr)
     const salesToday = todayInvoices.reduce((s, i) => s + i.total, 0)
     const salesWeek = activeInvoices
-      .filter((i) => new Date(i.timestamp) >= weekAgo)
+      .filter((i) => {
+        const date = parseSafeDate(i.timestamp)
+        return !!date && date >= weekAgo
+      })
       .reduce((s, i) => s + i.total, 0)
     const salesMonth = activeInvoices
-      .filter((i) => new Date(i.timestamp) >= monthAgo)
+      .filter((i) => {
+        const date = parseSafeDate(i.timestamp)
+        return !!date && date >= monthAgo
+      })
       .reduce((s, i) => s + i.total, 0)
 
     // Returns
@@ -349,7 +365,10 @@ export default function PhotographyPage() {
     // Photo sales (online)
     const onlineSalesTotal = photoSales.reduce((s, ps) => s + ps.amount, 0)
     const todayOnline = photoSales.filter(
-      (ps) => new Date(ps.timestamp).toLocaleDateString("es-DO") === todayStr
+      (ps) => {
+        const date = parseSafeDate(ps.timestamp)
+        return !!date && date.toLocaleDateString("es-DO") === todayStr
+      }
     )
     const onlineSalesToday = todayOnline.reduce((s, ps) => s + ps.amount, 0)
 
@@ -423,10 +442,16 @@ export default function PhotographyPage() {
         )
       } else if (dateFilter === "week") {
         cutoff.setDate(cutoff.getDate() - 7)
-        filtered = filtered.filter((i) => new Date(i.timestamp) >= cutoff)
+        filtered = filtered.filter((i) => {
+          const date = parseSafeDate(i.timestamp)
+          return !!date && date >= cutoff
+        })
       } else if (dateFilter === "month") {
         cutoff.setMonth(cutoff.getMonth() - 1)
-        filtered = filtered.filter((i) => new Date(i.timestamp) >= cutoff)
+        filtered = filtered.filter((i) => {
+          const date = parseSafeDate(i.timestamp)
+          return !!date && date >= cutoff
+        })
       }
     }
     return filtered
@@ -460,12 +485,16 @@ export default function PhotographyPage() {
     allInvoices
       .filter((i) => i.status !== "cancelled")
       .forEach((inv) => {
-        const key = new Date(inv.timestamp).toISOString().split("T")[0]
+        const date = parseSafeDate(inv.timestamp)
+        if (!date) return
+        const key = date.toISOString().split("T")[0]
         if (map[key]) map[key].cashier += inv.total
       })
 
     photoSales.forEach((ps) => {
-      const key = new Date(ps.timestamp).toISOString().split("T")[0]
+      const date = parseSafeDate(ps.timestamp)
+      if (!date) return
+      const key = date.toISOString().split("T")[0]
       if (map[key]) map[key].online += ps.amount
     })
 
