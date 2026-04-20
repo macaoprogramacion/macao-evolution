@@ -123,7 +123,39 @@ const sidebarItems = [
 ];
 
 // Usuario Panel Component
-function UsuarioPanel() {
+function UsuarioPanel({ user, invoices, onLogout }) {
+  // Real stats from actual invoices
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const activeInvoices = invoices.filter(i => i.status !== 'cancelled');
+  const monthInvoices = activeInvoices.filter(i => new Date(i.timestamp) >= monthStart);
+  const ventasMes = monthInvoices.length;
+  const totalMes = monthInvoices.reduce((s, i) => s + i.total, 0);
+
+  // Exchange rates state
+  const [rates, setRates] = useState(() => {
+    try {
+      const stored = localStorage.getItem('macao_exchange_rates');
+      return stored ? JSON.parse(stored) : { USD: 1, EUR: 1.08, DOP: 0.0167 };
+    } catch { return { USD: 1, EUR: 1.08, DOP: 0.0167 }; }
+  });
+  const [editingRates, setEditingRates] = useState(false);
+
+  const saveRates = (newRates) => {
+    setRates(newRates);
+    localStorage.setItem('macao_exchange_rates', JSON.stringify(newRates));
+  };
+
+  const roleLabels = {
+    billing: 'Cajero(a)',
+    photographer: 'Fotógrafo(a)',
+    both: 'Fotógrafo(a) / Cajero(a)',
+    admin: 'Administrador',
+    operaciones: 'Operaciones',
+    chofer: 'Chofer',
+    contabilidad: 'Contabilidad',
+  };
+
   return (
     <div className="flex-1 flex flex-col lg:flex-row gap-6">
       {/* User Profile */}
@@ -137,21 +169,74 @@ function UsuarioPanel() {
               <User className="w-12 h-12 text-[#DC2626]" />
             </div>
             <div>
-              <h2 className="text-white text-2xl font-title">Carlos Mendez</h2>
-              <p className="text-white/70">Fotógrafo Senior</p>
-              <p className="text-white/50 text-sm mt-1">carlos.mendez@macao.com</p>
+              <h2 className="text-white text-2xl font-title">{user.name || 'Usuario'}</h2>
+              <p className="text-white/70">{roleLabels[user.role] || user.role || 'Cajero(a)'}</p>
+              {user.email && <p className="text-white/50 text-sm mt-1">{user.email}</p>}
+              {user.phone && <p className="text-white/50 text-sm">{user.phone}</p>}
             </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 bg-black/15 rounded-2xl text-center">
-              <p className="text-white text-2xl font-bold">156</p>
+              <p className="text-white text-2xl font-bold">{ventasMes}</p>
               <p className="text-white/70 text-xs">Ventas Este Mes</p>
             </div>
             <div className="p-4 bg-black/15 rounded-2xl text-center">
-              <p className="text-white text-2xl font-bold">US$ 234K</p>
+              <p className="text-white text-2xl font-bold">{fmtMoney(totalMes)}</p>
               <p className="text-white/70 text-xs">Total Vendido</p>
             </div>
+          </div>
+        </div>
+
+        {/* Exchange Rates */}
+        <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-6 border border-white/20 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#DC2626]/20 flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-[#DC2626]" />
+              </div>
+              <div>
+                <h3 className="text-white font-semibold">Tasas de Cambio</h3>
+                <p className="text-white/50 text-xs">Equivalencia a 1 USD</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setEditingRates(!editingRates)}
+              className="text-xs px-3 py-1.5 rounded-xl bg-white/10 text-white/70 hover:bg-white/20 transition-colors flex items-center gap-1.5"
+            >
+              <Edit className="w-3 h-3" />
+              {editingRates ? 'Cerrar' : 'Editar Tasas'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            {Object.entries(CURRENCY_SYMBOLS).map(([cur, symbol]) => (
+              <div key={cur} className="p-3 bg-black/15 rounded-2xl">
+                <p className="text-white/50 text-xs mb-1">{symbol} ({cur})</p>
+                {editingRates && cur !== 'USD' ? (
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={rates[cur] || ''}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      if (!isNaN(val) && val > 0) saveRates({ ...rates, [cur]: val });
+                    }}
+                    className="w-full bg-black/30 rounded-xl px-3 py-1.5 text-white text-sm border border-white/20 focus:outline-none focus:ring-1 focus:ring-[#DC2626]/30"
+                  />
+                ) : (
+                  <p className="text-white font-semibold">{cur === 'USD' ? '1.0000' : (rates[cur] || 0).toFixed(4)}</p>
+                )}
+                {cur !== 'USD' && (
+                  <p className="text-white/40 text-[10px] mt-1">
+                    1 {cur} = {cur === 'DOP'
+                      ? `${(rates['DOP'] || 0.0167).toFixed(4)} USD`
+                      : `${(rates[cur] || 1).toFixed(4)} USD`
+                    }
+                  </p>
+                )}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -160,14 +245,14 @@ function UsuarioPanel() {
           <h3 className="text-white font-semibold mb-4">Configuración Rápida</h3>
           <div className="space-y-3">
             {[
-              { icon: Settings, label: 'Configuración General', desc: 'Preferencias del sistema' },
               { icon: Bell, label: 'Notificaciones', desc: 'Alertas y sonidos' },
               { icon: CreditCard, label: 'Métodos de Pago', desc: 'Configurar métodos' },
-              { icon: LogOut, label: 'Cerrar Sesión', desc: 'Salir de la cuenta' },
+              { icon: LogOut, label: 'Cerrar Sesión', desc: 'Salir de la cuenta', action: onLogout },
             ].map((item, i) => (
               <motion.button
                 key={i}
                 whileHover={{ x: 4 }}
+                onClick={item.action || undefined}
                 className="w-full flex items-center gap-4 p-4 bg-black/15 rounded-2xl hover:bg-black/20 transition-colors"
               >
                 <div className="w-10 h-10 rounded-xl bg-[#DC2626]/20 flex items-center justify-center">
@@ -1622,12 +1707,21 @@ export default function BillingPage() {
   const [products, setProducts] = useState(DEFAULT_PRODUCTS);
   const [editingProduct, setEditingProduct] = useState(null);
   const [billingUserName, setBillingUserName] = useState('');
+  const [billingUser, setBillingUser] = useState({ name: '', email: '', phone: '', role: 'billing' });
 
   // Read user from session
   useEffect(() => {
     try {
       const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || 'null');
-      if (session && session.active) setBillingUserName(session.name);
+      if (session && session.active) {
+        setBillingUserName(session.name);
+        setBillingUser({
+          name: session.name || '',
+          email: session.email || '',
+          phone: session.phone || '',
+          role: session.role || 'billing',
+        });
+      }
     } catch {}
   }, []);
 
@@ -2218,7 +2312,7 @@ export default function BillingPage() {
 
       {activeTab === 'usuario' && (
         <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
-          <UsuarioPanel />
+          <UsuarioPanel user={billingUser} invoices={invoices} onLogout={handleBillingLogout} />
         </main>
       )}
 
