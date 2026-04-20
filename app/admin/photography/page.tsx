@@ -130,6 +130,8 @@ interface PricingItem {
   updated_at: string
 }
 
+type ReturnDecision = "aprobada" | "rechazada"
+
 // ─── Helpers ────────────────────────────────────────────────────────
 function fmtMoney(amount: number, currency = "USD") {
   const symbols: Record<string, string> = { USD: "US$", EUR: "€", DOP: "RD$" }
@@ -156,6 +158,21 @@ function fmtTime(ts?: string | null) {
   const date = parseSafeDate(ts)
   if (!date) return "—"
   return date.toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" })
+}
+
+function normalizeReturn(raw: any): Return {
+  const timestamp = raw.timestamp || raw.created_at || ""
+  const invoiceNumber = raw.invoiceNumber || raw.invoice || raw.invoice_number || ""
+  return {
+    id: raw.id ?? `${invoiceNumber || "ret"}-${timestamp || "no-ts"}`,
+    invoiceNumber,
+    clientName: raw.clientName || raw.client || raw.client_name || "Cliente General",
+    amount: Number.parseFloat(raw.amount) || 0,
+    reason: raw.reason || "",
+    status: raw.status || "pendiente",
+    date: raw.date || fmtDate(timestamp),
+    timestamp,
+  }
 }
 
 const statusBadge = (status: string) => {
@@ -205,13 +222,15 @@ export default function PhotographyPage() {
   const [pricingLoading, setPricingLoading] = useState(true)
   const [editingPrice, setEditingPrice] = useState<PricingItem | null>(null)
   const [savingPrice, setSavingPrice] = useState(false)
+  const [processingReturnId, setProcessingReturnId] = useState<string | null>(null)
 
   // ─── Load data ──────────────────────────────────────────────────
   useEffect(() => {
     // localStorage data (wrapped defensively)
     try {
       setInvoices(getInvoices())
-      setReturns(getReturns())
+      const localReturns = (getReturns() || []).map((r: any) => normalizeReturn(r))
+      setReturns(localReturns)
       setPhotoSales(getPhotoSales())
       setPortfolios(getPortfolios())
     } catch (err) {
@@ -256,16 +275,7 @@ export default function PhotographyPage() {
 
         if (sbReturns) {
           setSupabaseReturns(
-            sbReturns.map((r: any) => ({
-              id: r.id,
-              invoiceNumber: r.invoice_number,
-              clientName: r.client_name,
-              amount: parseFloat(r.amount) || 0,
-              reason: r.reason || "",
-              status: r.status || "pendiente",
-              date: fmtDate(r.created_at),
-              timestamp: r.created_at || "",
-            }))
+            sbReturns.map((r: any) => normalizeReturn(r))
           )
         }
       } catch (err) {
@@ -315,6 +325,78 @@ export default function PhotographyPage() {
       alert("Error al guardar el precio")
     } finally {
       setSavingPrice(false)
+    }
+  }
+
+  async function handleReturnDecision(item: Return, decision: ReturnDecision) {
+    const invoiceNumber = item.invoiceNumber?.trim()
+    if (!invoiceNumber) {
+      alert("No se puede procesar: esta devolución no tiene número de factura")
+      return
+    }
+
+    try {
+      setProcessingReturnId(String(item.id))
+
+      const { error: retError } = await supabase
+        .from("photo_returns")
+        .update({ status: decision, updated_at: new Date().toISOString() })
+        .eq("invoice_number", invoiceNumber)
+      if (retError) throw retError
+
+      if (decision === "aprobada") {
+        const { error: invoiceError } = await supabase
+          .from("photo_invoices")
+          .update({
+            status: "cancelled",
+            cancelled_at: new Date().toISOString(),
+            cancel_reason: item.reason || "Devolución aprobada",
+          })
+          .eq("invoice_number", invoiceNumber)
+        if (invoiceError) throw invoiceError
+      } else {
+        const { error: invoiceError } = await supabase
+          .from("photo_invoices")
+          .update({
+            status: "active",
+            cancelled_at: null,
+            cancel_reason: null,
+          })
+          .eq("invoice_number", invoiceNumber)
+        if (invoiceError) throw invoiceError
+      }
+
+      setSupabaseReturns((prev) =>
+        prev.map((r) =>
+          r.id === item.id || r.invoiceNumber === invoiceNumber
+            ? { ...r, status: decision }
+            : r
+        )
+      )
+      setReturns((prev) =>
+        prev.map((r) =>
+          r.id === item.id || r.invoiceNumber === invoiceNumber
+            ? { ...r, status: decision }
+            : r
+        )
+      )
+
+      const nextInvoiceStatus = decision === "aprobada" ? "cancelled" : "active"
+      setSupabaseInvoices((prev) =>
+        prev.map((inv) =>
+          inv.invoiceNumber === invoiceNumber ? { ...inv, status: nextInvoiceStatus } : inv
+        )
+      )
+      setInvoices((prev) =>
+        prev.map((inv) =>
+          inv.invoiceNumber === invoiceNumber ? { ...inv, status: nextInvoiceStatus } : inv
+        )
+      )
+    } catch (err) {
+      console.error("[Admin Photography] Return decision error:", err)
+      alert("Error al procesar la decisión. Intenta nuevamente.")
+    } finally {
+      setProcessingReturnId(null)
     }
   }
 
@@ -876,12 +958,13 @@ export default function PhotographyPage() {
                         <TableHead className="text-xs">Motivo</TableHead>
                         <TableHead className="text-xs">Estado</TableHead>
                         <TableHead className="text-xs">Fecha</TableHead>
+                        <TableHead className="text-xs text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredReturns.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-12 text-gray-400">
+                          <TableCell colSpan={7} className="text-center py-12 text-gray-400">
                             <RotateCcw className="w-8 h-8 mx-auto mb-2 opacity-50" />
                             No hay devoluciones
                           </TableCell>
@@ -889,12 +972,44 @@ export default function PhotographyPage() {
                       ) : (
                         filteredReturns.map((r) => (
                           <TableRow key={r.id}>
-                            <TableCell className="text-xs font-mono font-medium">{r.invoiceNumber}</TableCell>
+                            <TableCell className="text-xs font-mono font-medium">{r.invoiceNumber || "—"}</TableCell>
                             <TableCell className="text-xs">{r.clientName}</TableCell>
                             <TableCell className="text-xs text-right font-semibold text-red-600">{fmtMoney(r.amount)}</TableCell>
                             <TableCell className="text-xs text-gray-500 max-w-[200px] truncate">{r.reason || "—"}</TableCell>
                             <TableCell className="text-xs">{statusBadge(r.status)}</TableCell>
                             <TableCell className="text-xs text-gray-500">{r.date || "—"}</TableCell>
+                            <TableCell className="text-right">
+                              {r.status === "pendiente" ? (
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 px-2 text-xs text-green-700 border-green-200 hover:bg-green-50"
+                                    disabled={processingReturnId === String(r.id)}
+                                    onClick={() => handleReturnDecision(r, "aprobada")}
+                                  >
+                                    {processingReturnId === String(r.id) ? (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                      <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                                    )}
+                                    Aprobar
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 px-2 text-xs text-red-700 border-red-200 hover:bg-red-50"
+                                    disabled={processingReturnId === String(r.id)}
+                                    onClick={() => handleReturnDecision(r, "rechazada")}
+                                  >
+                                    <XCircle className="w-3.5 h-3.5 mr-1" />
+                                    Rechazar
+                                  </Button>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">Procesada</span>
+                              )}
+                            </TableCell>
                           </TableRow>
                         ))
                       )}
