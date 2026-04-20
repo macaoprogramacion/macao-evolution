@@ -1762,11 +1762,41 @@ export default function BillingPage() {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [currentInvoice, setCurrentInvoice] = useState(null);
   
-  // Load invoices from localStorage on mount
+  // Load invoices from localStorage on mount + sync ALL to Supabase
   useEffect(() => {
     const stored = getStoredInvoices();
     setInvoices(stored);
     setNextInvoiceNum(getNextInvoiceNumber());
+
+    // Sync all localStorage invoices to Supabase (upsert = safe for duplicates)
+    async function syncAllInvoicesToSupabase() {
+      try {
+        if (stored.length === 0) return;
+        // Build rows for Supabase from localStorage invoices
+        const rows = stored.filter(inv => inv.invoiceNumber && inv.status === 'active').map(inv => ({
+          invoice_number: inv.invoiceNumber,
+          client_name: inv.clientName || 'Cliente General',
+          client_phone: inv.clientPhone || null,
+          turno: inv.turno || 'Turno 9:00',
+          photographer: inv.photographer || null,
+          source: inv.source || 'billing',
+          date: inv.date || null,
+          items: inv.items || [],
+          subtotal: inv.subtotal || 0,
+          tax: inv.tax || 0,
+          total: inv.total || 0,
+          currency: inv.currency || 'USD',
+          status: inv.status || 'active',
+        }));
+        if (rows.length === 0) return;
+        const { error } = await supabase.from('photo_invoices').upsert(rows, { onConflict: 'invoice_number' });
+        if (error) console.warn('[Billing] Bulk sync error:', error.message);
+        else console.log(`[Billing] Synced ${rows.length} invoices to Supabase`);
+      } catch (err) {
+        console.warn('[Billing] Sync invoices failed:', err);
+      }
+    }
+    syncAllInvoicesToSupabase();
   }, []);
 
   // Load photographers from Supabase
@@ -1880,8 +1910,8 @@ export default function BillingPage() {
       status: 'active',
     };
     
-    // Save to Supabase (non-blocking — localStorage is the primary store)
-    supabase.from('photo_invoices').insert({
+    // Save to Supabase (awaited — with offline fallback queue)
+    const supabaseRow = {
       invoice_number: invoiceNum,
       client_name: clientName || 'Cliente General',
       client_phone: clientPhone || null,
@@ -1895,9 +1925,21 @@ export default function BillingPage() {
       total,
       currency: currency,
       status: 'active',
-    }).then(({ error }) => {
-      if (error) console.warn('Supabase insert error (offline fallback active):', error.message);
-    });
+    };
+    try {
+      const { error: sbErr } = await supabase.from('photo_invoices').insert(supabaseRow);
+      if (sbErr) {
+        console.warn('Supabase insert error, queuing for sync:', sbErr.message);
+        const pending = JSON.parse(localStorage.getItem('macao_invoices_pending_sync') || '[]');
+        pending.push(supabaseRow);
+        localStorage.setItem('macao_invoices_pending_sync', JSON.stringify(pending));
+      }
+    } catch (err) {
+      console.warn('Supabase insert failed (offline), queuing for sync:', err);
+      const pending = JSON.parse(localStorage.getItem('macao_invoices_pending_sync') || '[]');
+      pending.push(supabaseRow);
+      localStorage.setItem('macao_invoices_pending_sync', JSON.stringify(pending));
+    }
 
     // Also save to localStorage (offline fallback)
     const updatedInvoices = [...invoices, newInvoice];
