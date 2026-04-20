@@ -1,0 +1,1408 @@
+"use client"
+
+import { useState, useEffect, useMemo } from "react"
+import { DashboardLayout } from "@/components/admin/dashboard-layout"
+import {
+  Camera,
+  DollarSign,
+  FileText,
+  RotateCcw,
+  ShoppingCart,
+  Globe,
+  Store,
+  Clock,
+  TrendingUp,
+  TrendingDown,
+  Users,
+  Eye,
+  Search,
+  Calendar,
+  Filter,
+  Download,
+  Image as ImageIcon,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  FolderOpen,
+  CreditCard,
+  Edit,
+  Save,
+  Tag,
+  Package,
+  Video,
+  Loader2,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Progress } from "@/components/ui/progress"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { supabase } from "@/lib/supabase"
+import {
+  getInvoices,
+  getReturns,
+  getPhotoSales,
+  getPortfolios,
+  getBillingClients,
+  calculateFinanceStats,
+  calculateSalesByTurno,
+} from "@/lib/store"
+
+// ─── Types ──────────────────────────────────────────────────────────
+interface Invoice {
+  id: number | string
+  invoiceNumber: string
+  clientName: string
+  clientPhone?: string
+  turno: string
+  photographer?: string
+  items: { name: string; price: number; quantity: number }[]
+  subtotal: number
+  tax: number
+  total: number
+  currency: string
+  status: string
+  date: string
+  timestamp: string
+}
+
+interface Return {
+  id: number | string
+  invoiceNumber: string
+  clientName: string
+  amount: number
+  reason: string
+  status: string
+  date?: string
+  timestamp?: string
+}
+
+interface PhotoSale {
+  id: number | string
+  phone: string
+  client_name?: string
+  plan: string
+  amount: number
+  timestamp: string
+  source?: string
+}
+
+interface Portfolio {
+  id: string
+  client_name?: string
+  clientName?: string
+  phone?: string
+  status: string
+  invoice_code?: string
+  invoiceCode?: string
+  source?: string
+  turno?: string
+  photographer_name?: string
+  photographerName?: string
+  created_at?: string
+  createdAt?: string
+}
+
+interface PricingItem {
+  id: number
+  code: string
+  name: string
+  price: number
+  description: string
+  category: string
+  min_photos: number | null
+  max_photos: number | null
+  sort_order: number
+  active: boolean
+  updated_at: string
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────
+function fmtMoney(amount: number, currency = "USD") {
+  const symbols: Record<string, string> = { USD: "US$", EUR: "€", DOP: "RD$" }
+  return `${symbols[currency] || "$"} ${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+}
+
+function fmtDate(ts: string) {
+  return new Date(ts).toLocaleDateString("es-DO", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
+}
+
+function fmtTime(ts: string) {
+  return new Date(ts).toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" })
+}
+
+const statusBadge = (status: string) => {
+  switch (status) {
+    case "active":
+      return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Activa</Badge>
+    case "cancelled":
+      return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Cancelada</Badge>
+    case "pendiente":
+      return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Pendiente</Badge>
+    case "aprobada":
+    case "procesada":
+      return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Aprobada</Badge>
+    case "rechazada":
+      return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Rechazada</Badge>
+    default:
+      return <Badge variant="secondary">{status}</Badge>
+  }
+}
+
+const portfolioStatusBadge = (status: string) => {
+  switch (status) {
+    case "Vendido":
+      return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Vendido</Badge>
+    case "Pendiente":
+      return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Pendiente</Badge>
+    case "Descargado":
+      return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">Descargado</Badge>
+    default:
+      return <Badge variant="secondary">{status}</Badge>
+  }
+}
+
+export default function PhotographyPage() {
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [returns, setReturns] = useState<Return[]>([])
+  const [photoSales, setPhotoSales] = useState<PhotoSale[]>([])
+  const [portfolios, setPortfolios] = useState<Portfolio[]>([])
+  const [supabaseInvoices, setSupabaseInvoices] = useState<Invoice[]>([])
+  const [supabaseReturns, setSupabaseReturns] = useState<Return[]>([])
+  const [activeTab, setActiveTab] = useState("overview")
+  const [searchInvoice, setSearchInvoice] = useState("")
+  const [searchReturn, setSearchReturn] = useState("")
+  const [dateFilter, setDateFilter] = useState("all")
+  const [detailInvoice, setDetailInvoice] = useState<Invoice | null>(null)
+  const [pricing, setPricing] = useState<PricingItem[]>([])
+  const [pricingLoading, setPricingLoading] = useState(true)
+  const [editingPrice, setEditingPrice] = useState<PricingItem | null>(null)
+  const [savingPrice, setSavingPrice] = useState(false)
+
+  // ─── Load data ──────────────────────────────────────────────────
+  useEffect(() => {
+    // localStorage data
+    setInvoices(getInvoices())
+    setReturns(getReturns())
+    setPhotoSales(getPhotoSales())
+    setPortfolios(getPortfolios())
+
+    // Supabase data
+    async function fetchSupabase() {
+      try {
+        const { data: sbInvoices } = await supabase
+          .from("photo_invoices")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(500)
+
+        if (sbInvoices) {
+          setSupabaseInvoices(
+            sbInvoices.map((inv: any) => ({
+              id: inv.id,
+              invoiceNumber: inv.invoice_number,
+              clientName: inv.client_name,
+              clientPhone: inv.client_phone,
+              turno: inv.turno,
+              photographer: inv.photographer,
+              items: inv.items || [],
+              subtotal: parseFloat(inv.subtotal) || 0,
+              tax: parseFloat(inv.tax) || 0,
+              total: parseFloat(inv.total) || 0,
+              currency: inv.currency || "USD",
+              status: inv.status || "active",
+              date: new Date(inv.created_at).toLocaleDateString("es-DO"),
+              timestamp: inv.created_at,
+            }))
+          )
+        }
+
+        const { data: sbReturns } = await supabase
+          .from("photo_returns")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(200)
+
+        if (sbReturns) {
+          setSupabaseReturns(
+            sbReturns.map((r: any) => ({
+              id: r.id,
+              invoiceNumber: r.invoice_number,
+              clientName: r.client_name,
+              amount: parseFloat(r.amount) || 0,
+              reason: r.reason || "",
+              status: r.status || "pendiente",
+              date: new Date(r.created_at).toLocaleDateString("es-DO"),
+              timestamp: r.created_at,
+            }))
+          )
+        }
+      } catch (err) {
+        console.error("[Admin Photography] Supabase fetch error:", err)
+      }
+    }
+
+    fetchSupabase()
+    fetchPricing()
+  }, [])
+
+  async function fetchPricing() {
+    try {
+      setPricingLoading(true)
+      const { data, error } = await supabase
+        .from("photo_pricing")
+        .select("*")
+        .order("sort_order", { ascending: true })
+      if (error) throw error
+      if (data) setPricing(data)
+    } catch (err) {
+      console.error("[Admin Photography] Pricing fetch error:", err)
+    } finally {
+      setPricingLoading(false)
+    }
+  }
+
+  async function handleSavePrice(item: PricingItem) {
+    setSavingPrice(true)
+    try {
+      const { error } = await supabase
+        .from("photo_pricing")
+        .update({
+          name: item.name,
+          price: item.price,
+          description: item.description,
+          min_photos: item.min_photos,
+          max_photos: item.max_photos,
+          active: item.active,
+        })
+        .eq("id", item.id)
+      if (error) throw error
+      setPricing((prev) => prev.map((p) => (p.id === item.id ? { ...p, ...item, updated_at: new Date().toISOString() } : p)))
+      setEditingPrice(null)
+    } catch (err) {
+      console.error("[Admin Photography] Price save error:", err)
+      alert("Error al guardar el precio")
+    } finally {
+      setSavingPrice(false)
+    }
+  }
+
+  // ─── Merge data: prefer Supabase, fallback to localStorage ────
+  const allInvoices = useMemo(() => {
+    if (supabaseInvoices.length > 0) return supabaseInvoices
+    return invoices
+  }, [invoices, supabaseInvoices])
+
+  const allReturns = useMemo(() => {
+    if (supabaseReturns.length > 0) return supabaseReturns
+    return returns
+  }, [returns, supabaseReturns])
+
+  // ─── Computed stats ───────────────────────────────────────────
+  const stats = useMemo(() => {
+    const now = new Date()
+    const todayStr = now.toLocaleDateString("es-DO")
+    const weekAgo = new Date(now)
+    weekAgo.setDate(weekAgo.getDate() - 7)
+    const monthAgo = new Date(now)
+    monthAgo.setMonth(monthAgo.getMonth() - 1)
+
+    // Invoices
+    const activeInvoices = allInvoices.filter((i) => i.status !== "cancelled")
+    const todayInvoices = activeInvoices.filter((i) => i.date === todayStr)
+    const salesToday = todayInvoices.reduce((s, i) => s + i.total, 0)
+    const salesWeek = activeInvoices
+      .filter((i) => new Date(i.timestamp) >= weekAgo)
+      .reduce((s, i) => s + i.total, 0)
+    const salesMonth = activeInvoices
+      .filter((i) => new Date(i.timestamp) >= monthAgo)
+      .reduce((s, i) => s + i.total, 0)
+
+    // Returns
+    const approvedReturns = allReturns.filter(
+      (r) => r.status === "aprobada" || r.status === "procesada"
+    )
+    const returnsTotal = approvedReturns.reduce((s, r) => s + r.amount, 0)
+    const pendingReturns = allReturns.filter((r) => r.status === "pendiente")
+
+    // Photo sales (online)
+    const onlineSalesTotal = photoSales.reduce((s, ps) => s + ps.amount, 0)
+    const todayOnline = photoSales.filter(
+      (ps) => new Date(ps.timestamp).toLocaleDateString("es-DO") === todayStr
+    )
+    const onlineSalesToday = todayOnline.reduce((s, ps) => s + ps.amount, 0)
+
+    // Portfolios
+    const paidAtCashier = portfolios.filter(
+      (p) => (p.source === "billing" || p.invoice_code || p.invoiceCode) && p.status === "Vendido"
+    ).length
+    const purchasedOnWeb = portfolios.filter(
+      (p) => p.source === "web" || p.source === "gallery" || p.source === "online"
+    ).length
+    const totalPortfolios = portfolios.length
+    const soldPortfolios = portfolios.filter((p) => p.status === "Vendido").length
+    const pendingPortfolios = portfolios.filter((p) => p.status === "Pendiente").length
+
+    // By currency
+    const byCurrency: Record<string, { total: number; count: number }> = {}
+    activeInvoices.forEach((inv) => {
+      const cur = inv.currency || "USD"
+      if (!byCurrency[cur]) byCurrency[cur] = { total: 0, count: 0 }
+      byCurrency[cur].total += inv.total
+      byCurrency[cur].count++
+    })
+
+    // By turno (today)
+    const turnoData = calculateSalesByTurno(todayInvoices)
+
+    // Ticket promedio
+    const ticketPromedio = todayInvoices.length > 0 ? salesToday / todayInvoices.length : 0
+
+    return {
+      salesToday,
+      salesWeek,
+      salesMonth,
+      invoicesToday: todayInvoices.length,
+      totalInvoices: activeInvoices.length,
+      returnsTotal,
+      pendingReturnsCount: pendingReturns.length,
+      totalReturnsCount: allReturns.length,
+      onlineSalesTotal,
+      onlineSalesToday,
+      onlineSalesCount: photoSales.length,
+      paidAtCashier,
+      purchasedOnWeb,
+      totalPortfolios,
+      soldPortfolios,
+      pendingPortfolios,
+      byCurrency,
+      turnoData,
+      ticketPromedio,
+    }
+  }, [allInvoices, allReturns, photoSales, portfolios])
+
+  // ─── Filtered invoices ────────────────────────────────────────
+  const filteredInvoices = useMemo(() => {
+    let filtered = allInvoices
+    if (searchInvoice) {
+      const q = searchInvoice.toLowerCase()
+      filtered = filtered.filter(
+        (i) =>
+          i.invoiceNumber?.toLowerCase().includes(q) ||
+          i.clientName?.toLowerCase().includes(q) ||
+          i.clientPhone?.toLowerCase().includes(q)
+      )
+    }
+    if (dateFilter !== "all") {
+      const now = new Date()
+      const cutoff = new Date(now)
+      if (dateFilter === "today") {
+        filtered = filtered.filter(
+          (i) => i.date === now.toLocaleDateString("es-DO")
+        )
+      } else if (dateFilter === "week") {
+        cutoff.setDate(cutoff.getDate() - 7)
+        filtered = filtered.filter((i) => new Date(i.timestamp) >= cutoff)
+      } else if (dateFilter === "month") {
+        cutoff.setMonth(cutoff.getMonth() - 1)
+        filtered = filtered.filter((i) => new Date(i.timestamp) >= cutoff)
+      }
+    }
+    return filtered
+  }, [allInvoices, searchInvoice, dateFilter])
+
+  // ─── Filtered returns ─────────────────────────────────────────
+  const filteredReturns = useMemo(() => {
+    if (!searchReturn) return allReturns
+    const q = searchReturn.toLowerCase()
+    return allReturns.filter(
+      (r) =>
+        r.invoiceNumber?.toLowerCase().includes(q) ||
+        r.clientName?.toLowerCase().includes(q)
+    )
+  }, [allReturns, searchReturn])
+
+  // ─── Analytics: daily sales for chart ─────────────────────────
+  const dailySales = useMemo(() => {
+    const map: Record<string, { date: string; cashier: number; online: number }> = {}
+    const daysBack = 14
+    const now = new Date()
+
+    for (let i = daysBack - 1; i >= 0; i--) {
+      const d = new Date(now)
+      d.setDate(d.getDate() - i)
+      const key = d.toISOString().split("T")[0]
+      const label = d.toLocaleDateString("es-DO", { day: "numeric", month: "short" })
+      map[key] = { date: label, cashier: 0, online: 0 }
+    }
+
+    allInvoices
+      .filter((i) => i.status !== "cancelled")
+      .forEach((inv) => {
+        const key = new Date(inv.timestamp).toISOString().split("T")[0]
+        if (map[key]) map[key].cashier += inv.total
+      })
+
+    photoSales.forEach((ps) => {
+      const key = new Date(ps.timestamp).toISOString().split("T")[0]
+      if (map[key]) map[key].online += ps.amount
+    })
+
+    return Object.values(map)
+  }, [allInvoices, photoSales])
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-100 dark:bg-red-950 rounded-lg flex items-center justify-center">
+              <Camera className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-title text-gray-900 dark:text-gray-100">Fotografía</h1>
+              <p className="text-gray-500 dark:text-gray-400 text-sm">
+                Ventas, devoluciones y analíticas del departamento de fotografía
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm">
+            <Download className="w-4 h-4 mr-2" />
+            Exportar
+          </Button>
+        </div>
+
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="bg-gray-100 dark:bg-gray-800">
+            <TabsTrigger value="overview">Resumen</TabsTrigger>
+            <TabsTrigger value="invoices">Facturas</TabsTrigger>
+            <TabsTrigger value="returns">Devoluciones</TabsTrigger>
+            <TabsTrigger value="portfolios">Portafolios</TabsTrigger>
+            <TabsTrigger value="analytics">Analíticas</TabsTrigger>
+            <TabsTrigger value="pricing">Precios</TabsTrigger>
+          </TabsList>
+
+          {/* ═══════════ OVERVIEW TAB ═══════════ */}
+          <TabsContent value="overview" className="space-y-6 mt-6">
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Ventas Hoy</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{fmtMoney(stats.salesToday)}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{stats.invoicesToday} facturas</p>
+                    </div>
+                    <div className="w-10 h-10 bg-green-100 dark:bg-green-950 rounded-lg flex items-center justify-center">
+                      <DollarSign className="w-5 h-5 text-green-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Ventas Online</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{fmtMoney(stats.onlineSalesToday)}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{stats.onlineSalesCount} compras total</p>
+                    </div>
+                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-950 rounded-lg flex items-center justify-center">
+                      <Globe className="w-5 h-5 text-blue-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Devoluciones</p>
+                      <p className="text-2xl font-bold text-red-600">{fmtMoney(stats.returnsTotal)}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{stats.pendingReturnsCount} pendientes</p>
+                    </div>
+                    <div className="w-10 h-10 bg-red-100 dark:bg-red-950 rounded-lg flex items-center justify-center">
+                      <RotateCcw className="w-5 h-5 text-red-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Portafolios</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalPortfolios}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{stats.soldPortfolios} vendidos</p>
+                    </div>
+                    <div className="w-10 h-10 bg-purple-100 dark:bg-purple-950 rounded-lg flex items-center justify-center">
+                      <FolderOpen className="w-5 h-5 text-purple-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Portfolios: Caja vs Web */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <Card className="border-gray-200 dark:border-gray-800 bg-gradient-to-br from-green-50 to-white dark:from-green-950/20 dark:to-gray-900">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-green-100 dark:bg-green-950 rounded-xl flex items-center justify-center">
+                      <Store className="w-6 h-6 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-green-700 dark:text-green-400">Pagados en Caja</p>
+                      <p className="text-3xl font-bold text-green-700 dark:text-green-400">{stats.paidAtCashier}</p>
+                      <p className="text-xs text-green-600/70 dark:text-green-500/70">portafolios</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-gray-200 dark:border-gray-800 bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/20 dark:to-gray-900">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-950 rounded-xl flex items-center justify-center">
+                      <Globe className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-blue-700 dark:text-blue-400">Comprados en Web</p>
+                      <p className="text-3xl font-bold text-blue-700 dark:text-blue-400">{stats.purchasedOnWeb}</p>
+                      <p className="text-xs text-blue-600/70 dark:text-blue-500/70">portafolios</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-gray-200 dark:border-gray-800 bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/20 dark:to-gray-900">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-amber-100 dark:bg-amber-950 rounded-xl flex items-center justify-center">
+                      <Clock className="w-6 h-6 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-amber-700 dark:text-amber-400">Pendientes</p>
+                      <p className="text-3xl font-bold text-amber-700 dark:text-amber-400">{stats.pendingPortfolios}</p>
+                      <p className="text-xs text-amber-600/70 dark:text-amber-500/70">sin vender</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Sales by Turno + Recent Invoices */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold">Ventas por Turno (Hoy)</CardTitle>
+                  <CardDescription>Distribución de ventas de fotografía por turno</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {stats.turnoData.map((t, i) => {
+                      const maxAmount = Math.max(...stats.turnoData.map((td) => td.amount), 1)
+                      const pct = (t.amount / maxAmount) * 100
+                      return (
+                        <div key={i}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.shift}</span>
+                            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmtMoney(t.amount)}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <Progress value={pct} className="flex-1" />
+                            <span className="text-xs text-gray-500 dark:text-gray-400 w-16 text-right">{t.sales} ventas</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold">Resumen Financiero</CardTitle>
+                  <CardDescription>Acumulados por período</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">Hoy</span>
+                      </div>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{fmtMoney(stats.salesToday)}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">Última Semana</span>
+                      </div>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{fmtMoney(stats.salesWeek)}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">Último Mes</span>
+                      </div>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{fmtMoney(stats.salesMonth)}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">Ticket Promedio</span>
+                      </div>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{fmtMoney(stats.ticketPromedio)}</span>
+                    </div>
+                    {Object.entries(stats.byCurrency).map(([cur, data]) => (
+                      <div key={cur} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm text-gray-700 dark:text-gray-300">Total en {cur}</span>
+                          <Badge variant="secondary" className="text-[10px]">{data.count}</Badge>
+                        </div>
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">{fmtMoney(data.total, cur)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ═══════════ INVOICES TAB ═══════════ */}
+          <TabsContent value="invoices" className="space-y-4 mt-6">
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Buscar por factura, cliente, teléfono..."
+                  className="pl-10"
+                  value={searchInvoice}
+                  onChange={(e) => setSearchInvoice(e.target.value)}
+                />
+              </div>
+              <Select value={dateFilter} onValueChange={setDateFilter}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Período" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todo</SelectItem>
+                  <SelectItem value="today">Hoy</SelectItem>
+                  <SelectItem value="week">Última Semana</SelectItem>
+                  <SelectItem value="month">Último Mes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Table */}
+            <Card className="border-gray-200 dark:border-gray-800">
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Factura</TableHead>
+                        <TableHead className="text-xs">Cliente</TableHead>
+                        <TableHead className="text-xs">Turno</TableHead>
+                        <TableHead className="text-xs">Fotógrafo</TableHead>
+                        <TableHead className="text-xs">Moneda</TableHead>
+                        <TableHead className="text-xs text-right">Total</TableHead>
+                        <TableHead className="text-xs">Estado</TableHead>
+                        <TableHead className="text-xs">Fecha</TableHead>
+                        <TableHead className="text-xs"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredInvoices.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={9} className="text-center py-12 text-gray-400">
+                            <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            No hay facturas
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredInvoices.slice(0, 50).map((inv) => (
+                          <TableRow
+                            key={inv.id}
+                            className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+                            onClick={() => setDetailInvoice(inv)}
+                          >
+                            <TableCell className="text-xs font-mono font-medium">{inv.invoiceNumber}</TableCell>
+                            <TableCell className="text-xs">{inv.clientName}</TableCell>
+                            <TableCell className="text-xs">
+                              <Badge variant="secondary" className="text-[10px]">{inv.turno}</Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-500">{inv.photographer || "—"}</TableCell>
+                            <TableCell className="text-xs">
+                              <Badge variant="outline" className="text-[10px]">{inv.currency}</Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-right font-semibold">{fmtMoney(inv.total, inv.currency)}</TableCell>
+                            <TableCell className="text-xs">{statusBadge(inv.status)}</TableCell>
+                            <TableCell className="text-xs text-gray-500">{inv.date}</TableCell>
+                            <TableCell>
+                              <Button variant="ghost" size="sm" className="text-gray-400 hover:text-gray-700">
+                                <Eye className="w-3.5 h-3.5" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+                {filteredInvoices.length > 50 && (
+                  <div className="p-3 text-center text-xs text-gray-400 border-t border-gray-100 dark:border-gray-800">
+                    Mostrando 50 de {filteredInvoices.length} facturas
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ═══════════ RETURNS TAB ═══════════ */}
+          <TabsContent value="returns" className="space-y-4 mt-6">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Total Devoluciones</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalReturnsCount}</p>
+                </CardContent>
+              </Card>
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Monto Devuelto</p>
+                  <p className="text-2xl font-bold text-red-600">{fmtMoney(stats.returnsTotal)}</p>
+                </CardContent>
+              </Card>
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Pendientes</p>
+                  <p className="text-2xl font-bold text-amber-600">{stats.pendingReturnsCount}</p>
+                </CardContent>
+              </Card>
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Tasa Devolución</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {stats.totalInvoices > 0
+                      ? `${((stats.totalReturnsCount / stats.totalInvoices) * 100).toFixed(1)}%`
+                      : "0%"}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Search */}
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Buscar por factura o cliente..."
+                className="pl-10"
+                value={searchReturn}
+                onChange={(e) => setSearchReturn(e.target.value)}
+              />
+            </div>
+
+            {/* Table */}
+            <Card className="border-gray-200 dark:border-gray-800">
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Factura</TableHead>
+                        <TableHead className="text-xs">Cliente</TableHead>
+                        <TableHead className="text-xs text-right">Monto</TableHead>
+                        <TableHead className="text-xs">Motivo</TableHead>
+                        <TableHead className="text-xs">Estado</TableHead>
+                        <TableHead className="text-xs">Fecha</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredReturns.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-12 text-gray-400">
+                            <RotateCcw className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            No hay devoluciones
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredReturns.map((r) => (
+                          <TableRow key={r.id}>
+                            <TableCell className="text-xs font-mono font-medium">{r.invoiceNumber}</TableCell>
+                            <TableCell className="text-xs">{r.clientName}</TableCell>
+                            <TableCell className="text-xs text-right font-semibold text-red-600">{fmtMoney(r.amount)}</TableCell>
+                            <TableCell className="text-xs text-gray-500 max-w-[200px] truncate">{r.reason || "—"}</TableCell>
+                            <TableCell className="text-xs">{statusBadge(r.status)}</TableCell>
+                            <TableCell className="text-xs text-gray-500">{r.date || "—"}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ═══════════ PORTFOLIOS TAB ═══════════ */}
+          <TabsContent value="portfolios" className="space-y-4 mt-6">
+            {/* Summary */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-purple-100 dark:bg-purple-950 rounded-lg flex items-center justify-center">
+                      <FolderOpen className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Total</p>
+                      <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{stats.totalPortfolios}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 dark:bg-green-950 rounded-lg flex items-center justify-center">
+                      <Store className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">En Caja</p>
+                      <p className="text-xl font-bold text-green-600">{stats.paidAtCashier}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-950 rounded-lg flex items-center justify-center">
+                      <Globe className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">En Web</p>
+                      <p className="text-xl font-bold text-blue-600">{stats.purchasedOnWeb}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 dark:bg-green-950 rounded-lg flex items-center justify-center">
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Vendidos</p>
+                      <p className="text-xl font-bold text-green-600">{stats.soldPortfolios}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Portfolio List */}
+            <Card className="border-gray-200 dark:border-gray-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold">Listado de Portafolios</CardTitle>
+                <CardDescription>Portafolios creados por el equipo de fotografía</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Cliente</TableHead>
+                        <TableHead className="text-xs">Teléfono</TableHead>
+                        <TableHead className="text-xs">Fotógrafo</TableHead>
+                        <TableHead className="text-xs">Turno</TableHead>
+                        <TableHead className="text-xs">Factura</TableHead>
+                        <TableHead className="text-xs">Origen</TableHead>
+                        <TableHead className="text-xs">Estado</TableHead>
+                        <TableHead className="text-xs">Fecha</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {portfolios.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center py-12 text-gray-400">
+                            <FolderOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            No hay portafolios
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        portfolios.slice(0, 50).map((p) => (
+                          <TableRow key={p.id}>
+                            <TableCell className="text-xs font-medium">{p.client_name || p.clientName || "—"}</TableCell>
+                            <TableCell className="text-xs text-gray-500">{p.phone || "—"}</TableCell>
+                            <TableCell className="text-xs text-gray-500">{p.photographer_name || p.photographerName || "—"}</TableCell>
+                            <TableCell className="text-xs">
+                              {p.turno ? <Badge variant="secondary" className="text-[10px]">{p.turno}</Badge> : "—"}
+                            </TableCell>
+                            <TableCell className="text-xs font-mono">{p.invoice_code || p.invoiceCode || "—"}</TableCell>
+                            <TableCell className="text-xs">
+                              {(p.source === "billing" || p.invoice_code || p.invoiceCode) ? (
+                                <Badge className="bg-green-100 text-green-700 hover:bg-green-100 text-[10px]">
+                                  <Store className="w-3 h-3 mr-1" />
+                                  Caja
+                                </Badge>
+                              ) : p.source === "web" || p.source === "gallery" || p.source === "online" ? (
+                                <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 text-[10px]">
+                                  <Globe className="w-3 h-3 mr-1" />
+                                  Web
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-[10px]">N/A</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs">{portfolioStatusBadge(p.status)}</TableCell>
+                            <TableCell className="text-xs text-gray-500">
+                              {p.created_at || p.createdAt
+                                ? fmtDate(p.created_at || p.createdAt || "")
+                                : "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ═══════════ ANALYTICS TAB ═══════════ */}
+          <TabsContent value="analytics" className="space-y-6 mt-6">
+            {/* Period Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Ventas Hoy</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{fmtMoney(stats.salesToday)}</p>
+                    </div>
+                    <TrendingUp className="w-5 h-5 text-green-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Ventas Semanal</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{fmtMoney(stats.salesWeek)}</p>
+                    </div>
+                    <TrendingUp className="w-5 h-5 text-green-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Ventas Mensual</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{fmtMoney(stats.salesMonth)}</p>
+                    </div>
+                    <TrendingUp className="w-5 h-5 text-green-500" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Daily Sales (simple bar representation) */}
+            <Card className="border-gray-200 dark:border-gray-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold">Ventas Diarias — Últimos 14 días</CardTitle>
+                <CardDescription>Comparación Caja vs Web</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {dailySales.map((day, i) => {
+                    const maxVal = Math.max(...dailySales.map((d) => d.cashier + d.online), 1)
+                    const cashierPct = (day.cashier / maxVal) * 100
+                    const onlinePct = (day.online / maxVal) * 100
+                    return (
+                      <div key={i} className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 w-16 text-right shrink-0">{day.date}</span>
+                        <div className="flex-1 flex gap-0.5 h-5">
+                          {cashierPct > 0 && (
+                            <div
+                              className="bg-red-500 rounded-l-sm h-full"
+                              style={{ width: `${cashierPct}%` }}
+                              title={`Caja: ${fmtMoney(day.cashier)}`}
+                            />
+                          )}
+                          {onlinePct > 0 && (
+                            <div
+                              className="bg-blue-500 rounded-r-sm h-full"
+                              style={{ width: `${onlinePct}%` }}
+                              title={`Web: ${fmtMoney(day.online)}`}
+                            />
+                          )}
+                          {cashierPct === 0 && onlinePct === 0 && (
+                            <div className="bg-gray-100 dark:bg-gray-800 rounded-sm h-full w-full" />
+                          )}
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 w-20 text-right shrink-0">
+                          {fmtMoney(day.cashier + day.online)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="flex items-center gap-6 mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-red-500 rounded-sm" />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Caja (POS)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-blue-500 rounded-sm" />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Web (Online)</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Online Sales Detail */}
+            <Card className="border-gray-200 dark:border-gray-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold">Compras Online</CardTitle>
+                <CardDescription>Paquetes de fotos comprados a través de la web</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Cliente</TableHead>
+                        <TableHead className="text-xs">Teléfono</TableHead>
+                        <TableHead className="text-xs">Plan</TableHead>
+                        <TableHead className="text-xs text-right">Monto</TableHead>
+                        <TableHead className="text-xs">Fecha</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {photoSales.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-12 text-gray-400">
+                            <Globe className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            No hay compras online registradas
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        photoSales.slice(0, 30).map((ps) => (
+                          <TableRow key={ps.id}>
+                            <TableCell className="text-xs">{ps.client_name || "—"}</TableCell>
+                            <TableCell className="text-xs text-gray-500">{ps.phone}</TableCell>
+                            <TableCell className="text-xs">
+                              <Badge variant="secondary" className="text-[10px]">{ps.plan}</Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-right font-semibold">{fmtMoney(ps.amount)}</TableCell>
+                            <TableCell className="text-xs text-gray-500">{fmtDate(ps.timestamp)}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          {/* ═══════════ PRICING TAB ═══════════ */}
+          <TabsContent value="pricing" className="space-y-6 mt-6">
+            <Card className="border-gray-200 dark:border-gray-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <Tag className="w-4 h-4" />
+                  Precios de Servicios de Fotografía
+                </CardTitle>
+                <CardDescription>
+                  Estos precios se aplican tanto en la caja (POS) como en la galería web del cliente.
+                  Los cambios se reflejan inmediatamente.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {pricingLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                  </div>
+                ) : pricing.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <Tag className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No hay precios configurados.</p>
+                    <p className="text-xs mt-1">Ejecuta la migración <code>migration-photo-pricing.sql</code> en Supabase.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {pricing.map((item) => (
+                      <div
+                        key={item.id}
+                        className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-xl border ${
+                          item.active
+                            ? "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
+                            : "border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 opacity-60"
+                        }`}
+                      >
+                        {/* Icon */}
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                          item.category === "video"
+                            ? "bg-blue-100 dark:bg-blue-950"
+                            : "bg-red-100 dark:bg-red-950"
+                        }`}>
+                          {item.category === "video" ? (
+                            <Video className="w-6 h-6 text-blue-600" />
+                          ) : (
+                            <Package className="w-6 h-6 text-red-600" />
+                          )}
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{item.name}</h4>
+                            <Badge variant="outline" className="text-[10px]">{item.code}</Badge>
+                            {!item.active && <Badge className="bg-gray-200 text-gray-600 text-[10px]">Inactivo</Badge>}
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{item.description}</p>
+                          {item.category === "package" && (
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                              Fotos: {item.min_photos ?? "—"} – {item.max_photos ?? "∞"}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Price */}
+                        <div className="text-right shrink-0">
+                          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            {fmtMoney(item.price)}
+                          </p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            Actualizado: {fmtDate(item.updated_at)}
+                          </p>
+                        </div>
+
+                        {/* Edit */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingPrice({ ...item })}
+                          className="shrink-0"
+                        >
+                          <Edit className="w-3.5 h-3.5 mr-1" />
+                          Editar
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+        </Tabs>
+      </div>
+
+      {/* ─── Pricing Edit Dialog ──────────────────────────────────── */}
+      <Dialog open={!!editingPrice} onOpenChange={() => setEditingPrice(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Precio</DialogTitle>
+          </DialogHeader>
+          {editingPrice && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Nombre</label>
+                <Input
+                  value={editingPrice.name}
+                  onChange={(e) => setEditingPrice({ ...editingPrice, name: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Precio (USD)</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editingPrice.price}
+                  onChange={(e) => setEditingPrice({ ...editingPrice, price: parseFloat(e.target.value) || 0 })}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Descripción</label>
+                <Input
+                  value={editingPrice.description}
+                  onChange={(e) => setEditingPrice({ ...editingPrice, description: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+              {editingPrice.category === "package" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Mín. Fotos</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={editingPrice.min_photos ?? ""}
+                      onChange={(e) => setEditingPrice({ ...editingPrice, min_photos: e.target.value ? parseInt(e.target.value) : null })}
+                      className="mt-1"
+                      placeholder="—"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Máx. Fotos</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={editingPrice.max_photos ?? ""}
+                      onChange={(e) => setEditingPrice({ ...editingPrice, max_photos: e.target.value ? parseInt(e.target.value) : null })}
+                      className="mt-1"
+                      placeholder="∞"
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="pricing-active"
+                  checked={editingPrice.active}
+                  onChange={(e) => setEditingPrice({ ...editingPrice, active: e.target.checked })}
+                  className="rounded border-gray-300"
+                />
+                <label htmlFor="pricing-active" className="text-sm text-gray-700 dark:text-gray-300">Activo</label>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Button variant="outline" className="flex-1" onClick={() => setEditingPrice(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  className="flex-1"
+                  disabled={savingPrice || !editingPrice.name.trim() || editingPrice.price < 0}
+                  onClick={() => handleSavePrice(editingPrice)}
+                >
+                  {savingPrice ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                  Guardar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Invoice Detail Dialog ─────────────────────────────────── */}
+      <Dialog open={!!detailInvoice} onOpenChange={() => setDetailInvoice(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Detalle de Factura</DialogTitle>
+          </DialogHeader>
+          {detailInvoice && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Factura</p>
+                  <p className="font-mono font-medium">{detailInvoice.invoiceNumber}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Estado</p>
+                  <div className="mt-1">{statusBadge(detailInvoice.status)}</div>
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Cliente</p>
+                  <p className="font-medium">{detailInvoice.clientName}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Teléfono</p>
+                  <p>{detailInvoice.clientPhone || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Turno</p>
+                  <p>{detailInvoice.turno}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Fotógrafo</p>
+                  <p>{detailInvoice.photographer || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Fecha</p>
+                  <p>{detailInvoice.date}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400">Hora</p>
+                  <p>{fmtTime(detailInvoice.timestamp)}</p>
+                </div>
+              </div>
+
+              {/* Items */}
+              {detailInvoice.items && detailInvoice.items.length > 0 && (
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Artículos</p>
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-2">
+                    {detailInvoice.items.map((item, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm">
+                        <span>{item.quantity}x {item.name}</span>
+                        <span className="font-medium">{fmtMoney(item.price * item.quantity, detailInvoice.currency)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Totals */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-3 space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">Subtotal</span>
+                  <span>{fmtMoney(detailInvoice.subtotal, detailInvoice.currency)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">ITBIS (18%)</span>
+                  <span>{fmtMoney(detailInvoice.tax, detailInvoice.currency)}</span>
+                </div>
+                <div className="flex justify-between text-sm font-bold text-lg pt-1">
+                  <span>Total</span>
+                  <span className="text-red-600">{fmtMoney(detailInvoice.total, detailInvoice.currency)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </DashboardLayout>
+  )
+}

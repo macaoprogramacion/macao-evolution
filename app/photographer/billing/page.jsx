@@ -1636,9 +1636,36 @@ export default function BillingPage() {
     window.location.reload();
   };
 
-  // Load products from localStorage
+  // Load products from localStorage, then sync defaults from Supabase
   useEffect(() => {
     setProducts(loadProducts());
+
+    // Fetch central pricing from Supabase and update defaults
+    async function syncPricing() {
+      try {
+        const { data, error } = await supabase
+          .from('photo_pricing')
+          .select('code, name, price, description')
+          .eq('active', true)
+          .order('sort_order', { ascending: true });
+        if (error || !data || data.length === 0) return;
+
+        setProducts(prev => {
+          const updated = prev.map(p => {
+            const remote = data.find(r => r.code === p.code);
+            if (remote) {
+              return { ...p, price: parseFloat(remote.price), name: remote.name, description: remote.description || p.description };
+            }
+            return p;
+          });
+          persistProducts(updated);
+          return updated;
+        });
+      } catch (err) {
+        console.error('Error syncing pricing:', err);
+      }
+    }
+    syncPricing();
   }, []);
   
   // Invoice management state

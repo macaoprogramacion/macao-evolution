@@ -7,6 +7,7 @@ import PhotoCard from '@/components/photographer/PhotoCard';
 import { GlassCard, GlassButton } from '@/components/photographer/ui';
 import { CheckCircle, Package, Video, Download, Play, Receipt, ShieldCheck, AlertCircle, Phone, User, Loader2 } from 'lucide-react';
 import { findInvoicesByPhone, findInvoiceByNumber, markInvoiceRedeemed, logActivity, addPhotoSale } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
 
 // Background image
 
@@ -14,8 +15,8 @@ import { findInvoicesByPhone, findInvoiceByNumber, markInvoiceRedeemed, logActiv
 
 const fallbackPhotos = Array.from({ length: 8 }, (_, i) => `/photographer/photos/bubble-photos (${i + 1}).png`);
 
-// Plans configuration
-const plans = [
+// Default plans (fallback if Supabase unavailable)
+const DEFAULT_PLANS = [
   { id: 'basic', name: 'Básico', price: 30, minPhotos: 1, maxPhotos: 2, description: '1-2 fotos' },
   { id: 'standard', name: 'Estándar', price: 50, minPhotos: 3, maxPhotos: 4, description: '3-4 fotos' },
   { id: 'full', name: 'Completo', price: 70, minPhotos: 5, maxPhotos: Infinity, description: '5+ fotos' },
@@ -39,6 +40,41 @@ function ClientGallery() {
   const [dbVideos, setDbVideos] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
+  const [plans, setPlans] = useState(DEFAULT_PLANS);
+  const [videoPrice, setVideoPrice] = useState(60);
+
+  // Fetch pricing from Supabase
+  useEffect(() => {
+    async function fetchPricing() {
+      try {
+        const { data, error } = await supabase
+          .from('photo_pricing')
+          .select('*')
+          .eq('active', true)
+          .order('sort_order', { ascending: true });
+        if (error) throw error;
+        if (data && data.length > 0) {
+          const packages = data
+            .filter(p => p.category === 'package')
+            .map(p => ({
+              id: p.code,
+              name: p.name,
+              price: parseFloat(p.price),
+              minPhotos: p.min_photos ?? 1,
+              maxPhotos: p.max_photos ?? Infinity,
+              description: p.description || '',
+            }));
+          if (packages.length > 0) setPlans(packages);
+          const vid = data.find(p => p.category === 'video');
+          if (vid) setVideoPrice(parseFloat(vid.price));
+        }
+      } catch (err) {
+        console.error('Error fetching pricing:', err);
+        // Keep defaults
+      }
+    }
+    fetchPricing();
+  }, []);
 
   // Fetch portfolio data from Supabase via API
   useEffect(() => {
@@ -163,12 +199,12 @@ function ClientGallery() {
         phone,
         clientName,
         plan: 'Video',
-        amount: 60,
+        amount: videoPrice,
         photos: 0,
         date: new Date().toLocaleDateString('es-DO'),
         source: 'online',
       });
-      logActivity('Venta video online', `${clientName} — US$ 60`);
+      logActivity('Venta video online', `${clientName} — US$ ${videoPrice}`);
       await downloadImage(portfolioVideo, 'macao-video-aventura.mp4');
       alert('¡Video comprado y descargado exitosamente!');
     } else if (videoSelected) {
@@ -622,7 +658,7 @@ function ClientGallery() {
                   Video HD de tu experiencia completa
                 </p>
                 <p className={`text-3xl font-bold mb-4 ${videoSelected ? 'text-red-500' : 'text-white/70'}`}>
-                  $60 <span className="text-base font-normal">USD</span>
+                  ${videoPrice} <span className="text-base font-normal">USD</span>
                 </p>
                 <div className="flex gap-3 justify-center">
                   <GlassButton

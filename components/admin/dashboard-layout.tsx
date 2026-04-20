@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft, Ship, Mountain, Sun, Moon } from "lucide-react"
+import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft, Ship, Mountain, Sun, Moon, Camera } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -27,6 +27,7 @@ const navigation = [
   { name: "Mis Recogidas", href: "/admin/chofer", icon: Navigation },
   { name: "Representantes", href: "/admin/representatives", icon: Handshake },
   { name: "Products", href: "/admin/products", icon: Package },
+  { name: "Fotografía", href: "/admin/photography", icon: Camera },
   { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
   { name: "Team", href: "/admin/team", icon: Users },
   { name: "Usuarios", href: "/admin/users", icon: UserCog },
@@ -40,7 +41,7 @@ const navigation = [
 const rolePageAccess: Record<string, string[]> = {
   operaciones: ["/admin/operation", "/admin/operation-saona", "/admin/operation-samana"],
   chofer: ["/admin/chofer"],
-  contabilidad: ["/admin/analytics", "/admin/products"],
+  contabilidad: ["/admin/analytics", "/admin/products", "/admin/photography"],
 }
 
 function hasAccess(role: string, href: string): boolean {
