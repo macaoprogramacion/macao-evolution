@@ -58,8 +58,6 @@ import {
   getReturns,
   getPhotoSales,
   getPortfolios,
-  getBillingClients,
-  calculateFinanceStats,
   calculateSalesByTurno,
 } from "@/lib/store"
 
@@ -200,11 +198,15 @@ export default function PhotographyPage() {
 
   // ─── Load data ──────────────────────────────────────────────────
   useEffect(() => {
-    // localStorage data
-    setInvoices(getInvoices())
-    setReturns(getReturns())
-    setPhotoSales(getPhotoSales())
-    setPortfolios(getPortfolios())
+    // localStorage data (wrapped defensively)
+    try {
+      setInvoices(getInvoices())
+      setReturns(getReturns())
+      setPhotoSales(getPhotoSales())
+      setPortfolios(getPortfolios())
+    } catch (err) {
+      console.error("[Admin Photography] localStorage load error:", err)
+    }
 
     // Supabase data
     async function fetchSupabase() {
