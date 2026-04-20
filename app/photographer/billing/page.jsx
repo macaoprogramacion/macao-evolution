@@ -132,12 +132,12 @@ function UsuarioPanel({ user, invoices, onLogout }) {
   const ventasMes = monthInvoices.length;
   const totalMes = monthInvoices.reduce((s, i) => s + i.total, 0);
 
-  // Exchange rates state
+  // Exchange rates state — pesos dominicanos por unidad de moneda extranjera
   const [rates, setRates] = useState(() => {
     try {
       const stored = localStorage.getItem('macao_exchange_rates');
-      return stored ? JSON.parse(stored) : { USD: 1, EUR: 1.08, DOP: 0.0167 };
-    } catch { return { USD: 1, EUR: 1.08, DOP: 0.0167 }; }
+      return stored ? JSON.parse(stored) : { USD: 60, EUR: 65 };
+    } catch { return { USD: 60, EUR: 65 }; }
   });
   const [editingRates, setEditingRates] = useState(false);
 
@@ -197,7 +197,7 @@ function UsuarioPanel({ user, invoices, onLogout }) {
               </div>
               <div>
                 <h3 className="text-white font-semibold">Tasas de Cambio</h3>
-                <p className="text-white/50 text-xs">Equivalencia a 1 USD</p>
+                <p className="text-white/50 text-xs">Pesos dominicanos (RD$) por unidad</p>
               </div>
             </div>
             <button
@@ -209,32 +209,31 @@ function UsuarioPanel({ user, invoices, onLogout }) {
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            {Object.entries(CURRENCY_SYMBOLS).map(([cur, symbol]) => (
-              <div key={cur} className="p-3 bg-black/15 rounded-2xl">
-                <p className="text-white/50 text-xs mb-1">{symbol} ({cur})</p>
-                {editingRates && cur !== 'USD' ? (
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={rates[cur] || ''}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      if (!isNaN(val) && val > 0) saveRates({ ...rates, [cur]: val });
-                    }}
-                    className="w-full bg-black/30 rounded-xl px-3 py-1.5 text-white text-sm border border-white/20 focus:outline-none focus:ring-1 focus:ring-[#DC2626]/30"
-                  />
+          <div className="grid grid-cols-2 gap-3">
+            {['USD', 'EUR'].map(cur => (
+              <div key={cur} className="p-4 bg-black/15 rounded-2xl">
+                <p className="text-white/50 text-xs mb-1">1 {cur} =</p>
+                {editingRates ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/50 text-sm">RD$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={rates[cur] || ''}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        if (!isNaN(val) && val > 0) saveRates({ ...rates, [cur]: val });
+                      }}
+                      className="w-full bg-black/30 rounded-xl px-3 py-1.5 text-white text-sm border border-white/20 focus:outline-none focus:ring-1 focus:ring-[#DC2626]/30"
+                    />
+                  </div>
                 ) : (
-                  <p className="text-white font-semibold">{cur === 'USD' ? '1.0000' : (rates[cur] || 0).toFixed(4)}</p>
+                  <p className="text-white font-bold text-xl">RD$ {(rates[cur] || 0).toFixed(2)}</p>
                 )}
-                {cur !== 'USD' && (
-                  <p className="text-white/40 text-[10px] mt-1">
-                    1 {cur} = {cur === 'DOP'
-                      ? `${(rates['DOP'] || 0.0167).toFixed(4)} USD`
-                      : `${(rates[cur] || 1).toFixed(4)} USD`
-                    }
-                  </p>
-                )}
+                <p className="text-white/40 text-[10px] mt-1.5">
+                  {CURRENCY_SYMBOLS[cur]} ({cur}) → Peso Dominicano
+                </p>
               </div>
             ))}
           </div>
@@ -814,12 +813,12 @@ function CierreDiaPanel({ invoices }) {
   const todayStr = new Date().toLocaleDateString('es-DO');
   const returns = getReturns();
 
-  // Exchange rates state — cashier can edit
+  // Exchange rates state — pesos dominicanos por unidad de moneda extranjera
   const [rates, setRates] = useState(() => {
     try {
       const stored = localStorage.getItem('macao_exchange_rates');
-      return stored ? JSON.parse(stored) : { USD: 1, EUR: 1.08, DOP: 0.0167 };
-    } catch { return { USD: 1, EUR: 1.08, DOP: 0.0167 }; }
+      return stored ? JSON.parse(stored) : { USD: 60, EUR: 65 };
+    } catch { return { USD: 60, EUR: 65 }; }
   });
   const [editingRates, setEditingRates] = useState(false);
   const [convertToDOP, setConvertToDOP] = useState(false);
@@ -862,14 +861,10 @@ function CierreDiaPanel({ invoices }) {
   });
   const returnsTotal = todayReturns.reduce((s, r) => s + (r.amount || 0), 0);
 
-  // Convert to DOP
+  // Convert to DOP — rates = pesos por unidad (ej: USD: 60 = 1 USD = 60 DOP)
   const toDOP = (amount, cur) => {
     if (cur === 'DOP') return amount;
-    // rates store how much 1 unit of currency = in USD. DOP rate = how much 1 DOP = USD
-    // To convert to DOP: amount_in_cur * (rate_cur_to_usd / rate_dop_to_usd)
-    const rateToUSD = rates[cur] || 1;
-    const dopToUSD = rates['DOP'] || 0.0167;
-    return amount * rateToUSD / dopToUSD;
+    return amount * (rates[cur] || 60);
   };
 
   const totalAllInDOP = Object.entries(byCurrency).reduce((sum, [cur, data]) => sum + toDOP(data.total, cur), 0);
@@ -897,7 +892,7 @@ function CierreDiaPanel({ invoices }) {
               </div>
               <div>
                 <h3 className="text-white font-semibold">Tasas de Cambio</h3>
-                <p className="text-white/50 text-xs">Equivalencia a 1 USD</p>
+                <p className="text-white/50 text-xs">Pesos dominicanos (RD$) por unidad</p>
               </div>
             </div>
             <button
@@ -909,32 +904,31 @@ function CierreDiaPanel({ invoices }) {
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            {Object.entries(CURRENCY_SYMBOLS).map(([cur, symbol]) => (
-              <div key={cur} className="p-3 bg-black/15 rounded-2xl">
-                <p className="text-white/50 text-xs mb-1">{symbol} ({cur})</p>
-                {editingRates && cur !== 'USD' ? (
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={rates[cur] || ''}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      if (!isNaN(val) && val > 0) saveRates({ ...rates, [cur]: val });
-                    }}
-                    className="w-full bg-black/30 rounded-xl px-3 py-1.5 text-white text-sm border border-white/20 focus:outline-none focus:ring-1 focus:ring-[#DC2626]/30"
-                  />
+          <div className="grid grid-cols-2 gap-3">
+            {['USD', 'EUR'].map(cur => (
+              <div key={cur} className="p-4 bg-black/15 rounded-2xl">
+                <p className="text-white/50 text-xs mb-1">1 {cur} =</p>
+                {editingRates ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/50 text-sm">RD$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={rates[cur] || ''}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        if (!isNaN(val) && val > 0) saveRates({ ...rates, [cur]: val });
+                      }}
+                      className="w-full bg-black/30 rounded-xl px-3 py-1.5 text-white text-sm border border-white/20 focus:outline-none focus:ring-1 focus:ring-[#DC2626]/30"
+                    />
+                  </div>
                 ) : (
-                  <p className="text-white font-semibold">{cur === 'USD' ? '1.0000' : (rates[cur] || 0).toFixed(4)}</p>
+                  <p className="text-white font-bold text-xl">RD$ {(rates[cur] || 0).toFixed(2)}</p>
                 )}
-                {cur !== 'USD' && (
-                  <p className="text-white/40 text-[10px] mt-1">
-                    1 {cur} = {cur === 'DOP'
-                      ? `${(rates['DOP'] || 0.0167).toFixed(4)} USD`
-                      : `${(rates[cur] || 1).toFixed(4)} USD`
-                    }
-                  </p>
-                )}
+                <p className="text-white/40 text-[10px] mt-1.5">
+                  {CURRENCY_SYMBOLS[cur]} ({cur}) → Peso Dominicano
+                </p>
               </div>
             ))}
           </div>
