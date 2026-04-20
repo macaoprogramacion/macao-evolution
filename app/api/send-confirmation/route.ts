@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 interface CartItem {
   name: string;
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
       </html>
     `;
 
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
       from: `Macao Adventure Park <reservas@${process.env.RESEND_DOMAIN || "resend.dev"}>`,
       to: customer.email,
       subject: `¡Reserva Confirmada! — Macao Adventure Park`,
