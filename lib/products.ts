@@ -739,7 +739,7 @@ const fallbackProducts: Product[] = [
   {
     id: "product-full-ride-experience",
     slug: "full-ride-experience",
-    title: "FULL RIDE EXPERIENCE",
+    title: "HORSEBACK RIDING FULL",
     description: "SINGLE",
     capacity: "1 person",
     image: "/images/productos/producto (9).webp",
@@ -799,6 +799,68 @@ const fallbackProducts: Product[] = [
         duration: "65 mins",
         description:
           "Enjoy the complete riding experience through scenic trails and countryside paths.",
+      },
+    ],
+    generalInfo: {
+      minAge: "Children must be 4 years old or above to participate, and drivers must be 18 years old or older.",
+      notAllowed:
+        "Pregnant women, individuals with heart conditions, mobility impairments, or under the influence of alcohol or drugs are not permitted to participate in the tour.",
+      freeCancellation:
+        "Cancel up to 24 hours in advance and receive a full refund.",
+      bookNowPayLater:
+        "Reserve your spot immediately with just $20 USD and pay the rest amount when you get to our base.",
+      duration: "4 hours",
+      guide: "English, French, Portuguese, Spanish, Italian, German, Russian",
+      pickupService:
+        "Pickup is available from hotels in Punta Cana, BÃ¡varo, Uvero Alto, and Cabeza de Toro.",
+    },
+  },
+  {
+    id: "product-sunset-ride",
+    slug: "sunset-ride",
+    title: "SUNSET RIDE",
+    description: "SINGLE",
+    capacity: "1 person",
+    image: "/images/productos/producto (8).webp",
+    price: 70,
+    originalPrice: 85,
+    gallery: [
+      "/images/productos/producto (8).webp",
+      "/images/Buggies/buggie (3).webp",
+      "/images/paradas/columna (2).webp",
+      "/images/paradas/columna (4).webp",
+    ],
+    duration: "4 hours",
+    highlights: [
+      "Golden-hour horseback route",
+      "Sunset views on scenic trails",
+      "Cultural stop and beach photo stop",
+      "Ideal for couples and solo riders",
+    ],
+    itinerary: [
+      {
+        title: "Pick-Up & City Tour",
+        duration: "1.5 hrs",
+        description:
+          "Begin your adventure with a scenic city tour in an open-air Safari truck.",
+      },
+      {
+        title: "Ranch Base Briefing",
+        duration: "30 mins",
+        description:
+          "Safety instructions and equipment fitting before your ride.",
+      },
+      {
+        title: "Typical Dominican House Visit",
+        duration: "20 mins",
+        description:
+          "Experience authentic local culture in a peaceful rural setting.",
+      },
+      {
+        title: "Sunset Trail Ride",
+        duration: "65 mins",
+        description:
+          "Ride through countryside paths timed with sunset light for a premium nature experience.",
       },
     ],
     generalInfo: {

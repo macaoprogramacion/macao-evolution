@@ -17,7 +17,15 @@ export function FeaturedProductsSection() {
   // Fetch products from Supabase on mount
   useEffect(() => {
     fetchProducts().then((data) => {
-      if (data.length > 0) setProductList(data);
+      if (data.length > 0) {
+        const merged = [...data];
+        for (const fallback of fallbackProducts) {
+          if (!merged.some((p) => p.slug === fallback.slug)) {
+            merged.push(fallback);
+          }
+        }
+        setProductList(merged);
+      }
     });
   }, []);
 
