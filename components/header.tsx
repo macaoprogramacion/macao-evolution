@@ -11,7 +11,41 @@ export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [userName, setUserName] = useState<string | null>(null);
   const { theme, setTheme } = useTheme();
+
+  useEffect(() => {
+    const refreshUser = () => {
+      try {
+        const raw = localStorage.getItem("macao-user");
+        if (!raw) {
+          setUserName(null);
+          return;
+        }
+
+        const parsed = JSON.parse(raw) as { name?: string; email?: string };
+        setUserName(parsed?.name || parsed?.email || null);
+      } catch {
+        setUserName(null);
+      }
+    };
+
+    refreshUser();
+    window.addEventListener("storage", refreshUser);
+    window.addEventListener("macao-auth-changed", refreshUser);
+
+    return () => {
+      window.removeEventListener("storage", refreshUser);
+      window.removeEventListener("macao-auth-changed", refreshUser);
+    };
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("macao-user");
+    localStorage.removeItem("sellers-rep-id");
+    window.dispatchEvent(new Event("macao-auth-changed"));
+    setIsMenuOpen(false);
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -84,13 +118,23 @@ export function Header() {
             <Sun className="w-4 h-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
             <Moon className="absolute w-4 h-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           </button>
-          <button
-            type="button"
-            onClick={() => setIsAuthOpen(true)}
-            className={`px-4 py-2 text-sm font-medium transition-all rounded-full ${isScrolled ? "bg-foreground text-background hover:opacity-80" : "bg-white text-foreground hover:bg-white/90"}`}
-          >
-            Sign in
-          </button>
+          {userName ? (
+            <button
+              type="button"
+              onClick={handleLogout}
+              className={`px-4 py-2 text-sm font-medium transition-all rounded-full ${isScrolled ? "bg-foreground text-background hover:opacity-80" : "bg-white text-foreground hover:bg-white/90"}`}
+            >
+              Salir ({userName.split(" ")[0]})
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsAuthOpen(true)}
+              className={`px-4 py-2 text-sm font-medium transition-all rounded-full ${isScrolled ? "bg-foreground text-background hover:opacity-80" : "bg-white text-foreground hover:bg-white/90"}`}
+            >
+              Sign in
+            </button>
+          )}
         </div>
 
         {/* Mobile Menu Button */}
@@ -136,16 +180,26 @@ export function Header() {
             >
               Get my photos
             </Link>
-            <button
-              type="button"
-              onClick={() => {
-                setIsMenuOpen(false);
-                setIsAuthOpen(true);
-              }}
-              className="mt-4 bg-foreground px-5 py-3 text-center text-sm font-medium text-background rounded-full w-full"
-            >
-              Sign in
-            </button>
+            {userName ? (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="mt-4 bg-foreground px-5 py-3 text-center text-sm font-medium text-background rounded-full w-full"
+              >
+                Salir ({userName.split(" ")[0]})
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setIsAuthOpen(true);
+                }}
+                className="mt-4 bg-foreground px-5 py-3 text-center text-sm font-medium text-background rounded-full w-full"
+              >
+                Sign in
+              </button>
+            )}
           </nav>
         </div>
       )}

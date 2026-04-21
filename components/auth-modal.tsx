@@ -14,6 +14,41 @@ interface AuthModalProps {
   onClose: () => void;
 }
 
+interface RegisteredUser {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  password: string;
+  role: Exclude<UserRole, "colaborador">;
+  registeredAt: string;
+}
+
+const REGISTERED_USERS_KEY = "macao-registered-users";
+const SESSION_KEY = "macao-user";
+
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getRegisteredUsers(): RegisteredUser[] {
+  try {
+    const raw = localStorage.getItem(REGISTERED_USERS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRegisteredUsers(users: RegisteredUser[]) {
+  localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(users));
+}
+
+function setSessionUser(data: Record<string, unknown>) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+  window.dispatchEvent(new Event("macao-auth-changed"));
+}
+
 export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const router = useRouter();
   const [tab, setTab] = useState<AuthTab>("login");
@@ -82,6 +117,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       newErrors.regPassword = "Mínimo 6 caracteres";
     if (regPassword !== regConfirmPassword)
       newErrors.regConfirmPassword = "Las contraseñas no coinciden";
+
+    const exists = getRegisteredUsers().some(
+      (u) => normalizeEmail(u.email) === normalizeEmail(regEmail)
+    );
+    if (exists) {
+      newErrors.regEmail = "Ya existe una cuenta con este correo";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -130,106 +173,168 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     if (!validateLogin()) return;
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
 
-      // If representative, find their account and redirect to sellers panel
-      if (loginRole === "representante") {
-        // Check mock representatives
-        const mockRepEmails: Record<string, string> = {
-          "carlos.mendez@excursionespca na.com": "REP-001",
-          "ana.rodriguez@viajesdominicanos.com": "REP-002",
-          "miguel.torres@barcelo.com": "REP-003",
-          "laura.pena@gmail.com": "REP-004",
-          "f.rosario@dreamsresort.com": "REP-005",
-        };
+    const email = normalizeEmail(loginEmail);
+    const registeredUsers = getRegisteredUsers();
+    const user = registeredUsers.find(
+      (u) => normalizeEmail(u.email) === email && u.role === loginRole
+    );
 
-        // Check registered reps from localStorage
-        const registeredReps = JSON.parse(localStorage.getItem("macao-registered-reps") || "[]");
-        const registeredRep = registeredReps.find((r: any) => r.email === loginEmail);
-        const mockRepId = mockRepEmails[loginEmail.toLowerCase()];
+    if (loginRole === "representante") {
+      const mockRepEmails: Record<string, string> = {
+        "carlos.mendez@excursionespcana.com": "REP-001",
+        "ana.rodriguez@viajesdominicanos.com": "REP-002",
+        "miguel.torres@barcelo.com": "REP-003",
+        "laura.pena@gmail.com": "REP-004",
+        "f.rosario@dreamsresort.com": "REP-005",
+      };
 
-        if (registeredRep) {
-          localStorage.setItem("sellers-rep-id", registeredRep.id);
-          localStorage.setItem("macao-user", JSON.stringify({
-            email: loginEmail,
-            role: loginRole,
-            loggedInAt: new Date().toISOString(),
-          }));
-          onClose();
-          router.push("/sellers/dashboard");
-        } else if (mockRepId) {
-          localStorage.setItem("sellers-rep-id", mockRepId);
-          localStorage.setItem("macao-user", JSON.stringify({
-            email: loginEmail,
-            role: loginRole,
-            loggedInAt: new Date().toISOString(),
-          }));
-          onClose();
-          router.push("/sellers/dashboard");
-        } else {
-          setErrors({ loginEmail: "No se encontró una cuenta de representante con este correo. Regístrate primero." });
-        }
-      } else {
-        // Client login
-        localStorage.setItem("macao-user", JSON.stringify({
+      const registeredReps = JSON.parse(localStorage.getItem("macao-registered-reps") || "[]");
+      const registeredRep = registeredReps.find((r: any) => normalizeEmail(r.email) === email);
+      const mockRepId = mockRepEmails[email];
+
+      if (user && user.password !== loginPassword) {
+        setErrors({ loginPassword: "Contraseña incorrecta" });
+        setIsLoading(false);
+        return;
+      }
+
+      if (registeredRep) {
+        localStorage.setItem("sellers-rep-id", registeredRep.id);
+        setSessionUser({
+          email: user?.email || loginEmail,
+          name: user?.name || registeredRep.name,
+          role: loginRole,
+          loggedInAt: new Date().toISOString(),
+        });
+        setIsLoading(false);
+        onClose();
+        router.push("/sellers/dashboard");
+        return;
+      }
+
+      if (user && !registeredRep) {
+        setErrors({ loginEmail: "Cuenta registrada, pero aún no está aprobada como representante." });
+        setIsLoading(false);
+        return;
+      }
+
+      if (mockRepId) {
+        localStorage.setItem("sellers-rep-id", mockRepId);
+        setSessionUser({
           email: loginEmail,
           role: loginRole,
           loggedInAt: new Date().toISOString(),
-        }));
-        onClose();
-      }
-    }, 1500);
-  }
-
-  function handleRegister() {
-    if (!validateRegister()) return;
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-
-      // Store user session
-      const userData = {
-        name: regName,
-        phone: regPhone,
-        email: regEmail,
-        role: regRole,
-        registeredAt: new Date().toISOString(),
-      };
-      localStorage.setItem("macao-user", JSON.stringify(userData));
-
-      // If representative, register and redirect to sellers panel
-      if (regRole === "representante") {
-        const initials = regName
-          .split(" ")
-          .map((w: string) => w[0])
-          .join("")
-          .toUpperCase()
-          .slice(0, 2);
-
-        const newRep = {
-          id: `REP-${Date.now()}`,
-          name: regName,
-          phone: regPhone,
-          email: regEmail,
-          company: "Independiente",
-          type: "local_seller",
-          commissionPercent: 15,
-          initials,
-        };
-
-        // Save to registered reps list
-        const registeredReps = JSON.parse(localStorage.getItem("macao-registered-reps") || "[]");
-        registeredReps.push(newRep);
-        localStorage.setItem("macao-registered-reps", JSON.stringify(registeredReps));
-        localStorage.setItem("sellers-rep-id", newRep.id);
-
+        });
+        setIsLoading(false);
         onClose();
         router.push("/sellers/dashboard");
-      } else {
-        onClose();
+        return;
       }
-    }, 1500);
+
+      setErrors({ loginEmail: "No se encontró una cuenta de representante con este correo. Regístrate primero." });
+      setIsLoading(false);
+      return;
+    }
+
+    if (!user) {
+      setErrors({ loginEmail: "No existe una cuenta con este correo" });
+      setIsLoading(false);
+      return;
+    }
+
+    if (user.password !== loginPassword) {
+      setErrors({ loginPassword: "Contraseña incorrecta" });
+      setIsLoading(false);
+      return;
+    }
+
+    setSessionUser({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      loggedInAt: new Date().toISOString(),
+    });
+    setIsLoading(false);
+    onClose();
+  }
+
+  async function handleRegister() {
+    if (!validateRegister()) return;
+    setIsLoading(true);
+
+    const newUser: RegisteredUser = {
+      id: `USR-${Date.now()}`,
+      name: regName.trim(),
+      phone: regPhone.trim(),
+      email: normalizeEmail(regEmail),
+      password: regPassword,
+      role: regRole,
+      registeredAt: new Date().toISOString(),
+    };
+
+    const registeredUsers = getRegisteredUsers();
+    registeredUsers.push(newUser);
+    saveRegisteredUsers(registeredUsers);
+
+    setSessionUser({
+      id: newUser.id,
+      name: newUser.name,
+      phone: newUser.phone,
+      email: newUser.email,
+      role: newUser.role,
+      loggedInAt: new Date().toISOString(),
+    });
+
+    // Optional confirmation email (non-blocking)
+    try {
+      await fetch("/api/send-register-confirmation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newUser.name,
+          email: newUser.email,
+          role: newUser.role,
+        }),
+      });
+    } catch {
+      // Ignore email send failures; account creation should not fail.
+    }
+
+    // If representative, register and redirect to sellers panel
+    if (regRole === "representante") {
+      const initials = regName
+        .split(" ")
+        .map((w: string) => w[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2);
+
+      const newRep = {
+        id: `REP-${Date.now()}`,
+        name: regName,
+        phone: regPhone,
+        email: normalizeEmail(regEmail),
+        company: "Independiente",
+        type: "local_seller",
+        commissionPercent: 15,
+        initials,
+      };
+
+      const registeredReps = JSON.parse(localStorage.getItem("macao-registered-reps") || "[]");
+      registeredReps.push(newRep);
+      localStorage.setItem("macao-registered-reps", JSON.stringify(registeredReps));
+      localStorage.setItem("sellers-rep-id", newRep.id);
+
+      setIsLoading(false);
+      onClose();
+      router.push("/sellers/dashboard");
+      return;
+    }
+
+    setIsLoading(false);
+    onClose();
   }
 
   if (!isOpen) return null;
