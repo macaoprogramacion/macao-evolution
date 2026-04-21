@@ -128,7 +128,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ...(tieredPricesByCategory ? { tieredPricesByCategory } : {}),
         }
         if (hasVacanciesByCategory) {
-          item.vacancies = vacancies
           item.vacanciesByCategory = product.vacanciesByCategory!.map((vc) => ({
             category: vc.category,
             vacancies: dateStr < todayStr ? 0 : Math.max(0, vc.defaultVacancies - booked),
@@ -149,7 +148,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ...(tieredPricesByCategory ? { tieredPricesByCategory } : {}),
         }
         if (hasVacanciesByCategory) {
-          item.vacancies = vacancies
           item.vacanciesByCategory = product.vacanciesByCategory!.map((vc) => ({
             category: vc.category,
             vacancies: dateStr < todayStr ? 0 : Math.max(0, vc.defaultVacancies - booked),
