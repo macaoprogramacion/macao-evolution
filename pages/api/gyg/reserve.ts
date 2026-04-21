@@ -40,14 +40,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json(gygError("INVALID_PRODUCT", `Product '${productId}' does not exist.`))
     }
 
-    // Validate ticket categories
-    const validCategories = ["ADULT", "CHILD", "YOUTH", "INFANT", "SENIOR", "STUDENT", "EU_CITIZEN", "MILITARY", "EU_CITIZEN_STUDENT", "GROUP"]
+    // Validate ticket categories against what this specific product supports
+    const supportedCategories = new Set<string>(product.prices.map((p) => p.category))
     for (const item of bookingItems) {
-      if (!validCategories.includes(item.category)) {
+      if (!supportedCategories.has(item.category)) {
         return res.status(200).json(
-          gygError("INVALID_TICKET_CATEGORY", `Category '${item.category}' is not supported.`, {
+          gygError("INVALID_TICKET_CATEGORY", `Category '${item.category}' is not supported for product '${productId}'.`, {
             ticketCategory: item.category,
-          } as any)
+          })
         )
       }
     }

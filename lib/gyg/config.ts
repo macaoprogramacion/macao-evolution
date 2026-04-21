@@ -131,7 +131,7 @@ export const PRODUCTS: Record<string, ProductConfig> = {
     destinationLocation: { city: "Punta Cana", country: "DOM" },
     defaultVacancies: 40,
     minParticipants: 1,
-    maxParticipants: 25,
+    maxParticipants: 20,
     currency: "USD",
     prices: [
       { category: "ADULT", price: 11500 }, // $115.00
