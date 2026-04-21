@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type SyntheticEvent, useEffect, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
 
@@ -34,8 +34,32 @@ type HomepageMediaRow = {
 };
 
 function getStoragePublicUrl(storagePath: string) {
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
+  const trimmedPath = storagePath.trim();
+
+  // Accept full URL values saved in DB without re-building them.
+  if (/^https?:\/\//i.test(trimmedPath)) {
+    return trimmedPath;
+  }
+
+  // Normalize common variants like:
+  // /homepage-videos/file.mp4
+  // portfolio-media/homepage-videos/file.mp4
+  const withoutLeadingSlash = trimmedPath.replace(/^\/+/, "");
+  const normalizedPath = withoutLeadingSlash.startsWith(`${STORAGE_BUCKET}/`)
+    ? withoutLeadingSlash.slice(STORAGE_BUCKET.length + 1)
+    : withoutLeadingSlash;
+
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(normalizedPath);
   return data.publicUrl;
+}
+
+function handleVideoError(event: SyntheticEvent<HTMLVideoElement>, fallbackSrc: string) {
+  const video = event.currentTarget;
+  if (video.dataset.fallbackApplied === "true") return;
+
+  video.dataset.fallbackApplied = "true";
+  video.src = fallbackSrc;
+  video.load();
 }
 
 export function CollectionSection() {
@@ -115,8 +139,10 @@ export function CollectionSection() {
                     loop
                     muted
                     playsInline
+                    preload="metadata"
                     className="absolute inset-0 h-full w-full object-cover"
                     src={video.src}
+                    onError={(event) => handleVideoError(event, fallbackVideos[0].id === video.id ? fallbackVideos[0].src : fallbackVideos[1].src)}
                   />
                 </div>
                 <div className="py-6">
@@ -135,8 +161,10 @@ export function CollectionSection() {
                 loop
                 muted
                 playsInline
+                preload="metadata"
                 className="absolute inset-0 h-full w-full object-cover"
                 src={featuredVideo.src}
+                onError={(event) => handleVideoError(event, fallbackFeaturedVideo.src)}
               />
             </div>
           </div>
@@ -153,8 +181,10 @@ export function CollectionSection() {
                     loop
                     muted
                     playsInline
+                    preload="metadata"
                     className="absolute inset-0 h-full w-full object-cover"
                     src={video.src}
+                    onError={(event) => handleVideoError(event, fallbackVideos[0].id === video.id ? fallbackVideos[0].src : fallbackVideos[1].src)}
                   />
                 </div>
                 <div className="py-6">
@@ -173,8 +203,10 @@ export function CollectionSection() {
                 loop
                 muted
                 playsInline
+                preload="metadata"
                 className="absolute inset-0 h-full w-full object-cover"
                 src={featuredVideo.src}
+                onError={(event) => handleVideoError(event, fallbackFeaturedVideo.src)}
               />
             </div>
           </div>
