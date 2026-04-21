@@ -56,6 +56,30 @@ interface CardInfo {
   cvc: string;
 }
 
+type StoredCustomerReservation = {
+  id: string;
+  createdAt: string;
+  customer: CustomerInfo;
+  items: { id: string; name: string; quantity: number; price: number; image: string }[];
+  totals: {
+    totalPrice: number;
+    totalPaid: number;
+    remainingAmount: number;
+    paymentOption: PaymentOption;
+    paymentMethod: PaymentMethod;
+  };
+  pickup?: {
+    mode: "hotel" | "custom";
+    hotel?: string;
+    custom?: string;
+    date?: string;
+    time?: string;
+    point?: string;
+  };
+};
+
+const CUSTOMER_RESERVATIONS_KEY = "macao-customer-reservations";
+
 const DEFAULT_TIMES = [
   { id: 0, label: "Mañana", time: "8:00 AM", hour: 8, minute: 0 },
   { id: 1, label: "Media mañana", time: "11:00 AM", hour: 11, minute: 0 },
@@ -226,6 +250,16 @@ function formatDateDisplay(iso: string): string {
   return d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
+function saveCustomerReservation(reservation: StoredCustomerReservation) {
+  try {
+    const current = JSON.parse(localStorage.getItem(CUSTOMER_RESERVATIONS_KEY) || "[]") as StoredCustomerReservation[];
+    current.unshift(reservation);
+    localStorage.setItem(CUSTOMER_RESERVATIONS_KEY, JSON.stringify(current));
+  } catch {
+    // Ignore storage failures to avoid blocking checkout completion.
+  }
+}
+
 export function CheckoutModal({
   isOpen,
   onClose,
@@ -350,6 +384,39 @@ export function CheckoutModal({
     setIsProcessing(true);
     // Simulate payment processing
     setTimeout(async () => {
+      const selectedPickupTime = pickupTimeSlot !== null ? activeTimes[pickupTimeSlot] : null;
+
+      const reservationRecord: StoredCustomerReservation = {
+        id: `RSV-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        customer,
+        items: items.map((i) => ({
+          id: i.id,
+          name: i.name,
+          quantity: i.quantity,
+          price: i.price,
+          image: i.image,
+        })),
+        totals: {
+          totalPrice,
+          totalPaid: amountToPay,
+          remainingAmount: paymentOption === "partial" ? remainingAmount : 0,
+          paymentOption,
+          paymentMethod,
+        },
+        pickup: !hasPrivateTransport
+          ? {
+              mode: pickupMode,
+              hotel: pickupHotel || undefined,
+              custom: pickupCustom || undefined,
+              date: pickupDate || undefined,
+              time: selectedPickupTime ? `${selectedPickupTime.time} (${selectedPickupTime.label})` : undefined,
+              point: activePickupPoint || undefined,
+            }
+          : undefined,
+      };
+
+      saveCustomerReservation(reservationRecord);
       setIsProcessing(false);
       setStep(4);
 
@@ -371,7 +438,7 @@ export function CheckoutModal({
                   hotel: pickupHotel || undefined,
                   custom: pickupCustom || undefined,
                   date: pickupDate ? formatDateDisplay(pickupDate) : undefined,
-                  time: pickupTimeSlot !== null ? `${activeTimes[pickupTimeSlot].time} (${activeTimes[pickupTimeSlot].label})` : undefined,
+                  time: selectedPickupTime ? `${selectedPickupTime.time} (${selectedPickupTime.label})` : undefined,
                   point: activePickupPoint || undefined,
                 }
               : undefined,

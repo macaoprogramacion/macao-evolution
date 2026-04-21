@@ -12,6 +12,7 @@ export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isMobileProfileOpen, setIsMobileProfileOpen] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const { theme, setTheme } = useTheme();
@@ -61,6 +62,7 @@ export function Header() {
     localStorage.removeItem("sellers-rep-id");
     window.dispatchEvent(new Event("macao-auth-changed"));
     setIsProfileMenuOpen(false);
+    setIsMobileProfileOpen(false);
     setIsMenuOpen(false);
   };
 
@@ -148,7 +150,7 @@ export function Header() {
               {isProfileMenuOpen && (
                 <div className="absolute right-0 mt-2 w-52 rounded-xl border border-border bg-background p-2 shadow-xl">
                   <Link
-                    href="/cancelaciones"
+                    href="/reservas"
                     onClick={() => setIsProfileMenuOpen(false)}
                     className="block rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted"
                   >
@@ -244,35 +246,50 @@ export function Header() {
             </Link>
             {userName ? (
               <>
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  {userName.split(" ")[0]}
-                </p>
-                <Link href="/cancelaciones" onClick={() => setIsMenuOpen(false)} className="text-base text-foreground">
-                  Mis reservas
-                </Link>
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    document.getElementById("products")?.scrollIntoView({ behavior: "smooth" });
-                  }}
-                  className="text-base text-foreground text-left"
+                  onClick={() => setIsMobileProfileOpen((prev) => !prev)}
+                  className="mt-2 flex w-full items-center justify-between text-left"
                 >
-                  Regalar
+                  <span className="text-sm font-semibold text-foreground">
+                    {userName.split(" ")[0]}
+                  </span>
+                  <ChevronDown
+                    size={16}
+                    className={`text-muted-foreground transition-transform ${isMobileProfileOpen ? "rotate-180" : ""}`}
+                  />
                 </button>
-                <Link href="/faq" onClick={() => setIsMenuOpen(false)} className="text-base text-foreground">
-                  Ayuda
-                </Link>
-                <Link href="/contact" onClick={() => setIsMenuOpen(false)} className="text-base text-foreground">
-                  Contactanos
-                </Link>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="mt-4 bg-foreground px-5 py-3 text-center text-sm font-medium text-background rounded-full w-full"
-                >
-                  Cerrar sesion
-                </button>
+
+                {isMobileProfileOpen && (
+                  <>
+                    <Link href="/reservas" onClick={() => setIsMenuOpen(false)} className="text-base text-foreground">
+                      Mis reservas
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        document.getElementById("products")?.scrollIntoView({ behavior: "smooth" });
+                      }}
+                      className="text-base text-foreground text-left"
+                    >
+                      Regalar
+                    </button>
+                    <Link href="/faq" onClick={() => setIsMenuOpen(false)} className="text-base text-foreground">
+                      Ayuda
+                    </Link>
+                    <Link href="/contact" onClick={() => setIsMenuOpen(false)} className="text-base text-foreground">
+                      Contactanos
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="mt-4 bg-foreground px-5 py-3 text-center text-sm font-medium text-background rounded-full w-full"
+                    >
+                      Cerrar sesion
+                    </button>
+                  </>
+                )}
               </>
             ) : (
               <button
