@@ -10,6 +10,7 @@ import notifyHandler from "./notify"
 import productListHandler from "./product-list"
 import productDetailsHandler from "./product-details"
 import addonsHandler from "./addons"
+import pricingCategoriesHandler from "./pricing-categories"
 
 /* ────────────────────────────────────────────────────────────────
    GYG Supplier API – Path-based Router
@@ -87,6 +88,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.json = (body: any) => { capturedBody = body; return origJson(body) }
     try {
       await addonsHandler(req, res)
+      if (logId) { capturedBody?.errorCode ? markWebhookFailed(logId, capturedBody, capturedBody.errorMessage) : markWebhookSuccess(logId, capturedBody) }
+    } catch (err: any) {
+      if (logId) markWebhookFailed(logId, capturedBody, err.message)
+      if (!res.headersSent) return res.status(200).json(gygError("INTERNAL_SYSTEM_FAILURE", err.message || "Unexpected error."))
+    }
+    return
+  }
+
+  // GET /1/products/{productId}/pricing-categories
+  if (slugs[1] === "products" && slugs.length >= 4 && slugs[3] === "pricing-categories") {
+    req.query.productId = slugs[2]
+    const shouldLog = req.method === "POST"
+    const logId = shouldLog ? await logWebhookRequest("products/pricing-categories", req) : null
+    const origJson = res.json.bind(res)
+    let capturedBody: any
+    res.json = (body: any) => { capturedBody = body; return origJson(body) }
+    try {
+      await pricingCategoriesHandler(req, res)
       if (logId) { capturedBody?.errorCode ? markWebhookFailed(logId, capturedBody, capturedBody.errorMessage) : markWebhookSuccess(logId, capturedBody) }
     } catch (err: any) {
       if (logId) markWebhookFailed(logId, capturedBody, err.message)
