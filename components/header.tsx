@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Menu, X, Sun, Moon } from "lucide-react";
@@ -11,7 +11,9 @@ export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
@@ -40,10 +42,25 @@ export function Header() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", handleClickOutside);
+    return () => window.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const handleLogout = () => {
     localStorage.removeItem("macao-user");
     localStorage.removeItem("sellers-rep-id");
     window.dispatchEvent(new Event("macao-auth-changed"));
+    setIsProfileMenuOpen(false);
     setIsMenuOpen(false);
   };
 
@@ -119,13 +136,58 @@ export function Header() {
             <Moon className="absolute w-4 h-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           </button>
           {userName ? (
-            <button
-              type="button"
-              onClick={handleLogout}
-              className={`px-4 py-2 text-sm font-medium transition-all rounded-full ${isScrolled ? "bg-foreground text-background hover:opacity-80" : "bg-white text-foreground hover:bg-white/90"}`}
-            >
-              Salir ({userName.split(" ")[0]})
-            </button>
+            <div className="relative" ref={profileMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+                className={`px-4 py-2 text-sm font-medium transition-all rounded-full ${isScrolled ? "bg-foreground text-background hover:opacity-80" : "bg-white text-foreground hover:bg-white/90"}`}
+              >
+                {userName.split(" ")[0]}
+              </button>
+
+              {isProfileMenuOpen && (
+                <div className="absolute right-0 mt-2 w-52 rounded-xl border border-border bg-background p-2 shadow-xl">
+                  <Link
+                    href="/cancelaciones"
+                    onClick={() => setIsProfileMenuOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted"
+                  >
+                    Mis reservas
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      document.getElementById("products")?.scrollIntoView({ behavior: "smooth" });
+                    }}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
+                  >
+                    Regalar
+                  </button>
+                  <Link
+                    href="/faq"
+                    onClick={() => setIsProfileMenuOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted"
+                  >
+                    Ayuda
+                  </Link>
+                  <Link
+                    href="/contact"
+                    onClick={() => setIsProfileMenuOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted"
+                  >
+                    Contactanos
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                  >
+                    Cerrar sesion
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
             <button
               type="button"
@@ -181,13 +243,37 @@ export function Header() {
               Get my photos
             </Link>
             {userName ? (
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="mt-4 bg-foreground px-5 py-3 text-center text-sm font-medium text-background rounded-full w-full"
-              >
-                Salir ({userName.split(" ")[0]})
-              </button>
+              <>
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  {userName.split(" ")[0]}
+                </p>
+                <Link href="/cancelaciones" onClick={() => setIsMenuOpen(false)} className="text-base text-foreground">
+                  Mis reservas
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    document.getElementById("products")?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="text-base text-foreground text-left"
+                >
+                  Regalar
+                </button>
+                <Link href="/faq" onClick={() => setIsMenuOpen(false)} className="text-base text-foreground">
+                  Ayuda
+                </Link>
+                <Link href="/contact" onClick={() => setIsMenuOpen(false)} className="text-base text-foreground">
+                  Contactanos
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="mt-4 bg-foreground px-5 py-3 text-center text-sm font-medium text-background rounded-full w-full"
+                >
+                  Cerrar sesion
+                </button>
+              </>
             ) : (
               <button
                 type="button"
