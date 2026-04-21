@@ -130,6 +130,10 @@ export const PRODUCTS: Record<string, ProductConfig> = {
     destinationTable: "samana_reservations",
     destinationLocation: { city: "Punta Cana", country: "DOM" },
     defaultVacancies: 40,
+    vacanciesByCategory: [
+      { category: "ADULT", defaultVacancies: 40 },
+      { category: "CHILD", defaultVacancies: 40 },
+    ],
     minParticipants: 1,
     maxParticipants: 25,
     currency: "USD",
