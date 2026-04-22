@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/select"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { supabase } from "@/lib/supabase"
+import { products as fallbackProducts } from "@/lib/products"
 
 // Webs disponibles (sin Viator ni GetYourGuide)
 const websites = [
@@ -116,6 +117,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [syncingMissing, setSyncingMissing] = useState(false)
   const [uploadingMain, setUploadingMain] = useState(false)
   const [uploadingGallery, setUploadingGallery] = useState(false)
 
@@ -365,6 +367,54 @@ export default function ProductsPage() {
     totalRevenue: products.reduce((sum, p) => sum + p.price, 0),
   }
 
+  const missingFallbackProducts = fallbackProducts.filter(
+    (fallbackProduct) => !products.some((product) => product.slug === fallbackProduct.slug)
+  )
+
+  const handleSyncMissingProducts = async () => {
+    if (missingFallbackProducts.length === 0) return
+
+    setSyncingMissing(true)
+
+    const rows = missingFallbackProducts.map((product) => {
+      const websiteData = websites.find((website) => website.value === product.website)
+
+      return {
+        slug: product.slug,
+        title: product.title,
+        description: product.description,
+        capacity: product.capacity,
+        image: product.image,
+        price: product.price,
+        original_price: product.originalPrice ?? null,
+        has_discount: product.hasDiscount ?? false,
+        discount_percent: product.discountPercent ?? 0,
+        duration: product.duration,
+        highlights: product.highlights,
+        gallery: product.gallery,
+        itinerary: product.itinerary,
+        general_info: product.generalInfo,
+        category: product.category || "",
+        website: product.website || "",
+        website_label: product.websiteLabel || websiteData?.label || "",
+        website_color: product.websiteColor || websiteData?.color || "",
+        active: product.active ?? true,
+      }
+    })
+
+    const { error } = await supabase.from("products").insert(rows)
+
+    if (error) {
+      console.error("Error syncing missing products:", error)
+      alert("Error importando productos faltantes: " + error.message)
+    } else {
+      await loadProducts()
+      alert(`Se importaron ${rows.length} productos faltantes.`)
+    }
+
+    setSyncingMissing(false)
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-4 md:space-y-6">
@@ -376,6 +426,22 @@ export default function ProductsPage() {
               Administra precios, ofertas y fotos de tus experiencias
             </p>
           </div>
+          {missingFallbackProducts.length > 0 && (
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleSyncMissingProducts}
+              disabled={syncingMissing}
+            >
+              {syncingMissing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Plus className="w-4 h-4 mr-2" />
+              )}
+              {syncingMissing
+                ? "Importando productos..."
+                : `Importar ${missingFallbackProducts.length} productos faltantes`}
+            </Button>
+          )}
         </div>
 
         {/* Stats Cards */}
