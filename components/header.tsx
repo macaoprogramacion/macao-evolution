@@ -78,7 +78,7 @@ export function Header() {
   return (
     <>
     <header 
-      className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-3xl transition-all duration-300 ${isScrolled ? "bg-background/80 backdrop-blur-md rounded-full" : "bg-transparent"}`}
+      className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-3xl overflow-hidden transition-all duration-300 ${isMenuOpen ? "bg-background/95 backdrop-blur-md rounded-2xl" : isScrolled ? "bg-background/80 backdrop-blur-md rounded-full" : "bg-transparent"}`}
       style={{
         boxShadow: isScrolled ? "rgba(14, 63, 126, 0.04) 0px 0px 0px 1px, rgba(42, 51, 69, 0.04) 0px 1px 1px -0.5px, rgba(42, 51, 70, 0.04) 0px 3px 3px -1.5px, rgba(42, 51, 70, 0.04) 0px 6px 6px -3px, rgba(14, 63, 126, 0.04) 0px 12px 12px -6px, rgba(14, 63, 126, 0.04) 0px 24px 24px -12px" : "none"
       }}
