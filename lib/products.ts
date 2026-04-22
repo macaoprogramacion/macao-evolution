@@ -742,11 +742,11 @@ const fallbackProducts: Product[] = [
     title: "HORSEBACK RIDING FULL",
     description: "SINGLE",
     capacity: "1 person",
-    image: "/images/productos/1.webp",
+    image: "/images/productos/horseback-full-main.webp",
     price: 60,
     originalPrice: 75,
     gallery: [
-      "/images/productos/1.webp",
+      "/images/productos/horseback-full-main.webp",
       "/images/productos/2.webp",
       "/images/productos/3.webp",
       "/images/productos/4.webp",

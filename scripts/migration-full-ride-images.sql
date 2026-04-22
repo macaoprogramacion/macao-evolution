@@ -4,9 +4,9 @@
 
 UPDATE products
 SET
-  image = '/images/productos/1.webp',
+  image = '/images/productos/horseback-full-main.webp',
   gallery = jsonb_build_array(
-    '/images/productos/1.webp',
+    '/images/productos/horseback-full-main.webp',
     '/images/productos/2.webp',
     '/images/productos/3.webp',
     '/images/productos/4.webp',
