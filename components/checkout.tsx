@@ -358,9 +358,9 @@ export function CheckoutModal({
       }
 
       setCustomer({
-        name: draft.receiverName || "",
-        phone: draft.receiverPhone || "",
-        email: draft.receiverEmail || "",
+        name: "",
+        phone: "",
+        email: "",
       });
       setStep(1);
       setErrors({});
@@ -627,7 +627,7 @@ export function CheckoutModal({
               </h2>
               <p className="text-sm text-muted-foreground mb-6">
                 {isGiftFlow
-                  ? "Datos de la persona que recibirá la experiencia"
+                  ? "Completa tus datos para continuar con el regalo"
                   : "Completa tu información para continuar"}
               </p>
 
