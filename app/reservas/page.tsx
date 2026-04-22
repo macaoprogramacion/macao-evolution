@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { CalendarDays, ChevronDown, Clock3, MapPin, ReceiptText, UserRound } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronLeft, Clock3, MapPin, ReceiptText, UserRound } from "lucide-react";
 
 type Reservation = {
   id: string;
@@ -43,6 +44,7 @@ function formatDate(value: string) {
 }
 
 export default function ReservasPage() {
+  const router = useRouter();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -72,6 +74,14 @@ export default function ReservasPage() {
     <main className="min-h-screen bg-background px-4 pb-16 pt-28 md:px-8">
       <div className="mx-auto w-full max-w-5xl">
         <div className="mb-8">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="mb-4 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Volver
+          </button>
           <h1 className="text-3xl font-title text-foreground">Mis reservas</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Aqui puedes ver las experiencias que reservaste y consultar la informacion de recogida y pago.
