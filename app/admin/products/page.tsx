@@ -574,8 +574,27 @@ export default function ProductsPage() {
                     <TableRow key={product.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
-                            <ImageIcon className="w-6 h-6 text-gray-400" />
+                          <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden border border-gray-200">
+                            {product.image ? (
+                              <img
+                                src={product.image}
+                                alt={product.name}
+                                className="w-full h-full object-cover"
+                                onError={(event) => {
+                                  event.currentTarget.style.display = "none"
+                                  const fallback = event.currentTarget.nextElementSibling as HTMLElement | null
+                                  if (fallback) {
+                                    fallback.style.display = "flex"
+                                  }
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className="w-full h-full items-center justify-center"
+                              style={{ display: product.image ? "none" : "flex" }}
+                            >
+                              <ImageIcon className="w-6 h-6 text-gray-400" />
+                            </div>
                           </div>
                           <div>
                             <div className="font-medium text-gray-900">{product.name}</div>
