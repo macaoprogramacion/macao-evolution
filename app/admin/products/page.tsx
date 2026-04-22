@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import {
   Search,
   Plus,
@@ -69,6 +69,20 @@ interface Product {
   discountPercent: number
   description: string
   image: string
+  gallery: string[]
+  highlights: string[]
+  itinerary: { title: string; duration: string; description: string; details?: string[] }[]
+  generalInfo: {
+    minAge?: string
+    notAllowed?: string
+    freeCancellation?: string
+    bookNowPayLater?: string
+    duration?: string
+    guide?: string
+    pickupService?: string
+  }
+  duration: string
+  capacity: string
   active: boolean
   category: string
 }
@@ -87,6 +101,12 @@ function mapRowToAdminProduct(row: any): Product {
     discountPercent: row.discount_percent ? Number(row.discount_percent) : 0,
     description: row.description || "",
     image: row.image || "",
+    gallery: Array.isArray(row.gallery) ? row.gallery : [],
+    highlights: Array.isArray(row.highlights) ? row.highlights : [],
+    itinerary: Array.isArray(row.itinerary) ? row.itinerary : [],
+    generalInfo: row.general_info || {},
+    duration: row.duration || "",
+    capacity: row.capacity || "",
     active: row.active,
     category: row.category || "",
   }
@@ -96,6 +116,11 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingMain, setUploadingMain] = useState(false)
+  const [uploadingGallery, setUploadingGallery] = useState(false)
+
+  const mainImageInputRef = useRef<HTMLInputElement | null>(null)
+  const galleryImagesInputRef = useRef<HTMLInputElement | null>(null)
 
   const [searchQuery, setSearchQuery] = useState("")
   const [websiteFilter, setWebsiteFilter] = useState("all")
@@ -131,6 +156,12 @@ export default function ProductsPage() {
     hasDiscount: false,
     description: "",
     image: "",
+    galleryText: "",
+    highlightsText: "",
+    itineraryJson: "[]",
+    generalInfoJson: "{}",
+    duration: "",
+    capacity: "",
     active: true,
     category: "",
   })
@@ -151,10 +182,85 @@ export default function ProductsPage() {
       hasDiscount: product.hasDiscount,
       description: product.description,
       image: product.image,
+      galleryText: product.gallery.join("\n"),
+      highlightsText: product.highlights.join("\n"),
+      itineraryJson: JSON.stringify(product.itinerary || [], null, 2),
+      generalInfoJson: JSON.stringify(product.generalInfo || {}, null, 2),
+      duration: product.duration || "",
+      capacity: product.capacity || "",
       active: product.active,
       category: product.category,
     })
     setIsEditDialogOpen(true)
+  }
+
+  const uploadToProductMediaBucket = useCallback(
+    async (file: File, kind: "main" | "gallery") => {
+      if (!editingProduct) return null
+
+      const sanitizedName = file.name
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9._-]/g, "")
+
+      const path = `products/${editingProduct.slug}/${Date.now()}-${kind}-${sanitizedName}`
+
+      const { error: uploadError } = await supabase.storage
+        .from("portfolio-media")
+        .upload(path, file, { upsert: false, cacheControl: "3600" })
+
+      if (uploadError) {
+        throw uploadError
+      }
+
+      const { data } = supabase.storage.from("portfolio-media").getPublicUrl(path)
+      return data.publicUrl
+    },
+    [editingProduct]
+  )
+
+  const handleMainImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploadingMain(true)
+    try {
+      const publicUrl = await uploadToProductMediaBucket(file, "main")
+      if (publicUrl) {
+        setFormData((prev) => ({ ...prev, image: publicUrl }))
+      }
+    } catch (error: any) {
+      alert("Error subiendo imagen principal: " + (error?.message || "Error desconocido"))
+    } finally {
+      setUploadingMain(false)
+      event.target.value = ""
+    }
+  }
+
+  const handleGalleryImagesUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    setUploadingGallery(true)
+    try {
+      const uploadTasks = Array.from(files).map((file) => uploadToProductMediaBucket(file, "gallery"))
+      const urls = (await Promise.all(uploadTasks)).filter(Boolean) as string[]
+
+      if (urls.length > 0) {
+        setFormData((prev) => {
+          const existing = prev.galleryText
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)
+          return { ...prev, galleryText: [...existing, ...urls].join("\n") }
+        })
+      }
+    } catch (error: any) {
+      alert("Error subiendo imágenes de galería: " + (error?.message || "Error desconocido"))
+    } finally {
+      setUploadingGallery(false)
+      event.target.value = ""
+    }
   }
 
   const handleSaveProduct = async () => {
@@ -166,16 +272,44 @@ export default function ProductsPage() {
       ? Math.round(((formData.originalPrice - formData.price) / formData.originalPrice) * 100)
       : 0
 
+    const gallery = formData.galleryText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+
+    const highlights = formData.highlightsText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+
+    let itinerary: Product["itinerary"] = []
+    let generalInfo: Product["generalInfo"] = {}
+
+    try {
+      itinerary = JSON.parse(formData.itineraryJson || "[]")
+      generalInfo = JSON.parse(formData.generalInfoJson || "{}")
+    } catch {
+      alert("Itinerario o Información General tienen JSON inválido.")
+      setSaving(false)
+      return
+    }
+
     const { error } = await supabase
       .from("products")
       .update({
         title: formData.name,
         description: formData.description,
+        capacity: formData.capacity,
+        duration: formData.duration,
         price: formData.price,
         original_price: formData.hasDiscount ? formData.originalPrice : null,
         has_discount: formData.hasDiscount,
         discount_percent: discountPercent,
         image: formData.image,
+        gallery,
+        highlights,
+        itinerary,
+        general_info: generalInfo,
         active: formData.active,
         category: formData.category,
         website: formData.website,
@@ -512,6 +646,27 @@ export default function ProductsPage() {
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-capacity">Capacidad</Label>
+                  <Input
+                    id="edit-capacity"
+                    value={formData.capacity}
+                    onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
+                    placeholder="1 person"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-duration">Duración</Label>
+                  <Input
+                    id="edit-duration"
+                    value={formData.duration}
+                    onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                    placeholder="4 hours"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="edit-category">Categoría</Label>
                 <Input
@@ -595,10 +750,95 @@ export default function ProductsPage() {
                     placeholder="/tours/product-name.jpg"
                   />
                 </div>
-                <Button variant="outline" className="w-full">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Subir Nueva Imagen
+                <input
+                  ref={mainImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleMainImageUpload}
+                  className="hidden"
+                />
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => mainImageInputRef.current?.click()}
+                  disabled={uploadingMain || saving}
+                >
+                  {uploadingMain ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4 mr-2" />
+                  )}
+                  {uploadingMain ? "Subiendo imagen principal..." : "Subir Imagen Principal al Bucket"}
                 </Button>
+              </div>
+
+              <div className="border-t pt-4 space-y-4">
+                <h3 className="font-semibold text-gray-900">Galería e Información</h3>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-gallery">Galería (1 URL por línea)</Label>
+                  <Textarea
+                    id="edit-gallery"
+                    value={formData.galleryText}
+                    onChange={(e) => setFormData({ ...formData, galleryText: e.target.value })}
+                    rows={5}
+                    placeholder="https://.../img-1.webp"
+                  />
+                </div>
+
+                <input
+                  ref={galleryImagesInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleGalleryImagesUpload}
+                  className="hidden"
+                />
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => galleryImagesInputRef.current?.click()}
+                  disabled={uploadingGallery || saving}
+                >
+                  {uploadingGallery ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4 mr-2" />
+                  )}
+                  {uploadingGallery ? "Subiendo galería..." : "Subir Imágenes de Galería al Bucket"}
+                </Button>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-highlights">Highlights (1 item por línea)</Label>
+                  <Textarea
+                    id="edit-highlights"
+                    value={formData.highlightsText}
+                    onChange={(e) => setFormData({ ...formData, highlightsText: e.target.value })}
+                    rows={4}
+                    placeholder="Complete horseback riding experience"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-itinerary">Itinerary (JSON)</Label>
+                  <Textarea
+                    id="edit-itinerary"
+                    value={formData.itineraryJson}
+                    onChange={(e) => setFormData({ ...formData, itineraryJson: e.target.value })}
+                    rows={8}
+                    placeholder='[{"title":"Pick-Up","duration":"30 mins","description":"..."}]'
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-general-info">Información General (JSON)</Label>
+                  <Textarea
+                    id="edit-general-info"
+                    value={formData.generalInfoJson}
+                    onChange={(e) => setFormData({ ...formData, generalInfoJson: e.target.value })}
+                    rows={8}
+                    placeholder='{"minAge":"...","notAllowed":"..."}'
+                  />
+                </div>
               </div>
 
               <div className="border-t pt-4">
