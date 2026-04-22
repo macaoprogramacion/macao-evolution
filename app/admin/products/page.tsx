@@ -113,6 +113,11 @@ function mapRowToAdminProduct(row: any): Product {
   }
 }
 
+function normalizeImageSrc(image: string): string {
+  if (!image) return ""
+  return encodeURI(image.trim())
+}
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -577,7 +582,7 @@ export default function ProductsPage() {
                           <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden border border-gray-200">
                             {product.image ? (
                               <img
-                                src={product.image}
+                                src={normalizeImageSrc(product.image)}
                                 alt={product.name}
                                 className="w-full h-full object-cover"
                                 onError={(event) => {
