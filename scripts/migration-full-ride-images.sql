@@ -5,13 +5,13 @@
 UPDATE products
 SET
   image = '/images/productos/1.webp',
-  gallery = ARRAY[
+  gallery = jsonb_build_array(
     '/images/productos/1.webp',
     '/images/productos/2.webp',
     '/images/productos/3.webp',
     '/images/productos/4.webp',
     '/images/productos/5.webp'
-  ]
+  )
 WHERE slug = 'full-ride-experience'
   AND title = 'FULL RIDE EXPERIENCE';
 
