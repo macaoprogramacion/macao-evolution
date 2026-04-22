@@ -4,46 +4,15 @@ import { type SyntheticEvent, useEffect, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
 
-const fallbackVideos = [
-  {
-    id: "macao-beach",
-    src: "/images/videos/lateral-izquierdo.mp4",
-    name: "Macao Beach",
-    description: "Vive la experiencia en los caminos de Macao",
-  },
-  {
-    id: "horseback-riding",
-    src: "/images/videos/lateral-derecho.mp4",
-    name: "Horseback Riding",
-    description: "Descubre los mejores paisajes en buggy",
-  },
-];
-
-const fallbackFeaturedVideo = {
-  src: "/images/videos/video-grande.mp4",
-  name: "Adventure Experience",
-};
-
 const STORAGE_BUCKET = "portfolio-media";
-
-type HomepageMediaRow = {
-  slot: string;
-  title: string;
-  description: string | null;
-  storage_path: string;
-};
 
 function getStoragePublicUrl(storagePath: string) {
   const trimmedPath = storagePath.trim();
 
-  // Accept full URL values saved in DB without re-building them.
   if (/^https?:\/\//i.test(trimmedPath)) {
     return trimmedPath;
   }
 
-  // Normalize common variants like:
-  // /homepage-videos/file.mp4
-  // portfolio-media/homepage-videos/file.mp4
   const withoutLeadingSlash = trimmedPath.replace(/^\/+/, "");
   const normalizedPath = withoutLeadingSlash.startsWith(`${STORAGE_BUCKET}/`)
     ? withoutLeadingSlash.slice(STORAGE_BUCKET.length + 1)
@@ -52,6 +21,46 @@ function getStoragePublicUrl(storagePath: string) {
   const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(normalizedPath);
   return data.publicUrl;
 }
+
+const localFallbackVideos = [
+  {
+    id: "macao-beach",
+    src: "/images/videos/lateral-izquierdo.mp4",
+  },
+  {
+    id: "horseback-riding",
+    src: "/images/videos/lateral-derecho.mp4",
+  },
+];
+
+const localFeaturedFallbackVideo = "/images/videos/video-grande.mp4";
+
+const fallbackVideos = [
+  {
+    id: "macao-beach",
+    src: getStoragePublicUrl("homepage-videos/lateral-izquierdo.mp4"),
+    name: "Macao Beach",
+    description: "Vive la experiencia en los caminos de Macao",
+  },
+  {
+    id: "horseback-riding",
+    src: getStoragePublicUrl("homepage-videos/lateral-derecho.mp4"),
+    name: "Horseback Riding",
+    description: "Descubre los mejores paisajes en buggy",
+  },
+];
+
+const fallbackFeaturedVideo = {
+  src: getStoragePublicUrl("homepage-videos/video-grande.mp4"),
+  name: "Adventure Experience",
+};
+
+type HomepageMediaRow = {
+  slot: string;
+  title: string;
+  description: string | null;
+  storage_path: string;
+};
 
 function handleVideoError(event: SyntheticEvent<HTMLVideoElement>, fallbackSrc: string) {
   const video = event.currentTarget;
@@ -142,7 +151,7 @@ export function CollectionSection() {
                     preload="metadata"
                     className="absolute inset-0 h-full w-full object-cover"
                     src={video.src}
-                    onError={(event) => handleVideoError(event, fallbackVideos[0].id === video.id ? fallbackVideos[0].src : fallbackVideos[1].src)}
+                    onError={(event) => handleVideoError(event, localFallbackVideos[0].id === video.id ? localFallbackVideos[0].src : localFallbackVideos[1].src)}
                   />
                 </div>
                 <div className="py-6">
@@ -164,7 +173,7 @@ export function CollectionSection() {
                 preload="metadata"
                 className="absolute inset-0 h-full w-full object-cover"
                 src={featuredVideo.src}
-                onError={(event) => handleVideoError(event, fallbackFeaturedVideo.src)}
+                onError={(event) => handleVideoError(event, localFeaturedFallbackVideo)}
               />
             </div>
           </div>
@@ -184,7 +193,7 @@ export function CollectionSection() {
                     preload="metadata"
                     className="absolute inset-0 h-full w-full object-cover"
                     src={video.src}
-                    onError={(event) => handleVideoError(event, fallbackVideos[0].id === video.id ? fallbackVideos[0].src : fallbackVideos[1].src)}
+                    onError={(event) => handleVideoError(event, localFallbackVideos[0].id === video.id ? localFallbackVideos[0].src : localFallbackVideos[1].src)}
                   />
                 </div>
                 <div className="py-6">
@@ -206,7 +215,7 @@ export function CollectionSection() {
                 preload="metadata"
                 className="absolute inset-0 h-full w-full object-cover"
                 src={featuredVideo.src}
-                onError={(event) => handleVideoError(event, fallbackFeaturedVideo.src)}
+                onError={(event) => handleVideoError(event, localFeaturedFallbackVideo)}
               />
             </div>
           </div>
