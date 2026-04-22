@@ -291,13 +291,10 @@ function ProductDetailContent({
                 {isAlreadyInCart || isAdded ? (
                   <>
                     <Check className="h-4 w-4" />
-                    Added to Cart
+                    Agregado
                   </>
                 ) : (
-                  <>
-                    <ShoppingCart className="h-4 w-4" />
-                    Add to Cart
-                  </>
+                  <>Agregar</>
                 )}
               </button>
             </div>
@@ -543,13 +540,10 @@ function ProductDetailContent({
             {isAlreadyInCart || isAdded ? (
               <>
                 <Check className="h-4 w-4" />
-                <span className="hidden sm:inline">Added</span>
+                <span>Agregado</span>
               </>
             ) : (
-              <>
-                <ShoppingCart className="h-4 w-4" />
-                <span className="hidden sm:inline">Add to Cart</span>
-              </>
+              <span>Agregar</span>
             )}
           </button>
         </div>
