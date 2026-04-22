@@ -156,16 +156,13 @@ export function Header() {
                   >
                     Mis reservas
                   </Link>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsProfileMenuOpen(false);
-                      document.getElementById("products")?.scrollIntoView({ behavior: "smooth" });
-                    }}
-                    className="block w-full rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
+                  <Link
+                    href="/regalar"
+                    onClick={() => setIsProfileMenuOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted"
                   >
                     Regalar
-                  </button>
+                  </Link>
                   <Link
                     href="/faq"
                     onClick={() => setIsProfileMenuOpen(false)}
@@ -265,16 +262,13 @@ export function Header() {
                     <Link href="/reservas" onClick={() => setIsMenuOpen(false)} className="text-base text-foreground">
                       Mis reservas
                     </Link>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        document.getElementById("products")?.scrollIntoView({ behavior: "smooth" });
-                      }}
-                      className="text-base text-foreground text-left"
+                    <Link
+                      href="/regalar"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="text-base text-foreground"
                     >
                       Regalar
-                    </button>
+                    </Link>
                     <Link href="/faq" onClick={() => setIsMenuOpen(false)} className="text-base text-foreground">
                       Ayuda
                     </Link>

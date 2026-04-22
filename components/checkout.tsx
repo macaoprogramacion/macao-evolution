@@ -79,6 +79,13 @@ type StoredCustomerReservation = {
 };
 
 const CUSTOMER_RESERVATIONS_KEY = "macao-customer-reservations";
+const GIFT_DRAFT_KEY = "macao-gift-draft";
+
+type GiftDraft = {
+  receiverName?: string;
+  receiverPhone?: string;
+  receiverEmail?: string;
+};
 
 const DEFAULT_TIMES = [
   { id: 0, label: "Mañana", time: "8:00 AM", hour: 8, minute: 0 },
@@ -274,6 +281,7 @@ export function CheckoutModal({
     phone: "",
     email: "",
   });
+  const [isGiftFlow, setIsGiftFlow] = useState(false);
   const [paymentOption, setPaymentOption] = useState<PaymentOption>("full");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [card, setCard] = useState<CardInfo>({
@@ -332,6 +340,36 @@ export function CheckoutModal({
   const depositAmount = totalPrice * 0.2;
   const remainingAmount = totalPrice * 0.8;
   const amountToPay = paymentOption === "full" ? totalPrice : depositAmount;
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    try {
+      const rawDraft = localStorage.getItem(GIFT_DRAFT_KEY);
+      if (!rawDraft) {
+        setIsGiftFlow(false);
+        return;
+      }
+
+      const draft = JSON.parse(rawDraft) as GiftDraft;
+      if (!draft.receiverName && !draft.receiverPhone && !draft.receiverEmail) {
+        setIsGiftFlow(false);
+        return;
+      }
+
+      setCustomer({
+        name: draft.receiverName || "",
+        phone: draft.receiverPhone || "",
+        email: draft.receiverEmail || "",
+      });
+      setStep(1);
+      setErrors({});
+      setIsGiftFlow(true);
+      localStorage.removeItem(GIFT_DRAFT_KEY);
+    } catch {
+      setIsGiftFlow(false);
+    }
+  }, [isOpen]);
 
   // --- Validation ---
   function validateStep1() {
@@ -464,6 +502,7 @@ export function CheckoutModal({
     setPickupTimeSlot(null);
     setPickupDate("");
     setErrors({});
+    setIsGiftFlow(false);
     onClose();
   }
 
@@ -587,7 +626,9 @@ export function CheckoutModal({
                 Tus datos
               </h2>
               <p className="text-sm text-muted-foreground mb-6">
-                Completa tu información para continuar
+                {isGiftFlow
+                  ? "Datos de la persona que recibirá la experiencia"
+                  : "Completa tu información para continuar"}
               </p>
 
               <div className="space-y-4">

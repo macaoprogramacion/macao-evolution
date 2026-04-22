@@ -59,6 +59,17 @@ export function CartPanel() {
     }
   }, [toast]);
 
+  // Open checkout from external flows (e.g., gift page)
+  useEffect(() => {
+    const openCheckout = () => {
+      setIsOpen(false);
+      setIsCheckoutOpen(true);
+    };
+
+    window.addEventListener("macao-open-checkout", openCheckout);
+    return () => window.removeEventListener("macao-open-checkout", openCheckout);
+  }, [setIsOpen]);
+
   // Close on Escape key
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
