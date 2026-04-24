@@ -48,6 +48,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const fromDate = from.toISOString().split("T")[0]
     const toDate = to.toISOString().split("T")[0]
 
+    const { data: manualOverrides, error: overridesError } = await supabase
+      .from("gyg_availability_overrides")
+      .select("date, manual_vacancies, is_blocked")
+      .eq("product_id", productId)
+      .gte("date", fromDate)
+      .lte("date", toDate)
+
+    // Keep integration backwards compatible if migration has not been applied yet.
+    if (overridesError && !overridesError.message?.includes("gyg_availability_overrides")) {
+      console.error("Failed to read availability overrides:", overridesError)
+    }
+
+    const overridesByDate: Record<string, { manualVacancies: number | null; isBlocked: boolean }> = {}
+    if (manualOverrides) {
+      for (const o of manualOverrides) {
+        overridesByDate[o.date] = {
+          manualVacancies: typeof o.manual_vacancies === "number" ? o.manual_vacancies : null,
+          isBlocked: Boolean(o.is_blocked),
+        }
+      }
+    }
+
     const { data: existingReservations } = await supabase
       .from(product.destinationTable)
       .select("date, guests, children")
@@ -88,8 +110,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     while (current <= end) {
       const dateStr = current.toISOString().split("T")[0]
       const booked = bookedPerDate[dateStr] || 0
+      const dateOverride = overridesByDate[dateStr]
+      const effectiveCapacity = dateOverride?.manualVacancies ?? product.defaultVacancies
+      const isBlockedByOverride = dateOverride?.isBlocked === true
       // Past dates have 0 vacancies
-      const vacancies = dateStr < todayStr ? 0 : Math.max(0, product.defaultVacancies - booked)
+      const vacancies = dateStr < todayStr || isBlockedByOverride ? 0 : Math.max(0, effectiveCapacity - booked)
 
       const pricesByCategory = {
         retailPrices: product.prices.map((p) => ({
@@ -130,7 +155,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (hasVacanciesByCategory) {
           item.vacanciesByCategory = product.vacanciesByCategory!.map((vc) => ({
             category: vc.category,
-            vacancies: dateStr < todayStr ? 0 : Math.max(0, vc.defaultVacancies - booked),
+            vacancies: dateStr < todayStr || isBlockedByOverride ? 0 : Math.max(0, vc.defaultVacancies - booked),
           }))
         } else {
           item.vacancies = vacancies
@@ -150,7 +175,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (hasVacanciesByCategory) {
           item.vacanciesByCategory = product.vacanciesByCategory!.map((vc) => ({
             category: vc.category,
-            vacancies: dateStr < todayStr ? 0 : Math.max(0, vc.defaultVacancies - booked),
+            vacancies: dateStr < todayStr || isBlockedByOverride ? 0 : Math.max(0, vc.defaultVacancies - booked),
           }))
         } else {
           item.vacancies = vacancies

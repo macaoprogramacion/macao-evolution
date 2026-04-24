@@ -83,6 +83,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       )
     }
 
+    let effectiveCapacity = product.defaultVacancies
+    const { data: availabilityOverride, error: overrideError } = await supabase
+      .from("gyg_availability_overrides")
+      .select("manual_vacancies, is_blocked")
+      .eq("product_id", productId)
+      .eq("date", dateStr)
+      .maybeSingle()
+
+    // Keep integration backwards compatible if migration has not been applied yet.
+    if (overrideError && !overrideError.message?.includes("gyg_availability_overrides")) {
+      console.error("Failed to read availability override:", overrideError)
+    }
+
+    if (availabilityOverride?.is_blocked) {
+      return res.status(200).json(
+        gygError("NO_AVAILABILITY", `No availability for blocked date ${dateStr}.`)
+      )
+    }
+
+    if (typeof availabilityOverride?.manual_vacancies === "number") {
+      effectiveCapacity = availabilityOverride.manual_vacancies
+    }
+
     const { data: existing } = await supabase
       .from(product.destinationTable)
       .select("guests, children")
@@ -113,7 +136,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       totalBooked += activeHolds.reduce((sum, h) => sum + (h.total_participants || 0), 0)
     }
 
-    const available = product.defaultVacancies - totalBooked
+    const available = effectiveCapacity - totalBooked
     if (totalParticipants > available) {
       return res.status(200).json(
         gygError("NO_AVAILABILITY", `Insufficient availability. Requested ${totalParticipants}; available ${Math.max(0, available)}.`)

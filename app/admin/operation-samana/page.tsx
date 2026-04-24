@@ -23,6 +23,10 @@ import {
   Copy,
   MessageSquare,
   RefreshCw,
+  Lock,
+  Unlock,
+  RotateCcw,
+  Save,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -72,6 +76,20 @@ type SamanaReservation = {
   language: string
 }
 
+type AvailabilityDayRow = {
+  date: string
+  booked: number
+  holds: number
+  baseCapacity: number
+  manualCapacity: number | null
+  isBlocked: boolean
+  available: number
+}
+
+const SAMANA_PRODUCT_ID = "1068932"
+const SAMANA_DEFAULT_CAPACITY = 40
+const AVAILABILITY_WINDOW_DAYS = 21
+
 function mapRow(r: any): SamanaReservation {
   return {
     id: r.id,
@@ -109,6 +127,11 @@ export default function OperationSamanaPage() {
   const [copiedMsg, setCopiedMsg] = useState("")
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<string | null>(null)
+  const [availabilityRows, setAvailabilityRows] = useState<AvailabilityDayRow[]>([])
+  const [availabilityLoading, setAvailabilityLoading] = useState(true)
+  const [availabilitySavingDate, setAvailabilitySavingDate] = useState<string | null>(null)
+  const [availabilityMessage, setAvailabilityMessage] = useState<string | null>(null)
+  const [manualCapacityInputs, setManualCapacityInputs] = useState<Record<string, string>>({})
 
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -179,7 +202,7 @@ export default function OperationSamanaPage() {
       const reconciled = data.reconciledBookings?.filter((r: any) => r.success).length || 0
       if (retried > 0 || reconciled > 0) {
         setSyncResult(`Sincronizado: ${retried} reintentos, ${reconciled} reconciliados`)
-        await fetchReservations()
+        await Promise.all([fetchReservations(), fetchAvailabilityOverview()])
       } else {
         setSyncResult("Todo sincronizado — sin pendientes")
       }
@@ -204,7 +227,7 @@ export default function OperationSamanaPage() {
         console.error("Error creating reservation:", error)
         alert("Error al crear reserva: " + error.message)
       } else {
-        await fetchReservations()
+        await Promise.all([fetchReservations(), fetchAvailabilityOverview()])
         setAddDialogOpen(false)
         resetNewRes()
       }
@@ -232,9 +255,187 @@ export default function OperationSamanaPage() {
     }
   }
 
+  const fetchAvailabilityOverview = async () => {
+    setAvailabilityLoading(true)
+    try {
+      const today = new Date()
+      today.setUTCHours(0, 0, 0, 0)
+      const fromDate = today.toISOString().slice(0, 10)
+
+      const endDate = new Date(today)
+      endDate.setUTCDate(endDate.getUTCDate() + AVAILABILITY_WINDOW_DAYS - 1)
+      const toDate = endDate.toISOString().slice(0, 10)
+
+      const nowIso = new Date().toISOString()
+
+      const [{ data: reservationData }, { data: holdData }, { data: overrideData, error: overrideError }] = await Promise.all([
+        supabase
+          .from("samana_reservations")
+          .select("date, guests, children")
+          .gte("date", fromDate)
+          .lte("date", toDate)
+          .in("status", ["confirmed", "pending"]),
+        supabase
+          .from("gyg_reservations")
+          .select("date_time, total_participants")
+          .eq("product_id", SAMANA_PRODUCT_ID)
+          .eq("status", "active")
+          .gte("expires_at", nowIso),
+        supabase
+          .from("gyg_availability_overrides")
+          .select("date, manual_vacancies, is_blocked")
+          .eq("product_id", SAMANA_PRODUCT_ID)
+          .gte("date", fromDate)
+          .lte("date", toDate),
+      ])
+
+      if (overrideError && !overrideError.message?.includes("gyg_availability_overrides")) {
+        console.error("Error fetching availability overrides:", overrideError)
+      }
+
+      const bookedByDate: Record<string, number> = {}
+      for (const row of reservationData || []) {
+        const date = row.date
+        bookedByDate[date] = (bookedByDate[date] || 0) + (row.guests || 0) + (row.children || 0)
+      }
+
+      const holdsByDate: Record<string, number> = {}
+      for (const hold of holdData || []) {
+        const holdDate = new Date(hold.date_time).toISOString().slice(0, 10)
+        if (holdDate >= fromDate && holdDate <= toDate) {
+          holdsByDate[holdDate] = (holdsByDate[holdDate] || 0) + (hold.total_participants || 0)
+        }
+      }
+
+      const overrideByDate: Record<string, { manualCapacity: number | null; isBlocked: boolean }> = {}
+      for (const row of overrideData || []) {
+        overrideByDate[row.date] = {
+          manualCapacity: typeof row.manual_vacancies === "number" ? row.manual_vacancies : null,
+          isBlocked: Boolean(row.is_blocked),
+        }
+      }
+
+      const rows: AvailabilityDayRow[] = []
+      const walker = new Date(today)
+      while (walker <= endDate) {
+        const date = walker.toISOString().slice(0, 10)
+        const booked = bookedByDate[date] || 0
+        const holds = holdsByDate[date] || 0
+        const override = overrideByDate[date]
+        const manualCapacity = override?.manualCapacity ?? null
+        const isBlocked = override?.isBlocked === true
+        const capacity = manualCapacity ?? SAMANA_DEFAULT_CAPACITY
+        const available = isBlocked ? 0 : Math.max(0, capacity - booked - holds)
+
+        rows.push({
+          date,
+          booked,
+          holds,
+          baseCapacity: SAMANA_DEFAULT_CAPACITY,
+          manualCapacity,
+          isBlocked,
+          available,
+        })
+
+        walker.setUTCDate(walker.getUTCDate() + 1)
+      }
+
+      setAvailabilityRows(rows)
+      setManualCapacityInputs(
+        rows.reduce<Record<string, string>>((acc, row) => {
+          acc[row.date] = row.manualCapacity == null ? "" : String(row.manualCapacity)
+          return acc
+        }, {})
+      )
+    } catch (e) {
+      console.error("Error fetching availability overview:", e)
+    } finally {
+      setAvailabilityLoading(false)
+    }
+  }
+
+  const applyAvailabilityOverride = async (date: string, manualCapacity: number | null, isBlocked: boolean) => {
+    setAvailabilitySavingDate(date)
+    try {
+      let error: any = null
+
+      if (manualCapacity == null && !isBlocked) {
+        ;({ error } = await supabase
+          .from("gyg_availability_overrides")
+          .delete()
+          .eq("product_id", SAMANA_PRODUCT_ID)
+          .eq("date", date))
+      } else {
+        ;({ error } = await supabase
+          .from("gyg_availability_overrides")
+          .upsert(
+            {
+              product_id: SAMANA_PRODUCT_ID,
+              date,
+              manual_vacancies: manualCapacity,
+              is_blocked: isBlocked,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "product_id,date" }
+          ))
+      }
+
+      if (error) {
+        if (error.message?.includes("gyg_availability_overrides")) {
+          setAvailabilityMessage("Falta migracion de disponibilidad. Ejecuta scripts/migration-gyg-availability-overrides.sql")
+          return
+        }
+        setAvailabilityMessage("No se pudo guardar la disponibilidad")
+        console.error("Error saving availability override:", error)
+        return
+      }
+
+      setAvailabilityMessage("Disponibilidad actualizada")
+      await fetchAvailabilityOverview()
+    } catch (e) {
+      console.error("Error updating availability override:", e)
+      setAvailabilityMessage("Error inesperado al actualizar disponibilidad")
+    } finally {
+      setAvailabilitySavingDate(null)
+      setTimeout(() => setAvailabilityMessage(null), 4000)
+    }
+  }
+
+  const saveManualCapacity = async (date: string) => {
+    const current = availabilityRows.find((row) => row.date === date)
+    if (!current) return
+
+    const rawValue = (manualCapacityInputs[date] || "").trim()
+    let manualCapacity: number | null = null
+    if (rawValue !== "") {
+      const parsed = Number(rawValue)
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        alert("Ingresa un numero valido de cupos (0 o mayor)")
+        return
+      }
+      manualCapacity = Math.floor(parsed)
+    }
+
+    await applyAvailabilityOverride(date, manualCapacity, current.isBlocked)
+  }
+
+  const toggleDateBlocked = async (date: string) => {
+    const current = availabilityRows.find((row) => row.date === date)
+    if (!current) return
+    await applyAvailabilityOverride(date, current.manualCapacity, !current.isBlocked)
+  }
+
+  const resetDateAvailability = async (date: string) => {
+    await applyAvailabilityOverride(date, null, false)
+  }
+
   useEffect(() => {
     fetchReservations()
-    const interval = setInterval(fetchReservations, 5000)
+    fetchAvailabilityOverview()
+    const interval = setInterval(() => {
+      fetchReservations()
+      fetchAvailabilityOverview()
+    }, 10000)
     return () => clearInterval(interval)
   }, [])
 
@@ -253,6 +454,7 @@ export default function OperationSamanaPage() {
             r.id === id ? { ...r, status: "confirmed" as const } : r
           )
         )
+        await fetchAvailabilityOverview()
       }
     } catch (e) {
       console.error("Error updating status:", e)
@@ -695,6 +897,97 @@ ${t.getReady} 🐋⚓
             </CardContent>
           </Card>
         </div>
+
+        {/* Availability Control */}
+        <Card className="border-gray-200">
+          <CardHeader>
+            <CardTitle className="text-lg">Disponibilidad Samaná (GYG)</CardTitle>
+            <CardDescription>
+              Visualiza cupos por fecha y aplica bloqueos o cupos manuales sin alterar la configuracion base.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {availabilityMessage && (
+              <div className={`mb-3 rounded-lg px-3 py-2 text-sm font-medium ${
+                availabilityMessage.includes("Error") || availabilityMessage.includes("No se pudo") || availabilityMessage.includes("Falta")
+                  ? "bg-red-50 text-red-700"
+                  : "bg-green-50 text-green-700"
+              }`}>
+                {availabilityMessage}
+              </div>
+            )}
+
+            {availabilityLoading ? (
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Cargando disponibilidad...
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {availabilityRows.map((row) => {
+                  const isSaving = availabilitySavingDate === row.date
+                  return (
+                    <div key={row.date} className="rounded-lg border border-gray-200 p-3">
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
+                        <div className="lg:col-span-3">
+                          <p className="text-sm font-semibold text-gray-900">
+                            {new Date(row.date + "T12:00:00").toLocaleDateString("es-DO", {
+                              weekday: "short",
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </p>
+                          <p className="text-xs text-gray-500">Base: {row.baseCapacity} cupos</p>
+                        </div>
+
+                        <div className="lg:col-span-4 flex flex-wrap gap-2">
+                          <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">Reservado: {row.booked}</Badge>
+                          <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">Holds: {row.holds}</Badge>
+                          <Badge className={row.available > 0 && !row.isBlocked ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-red-100 text-red-700 hover:bg-red-100"}>
+                            Disponible: {row.available}
+                          </Badge>
+                          {row.isBlocked && <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Bloqueado</Badge>}
+                        </div>
+
+                        <div className="lg:col-span-2">
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="Cupos manuales"
+                            value={manualCapacityInputs[row.date] ?? ""}
+                            onChange={(e) => setManualCapacityInputs((prev) => ({ ...prev, [row.date]: e.target.value }))}
+                          />
+                        </div>
+
+                        <div className="lg:col-span-3 flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" disabled={isSaving} onClick={() => saveManualCapacity(row.date)}>
+                            {isSaving ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}
+                            Guardar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isSaving}
+                            className={row.isBlocked ? "border-red-300 text-red-700 hover:bg-red-50" : "border-gray-300 text-gray-700 hover:bg-gray-50"}
+                            onClick={() => toggleDateBlocked(row.date)}
+                          >
+                            {row.isBlocked ? <Unlock className="w-3.5 h-3.5 mr-1" /> : <Lock className="w-3.5 h-3.5 mr-1" />}
+                            {row.isBlocked ? "Desbloquear" : "Bloquear"}
+                          </Button>
+                          <Button size="sm" variant="ghost" disabled={isSaving} onClick={() => resetDateAvailability(row.date)}>
+                            <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                            Reset
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Filters */}
         <Card className="border-gray-200">
