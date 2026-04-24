@@ -8,7 +8,7 @@ const footerLinks = {
     { label: "Services", href: "#products" },
     { label: "Product", href: "#technology" },
     { label: "Gallery", href: "#gallery" },
-    { label: "Get my portafolio", href: "http://localhost:5173/" },
+    { label: "Get my portafolio", href: "/photographer" },
   ],
   about: [
     { label: "Our Story", href: "/our-story" },
@@ -18,7 +18,7 @@ const footerLinks = {
   ],
   service: [
     { label: "FAQ", href: "/faq" },
-    { label: "Get my portafolio", href: "http://localhost:5173/" },
+    { label: "Get my portafolio", href: "/photographer" },
     { label: "Services", href: "/#products" },
     { label: "Gallery", href: "/#gallery" },
   ],

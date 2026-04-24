@@ -8,25 +8,25 @@ const word = "MACAO";
 const sideImages = [
   {
     src: "/images/hero-secction/hero-seccion (1).webp",
-    alt: "Hero secciÃ³n imagen 1",
+    alt: "Buggy tour en Punta Cana - aventura offroad",
     position: "left",
     span: 1,
   },
   {
     src: "/images/hero-secction/hero-seccion (2).webp",
-    alt: "Hero secciÃ³n imagen 2",
+    alt: "Excursion en buggy por la playa de Macao",
     position: "left",
     span: 1,
   },
   {
     src: "/images/hero-secction/hero-seccion (3).webp",
-    alt: "Hero secciÃ³n imagen 3",
+    alt: "Grupo disfrutando experiencia offroad Macao",
     position: "right",
     span: 1,
   },
   {
     src: "/images/hero-secction/hero-seccion (4).webp",
-    alt: "Hero secciÃ³n imagen 4",
+    alt: "Tour en ATV por las rutas de Punta Cana",
     position: "right",
     span: 1,
   },
@@ -205,10 +205,10 @@ export function HeroSection() {
               {/* Overlay Text - Fades out first */}
               <div
                 ref={textRef}
-                className="absolute inset-0 flex items-end justify-center overflow-hidden"
+                className="absolute inset-0 flex items-end justify-center overflow-hidden select-none"
                 style={{ opacity: 1 }}
               >
-                <h1 className="text-[22vw] font-medium leading-[0.8] tracking-tighter text-white text-center font-title">
+                <h1 className="text-[22vw] font-medium leading-[0.8] tracking-tighter text-white text-center font-title select-none pointer-events-none">
                   {word.split("").map((letter, index) => (
                     <span
                       key={index}

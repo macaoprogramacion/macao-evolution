@@ -186,7 +186,7 @@ export function TransportSection() {
             <Bus className="h-3.5 w-3.5" />
             <span>Door-to-Door Service</span>
           </div>
-          <h2 className="font-title text-4xl md:text-5xl lg:text-6xl text-white mb-10">
+          <h2 className="font-title text-4xl md:text-5xl lg:text-6xl text-white mb-10 select-none pointer-events-none">
             Private Transport
           </h2>
           <p className="text-white/50 text-base md:text-lg max-w-2xl mx-auto mt-4">

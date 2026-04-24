@@ -130,7 +130,7 @@ export function CollectionSection() {
     <section id="accessories" className="bg-background">
       {/* Section Title */}
       <div className="px-6 py-20 md:px-12 lg:px-20 md:py-10">
-        <h2 className="text-3xl font-medium tracking-tight text-foreground md:text-4xl font-title">
+        <h2 className="text-3xl font-medium tracking-tight text-foreground md:text-4xl font-title select-none">
           Discover Our Landscapes
         </h2>
       </div>

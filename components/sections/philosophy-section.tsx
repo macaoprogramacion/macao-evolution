@@ -136,7 +136,7 @@ export function PhilosophySection() {
               className="absolute inset-0 flex items-center justify-center pointer-events-none z-0"
               style={{ opacity: 1 }}
             >
-              <h2 className="text-[7vw] font-medium leading-[0.95] tracking-tighter text-foreground md:text-[6vw] lg:text-[5vw] text-center px-6 font-title whitespace-nowrap">
+              <h2 className="text-[7vw] font-medium leading-[0.95] tracking-tighter text-foreground md:text-[6vw] lg:text-[5vw] text-center px-6 font-title whitespace-nowrap select-none pointer-events-none">
                 Choose One.
               </h2>
             </div>
