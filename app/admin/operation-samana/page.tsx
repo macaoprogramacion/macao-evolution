@@ -51,6 +51,8 @@ import Link from "next/link"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { supabase } from "@/lib/supabase"
 import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar as DateCalendar } from "@/components/ui/calendar"
 
 type SamanaReservation = {
   id: string
@@ -138,6 +140,7 @@ export default function OperationSamanaPage() {
   const [saving, setSaving] = useState(false)
   const [checkingSelectedDateBlocked, setCheckingSelectedDateBlocked] = useState(false)
   const [selectedDateBlocked, setSelectedDateBlocked] = useState(false)
+  const [blockedReservationDates, setBlockedReservationDates] = useState<string[]>([])
   const [newRes, setNewRes] = useState({
     customer_name: "",
     phone: "",
@@ -461,8 +464,9 @@ export default function OperationSamanaPage() {
   useEffect(() => {
     let cancelled = false
 
-    const checkSelectedDateBlocked = async () => {
-      if (!addDialogOpen || !newRes.date) {
+    const loadBlockedReservationDates = async () => {
+      if (!addDialogOpen) {
+        setBlockedReservationDates([])
         setSelectedDateBlocked(false)
         setCheckingSelectedDateBlocked(false)
         return
@@ -470,31 +474,59 @@ export default function OperationSamanaPage() {
 
       setCheckingSelectedDateBlocked(true)
 
+      const today = new Date()
+      today.setUTCHours(0, 0, 0, 0)
+
       const { data, error } = await supabase
         .from("gyg_availability_overrides")
-        .select("is_blocked")
+        .select("date")
         .eq("product_id", SAMANA_PRODUCT_ID)
-        .eq("date", newRes.date)
-        .maybeSingle()
+        .eq("is_blocked", true)
+        .gte("date", today.toISOString().slice(0, 10))
 
       if (cancelled) return
 
       if (error && !error.message?.includes("gyg_availability_overrides")) {
         console.error("Error checking selected date block status:", error)
-        setSelectedDateBlocked(false)
+        setBlockedReservationDates([])
       } else {
-        setSelectedDateBlocked(Boolean(data?.is_blocked))
+        setBlockedReservationDates((data || []).map((row) => row.date))
       }
 
       setCheckingSelectedDateBlocked(false)
     }
 
-    checkSelectedDateBlocked()
+    loadBlockedReservationDates()
 
     return () => {
       cancelled = true
     }
-  }, [addDialogOpen, newRes.date])
+  }, [addDialogOpen])
+
+  useEffect(() => {
+    if (!addDialogOpen || !newRes.date) {
+      setSelectedDateBlocked(false)
+      return
+    }
+
+    setSelectedDateBlocked(blockedReservationDates.includes(newRes.date))
+  }, [addDialogOpen, newRes.date, blockedReservationDates])
+
+  const formatDateLabel = (dateValue: string) => {
+    return new Date(`${dateValue}T12:00:00`).toLocaleDateString("es-DO", {
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    })
+  }
+
+  const toDateInputValue = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
 
   const toggleStatus = async (id: string) => {
     try {
@@ -1246,11 +1278,31 @@ ${t.getReady} 🐋⚓
 
             <div className="space-y-1.5">
               <Label>Fecha *</Label>
-              <Input
-                type="date"
-                value={newRes.date}
-                onChange={(e) => setNewRes({ ...newRes, date: e.target.value })}
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between font-normal">
+                    <span>{newRes.date ? formatDateLabel(newRes.date) : "Selecciona una fecha"}</span>
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <DateCalendar
+                    mode="single"
+                    selected={newRes.date ? new Date(`${newRes.date}T12:00:00`) : undefined}
+                    onSelect={(date) => {
+                      if (!date) return
+                      const nextDate = toDateInputValue(date)
+                      if (blockedReservationDates.includes(nextDate)) return
+                      setNewRes({ ...newRes, date: nextDate })
+                    }}
+                    disabled={(date) => {
+                      const today = new Date()
+                      today.setHours(0, 0, 0, 0)
+                      return date < today || blockedReservationDates.includes(toDateInputValue(date))
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
               {checkingSelectedDateBlocked && (
                 <p className="text-xs text-gray-500">Validando disponibilidad de la fecha...</p>
               )}
