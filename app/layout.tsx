@@ -4,6 +4,7 @@ import { Inter } from 'next/font/google'
 import localFont from 'next/font/local'
 import { Analytics } from '@vercel/analytics/next'
 import { Providers } from '@/components/providers'
+import { WhatsAppFloat } from '@/components/whatsapp-float'
 import './globals.css'
 
 const inter = Inter({ subsets: ["latin"], variable: '--font-inter' });
@@ -60,6 +61,7 @@ export default function RootLayout({
       <body className={`${inter.variable} ${montserrat.variable} ${trenches.variable} font-sans antialiased`}>
         <Providers>
           {children}
+          <WhatsAppFloat />
         </Providers>
         <Analytics />
       </body>
