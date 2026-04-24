@@ -3,7 +3,6 @@
 import { useCart, type CartItem } from "@/context/cart-context";
 import { CheckoutModal } from "@/components/checkout";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
 import { ShoppingCart, X, Plus, Minus, Trash2, Check, Tag, AlertCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -20,14 +19,12 @@ function AddedToast({ message }: { message: string }) {
 
 export function CartButton() {
   const { totalItems, setIsOpen, isOpen } = useCart();
-  const pathname = usePathname();
-  const isProductPage = pathname?.startsWith("/product/") ?? false;
 
   return (
     <button
       type="button"
       onClick={() => setIsOpen(!isOpen)}
-      className={`fixed right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-background shadow-lg transition-transform hover:scale-110 active:scale-95 ${isProductPage ? "bottom-24 sm:bottom-6" : "bottom-6"}`}
+      className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-background shadow-lg transition-transform hover:scale-110 active:scale-95"
       aria-label="Abrir carrito"
     >
       <ShoppingCart size={22} />
