@@ -251,7 +251,7 @@ export default function SamanaAvailabilityPage() {
       <div className="space-y-4 md:space-y-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl md:text-3xl font-title text-gray-900 dark:text-gray-100">Disponibilidad Samaná</h1>
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900 dark:text-gray-100">Disponibilidad Samana</h1>
             <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">
               Controla bloqueos y cupos por fecha sin perder la integracion actual.
             </p>

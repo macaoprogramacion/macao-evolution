@@ -136,6 +136,8 @@ export default function OperationSamanaPage() {
 
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [checkingSelectedDateBlocked, setCheckingSelectedDateBlocked] = useState(false)
+  const [selectedDateBlocked, setSelectedDateBlocked] = useState(false)
   const [newRes, setNewRes] = useState({
     customer_name: "",
     phone: "",
@@ -220,6 +222,24 @@ export default function OperationSamanaPage() {
     if (!newRes.customer_name || !newRes.date) return
     setSaving(true)
     try {
+      const { data: blockedOverride, error: blockedOverrideError } = await supabase
+        .from("gyg_availability_overrides")
+        .select("is_blocked")
+        .eq("product_id", SAMANA_PRODUCT_ID)
+        .eq("date", newRes.date)
+        .maybeSingle()
+
+      if (blockedOverrideError && !blockedOverrideError.message?.includes("gyg_availability_overrides")) {
+        console.error("Error checking blocked availability:", blockedOverrideError)
+        alert("No se pudo validar la disponibilidad para la fecha seleccionada.")
+        return
+      }
+
+      if (blockedOverride?.is_blocked) {
+        alert("Esta fecha esta bloqueada en disponibilidad y no permite reservas manuales.")
+        return
+      }
+
       const { error } = await supabase.from("samana_reservations").insert({
         ...newRes,
         channel_color: channelColors[newRes.channel] || "#6b7280",
@@ -437,6 +457,44 @@ export default function OperationSamanaPage() {
     }, 5000)
     return () => clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const checkSelectedDateBlocked = async () => {
+      if (!addDialogOpen || !newRes.date) {
+        setSelectedDateBlocked(false)
+        setCheckingSelectedDateBlocked(false)
+        return
+      }
+
+      setCheckingSelectedDateBlocked(true)
+
+      const { data, error } = await supabase
+        .from("gyg_availability_overrides")
+        .select("is_blocked")
+        .eq("product_id", SAMANA_PRODUCT_ID)
+        .eq("date", newRes.date)
+        .maybeSingle()
+
+      if (cancelled) return
+
+      if (error && !error.message?.includes("gyg_availability_overrides")) {
+        console.error("Error checking selected date block status:", error)
+        setSelectedDateBlocked(false)
+      } else {
+        setSelectedDateBlocked(Boolean(data?.is_blocked))
+      }
+
+      setCheckingSelectedDateBlocked(false)
+    }
+
+    checkSelectedDateBlocked()
+
+    return () => {
+      cancelled = true
+    }
+  }, [addDialogOpen, newRes.date])
 
   const toggleStatus = async (id: string) => {
     try {
@@ -1193,6 +1251,12 @@ ${t.getReady} 🐋⚓
                 value={newRes.date}
                 onChange={(e) => setNewRes({ ...newRes, date: e.target.value })}
               />
+              {checkingSelectedDateBlocked && (
+                <p className="text-xs text-gray-500">Validando disponibilidad de la fecha...</p>
+              )}
+              {!checkingSelectedDateBlocked && selectedDateBlocked && (
+                <p className="text-xs text-red-600">Fecha bloqueada. No se pueden crear reservas manuales para este dia.</p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -1326,7 +1390,7 @@ ${t.getReady} 🐋⚓
             <Button
               className="bg-green-600 hover:bg-green-700 text-white"
               onClick={saveNewReservation}
-              disabled={!newRes.customer_name || !newRes.date || saving}
+              disabled={!newRes.customer_name || !newRes.date || saving || checkingSelectedDateBlocked || selectedDateBlocked}
             >
               {saving ? (
                 <>
