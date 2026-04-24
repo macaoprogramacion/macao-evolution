@@ -135,7 +135,6 @@ export const PRODUCTS: Record<string, ProductConfig> = {
     currency: "USD",
     prices: [
       { category: "ADULT", price: 11500 }, // $115.00
-      { category: "CHILD", price: 7500 },  // $75.00
     ],
     addons: [
       { addonType: "FOOD", retailPrice: 1500, currency: "USD", addonDescription: "Premium lunch upgrade" },
