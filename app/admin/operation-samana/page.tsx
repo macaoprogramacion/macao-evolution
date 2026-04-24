@@ -47,6 +47,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import Link from "next/link"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { supabase } from "@/lib/supabase"
 import { Label } from "@/components/ui/label"
@@ -202,7 +203,7 @@ export default function OperationSamanaPage() {
       const reconciled = data.reconciledBookings?.filter((r: any) => r.success).length || 0
       if (retried > 0 || reconciled > 0) {
         setSyncResult(`Sincronizado: ${retried} reintentos, ${reconciled} reconciliados`)
-        await Promise.all([fetchReservations(), fetchAvailabilityOverview()])
+        await fetchReservations()
       } else {
         setSyncResult("Todo sincronizado — sin pendientes")
       }
@@ -227,7 +228,7 @@ export default function OperationSamanaPage() {
         console.error("Error creating reservation:", error)
         alert("Error al crear reserva: " + error.message)
       } else {
-        await Promise.all([fetchReservations(), fetchAvailabilityOverview()])
+        await fetchReservations()
         setAddDialogOpen(false)
         resetNewRes()
       }
@@ -431,11 +432,9 @@ export default function OperationSamanaPage() {
 
   useEffect(() => {
     fetchReservations()
-    fetchAvailabilityOverview()
     const interval = setInterval(() => {
       fetchReservations()
-      fetchAvailabilityOverview()
-    }, 10000)
+    }, 5000)
     return () => clearInterval(interval)
   }, [])
 
@@ -454,7 +453,6 @@ export default function OperationSamanaPage() {
             r.id === id ? { ...r, status: "confirmed" as const } : r
           )
         )
-        await fetchAvailabilityOverview()
       }
     } catch (e) {
       console.error("Error updating status:", e)
@@ -823,6 +821,12 @@ ${t.getReady} 🐋⚓
               <Plus className="w-4 h-4 mr-2" />
               Agregar Reserva
             </Button>
+            <Button asChild variant="outline" className="flex-1 sm:flex-none border-blue-300 text-blue-700 hover:bg-blue-50">
+              <Link href="/admin/operation-samana/disponibilidad">
+                <Calendar className="w-4 h-4 mr-2" />
+                Disponibilidad
+              </Link>
+            </Button>
             <Button variant="outline" className="flex-1 sm:flex-none">
               <Download className="w-4 h-4 mr-2" />
               Exportar
@@ -898,94 +902,20 @@ ${t.getReady} 🐋⚓
           </Card>
         </div>
 
-        {/* Availability Control */}
-        <Card className="border-gray-200">
-          <CardHeader>
-            <CardTitle className="text-lg">Disponibilidad Samaná (GYG)</CardTitle>
-            <CardDescription>
-              Visualiza cupos por fecha y aplica bloqueos o cupos manuales sin alterar la configuracion base.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {availabilityMessage && (
-              <div className={`mb-3 rounded-lg px-3 py-2 text-sm font-medium ${
-                availabilityMessage.includes("Error") || availabilityMessage.includes("No se pudo") || availabilityMessage.includes("Falta")
-                  ? "bg-red-50 text-red-700"
-                  : "bg-green-50 text-green-700"
-              }`}>
-                {availabilityMessage}
+        <Card className="border-gray-200 bg-gradient-to-r from-blue-50 to-cyan-50">
+          <CardContent className="pt-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <p className="text-lg font-semibold text-gray-900">Gestion de Disponibilidad</p>
+                <p className="text-sm text-gray-600">Abre el panel dedicado para buscar por fecha y actualizar cupos o bloqueos.</p>
               </div>
-            )}
-
-            {availabilityLoading ? (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Cargando disponibilidad...
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {availabilityRows.map((row) => {
-                  const isSaving = availabilitySavingDate === row.date
-                  return (
-                    <div key={row.date} className="rounded-lg border border-gray-200 p-3">
-                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
-                        <div className="lg:col-span-3">
-                          <p className="text-sm font-semibold text-gray-900">
-                            {new Date(row.date + "T12:00:00").toLocaleDateString("es-DO", {
-                              weekday: "short",
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            })}
-                          </p>
-                          <p className="text-xs text-gray-500">Base: {row.baseCapacity} cupos</p>
-                        </div>
-
-                        <div className="lg:col-span-4 flex flex-wrap gap-2">
-                          <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">Reservado: {row.booked}</Badge>
-                          <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">Holds: {row.holds}</Badge>
-                          <Badge className={row.available > 0 && !row.isBlocked ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-red-100 text-red-700 hover:bg-red-100"}>
-                            Disponible: {row.available}
-                          </Badge>
-                          {row.isBlocked && <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Bloqueado</Badge>}
-                        </div>
-
-                        <div className="lg:col-span-2">
-                          <Input
-                            type="number"
-                            min={0}
-                            placeholder="Cupos manuales"
-                            value={manualCapacityInputs[row.date] ?? ""}
-                            onChange={(e) => setManualCapacityInputs((prev) => ({ ...prev, [row.date]: e.target.value }))}
-                          />
-                        </div>
-
-                        <div className="lg:col-span-3 flex flex-wrap gap-2">
-                          <Button size="sm" variant="outline" disabled={isSaving} onClick={() => saveManualCapacity(row.date)}>
-                            {isSaving ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}
-                            Guardar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={isSaving}
-                            className={row.isBlocked ? "border-red-300 text-red-700 hover:bg-red-50" : "border-gray-300 text-gray-700 hover:bg-gray-50"}
-                            onClick={() => toggleDateBlocked(row.date)}
-                          >
-                            {row.isBlocked ? <Unlock className="w-3.5 h-3.5 mr-1" /> : <Lock className="w-3.5 h-3.5 mr-1" />}
-                            {row.isBlocked ? "Desbloquear" : "Bloquear"}
-                          </Button>
-                          <Button size="sm" variant="ghost" disabled={isSaving} onClick={() => resetDateAvailability(row.date)}>
-                            <RotateCcw className="w-3.5 h-3.5 mr-1" />
-                            Reset
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+              <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white">
+                <Link href="/admin/operation-samana/disponibilidad">
+                  <Calendar className="w-4 h-4 mr-2" />
+                  Ir a Disponibilidad
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
