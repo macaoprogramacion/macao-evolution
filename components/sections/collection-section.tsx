@@ -6,8 +6,20 @@ import { supabase } from "@/lib/supabase";
 
 const STORAGE_BUCKET = "portfolio-media";
 
+function normalizeHomepageVideoPath(storagePath: string) {
+  const trimmed = storagePath.trim();
+  if (!trimmed) return trimmed;
+
+  // Backward compatibility: media was moved from homepage-videos/ to videos/
+  if (trimmed.startsWith("homepage-videos/")) {
+    return trimmed.replace("homepage-videos/", "videos/");
+  }
+
+  return trimmed;
+}
+
 function getStoragePublicUrl(storagePath: string) {
-  const trimmedPath = storagePath.trim();
+  const trimmedPath = normalizeHomepageVideoPath(storagePath);
 
   if (/^https?:\/\//i.test(trimmedPath)) {
     return trimmedPath;
@@ -38,20 +50,20 @@ const localFeaturedFallbackVideo = "/images/videos/video-grande.mp4";
 const fallbackVideos = [
   {
     id: "macao-beach",
-    src: getStoragePublicUrl("homepage-videos/lateral-izquierdo.mp4"),
+    src: getStoragePublicUrl("videos/lateral-izquierdo.mp4"),
     name: "Macao Beach",
     description: "Vive la experiencia en los caminos de Macao",
   },
   {
     id: "horseback-riding",
-    src: getStoragePublicUrl("homepage-videos/lateral-derecho.mp4"),
+    src: getStoragePublicUrl("videos/lateral-derecho.mp4"),
     name: "Horseback Riding",
     description: "Descubre los mejores paisajes en buggy",
   },
 ];
 
 const fallbackFeaturedVideo = {
-  src: getStoragePublicUrl("homepage-videos/video-grande.mp4"),
+  src: getStoragePublicUrl("videos/video-grande.mp4"),
   name: "Adventure Experience",
 };
 
