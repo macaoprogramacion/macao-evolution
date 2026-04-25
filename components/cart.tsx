@@ -3,8 +3,43 @@
 import { useCart, type CartItem } from "@/context/cart-context";
 import { CheckoutModal } from "@/components/checkout";
 import Image from "next/image";
-import { ShoppingCart, X, Plus, Minus, Trash2, Check, Tag, AlertCircle } from "lucide-react";
+import { products as fallbackProducts, fetchProducts, type Product } from "@/lib/products";
+import { ShoppingCart, X, Plus, Minus, Trash2, Check, Tag, AlertCircle, ArrowRight } from "lucide-react";
 import { useState, useEffect } from "react";
+
+const SERVICE_OPTIONS = [
+  {
+    id: "service-colectivo",
+    name: "Servicio Colectivo",
+    price: 0,
+    image: "/images/service-section/servicio-colective.webp",
+    type: "service" as const,
+    caption: "Colectivo - GRATIS",
+  },
+  {
+    id: "service-privado",
+    name: "Servicio Privado",
+    price: 100,
+    image: "/images/service-section/servicio-private.webp",
+    type: "service" as const,
+    caption: "Privado - $100",
+  },
+];
+
+function scrollToHomepageSection(sectionId: string, closeCart: () => void) {
+  closeCart();
+
+  if (typeof window === "undefined") return;
+
+  if (window.location.pathname === "/") {
+    window.setTimeout(() => {
+      document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 200);
+    return;
+  }
+
+  window.location.href = `/#${sectionId}`;
+}
 
 function AddedToast({ message }: { message: string }) {
   return (
@@ -40,6 +75,7 @@ export function CartButton() {
 export function CartPanel() {
   const {
     items,
+    addItem,
     removeItem,
     updateQuantity,
     clearCart,
@@ -48,9 +84,30 @@ export function CartPanel() {
     totalItems,
     totalPrice,
     hasServiceSelected,
+    getConflictingService,
+    replaceService,
   } = useCart();
   const [toast, setToast] = useState<string | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [productList, setProductList] = useState<Product[]>(fallbackProducts);
+
+  const hasProductSelected = items.some((item) => item.type === "product");
+  const canReserve = hasServiceSelected && hasProductSelected;
+
+  useEffect(() => {
+    fetchProducts().then((data) => {
+      if (data.length === 0) return;
+
+      const merged = [...data];
+      for (const fallback of fallbackProducts) {
+        if (!merged.some((product) => product.slug === fallback.slug)) {
+          merged.push(fallback);
+        }
+      }
+
+      setProductList(merged);
+    });
+  }, []);
 
   useEffect(() => {
     if (toast) {
@@ -78,6 +135,38 @@ export function CartPanel() {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [setIsOpen]);
+
+  const suggestedProducts = productList.slice(0, 3);
+
+  const handleSelectService = (serviceId: string) => {
+    const option = SERVICE_OPTIONS.find((service) => service.id === serviceId);
+    if (!option) return;
+
+    const conflict = getConflictingService(serviceId);
+    if (conflict) {
+      if (!confirm(`Ya tienes "${conflict.name}" en tu carrito. ¿Deseas cambiarlo por "${option.name}"?`)) {
+        return;
+      }
+      replaceService(conflict.id, option);
+    } else {
+      addItem(option);
+    }
+
+    setToast(`${option.name} agregado`);
+  };
+
+  const handleSelectProduct = (product: Product) => {
+    addItem({
+      id: product.id,
+      name: product.title,
+      price: product.price,
+      originalPrice: product.originalPrice,
+      image: product.image,
+      type: "product",
+    });
+
+    setToast(`${product.title} agregado`);
+  };
 
   return (
     <>
@@ -240,11 +329,73 @@ export function CartPanel() {
 
             {/* Service warning */}
             {!hasServiceSelected && (
-              <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 animate-in fade-in duration-300">
-                <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Agrega un servicio (Colectivo o Privado) para poder reservar.
-                </p>
+              <div className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 animate-in fade-in duration-300">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Agrega un servicio (Colectivo o Privado) para poder reservar.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                  {SERVICE_OPTIONS.map((service) => (
+                    <button
+                      key={service.id}
+                      type="button"
+                      onClick={() => handleSelectService(service.id)}
+                      className="flex items-center gap-3 rounded-xl border border-border bg-background/90 p-2 text-left transition-colors hover:bg-background"
+                    >
+                      <div className="relative h-14 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-secondary">
+                        <Image src={service.image} alt={service.name} fill className="object-cover" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-foreground">{service.name}</p>
+                        <p className="text-xs text-muted-foreground">{service.caption}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {hasServiceSelected && !hasProductSelected && (
+              <div className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 animate-in fade-in duration-300">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Debes seleccionar al menos un buggy para continuar con la reserva.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                  {suggestedProducts.map((product) => (
+                    <button
+                      key={product.id}
+                      type="button"
+                      onClick={() => handleSelectProduct(product)}
+                      className="flex items-center gap-3 rounded-xl border border-border bg-background/90 p-2 text-left transition-colors hover:bg-background"
+                    >
+                      <div className="relative h-14 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-secondary">
+                        <Image src={product.image} alt={product.title} fill className="object-cover" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-foreground">{product.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {product.price === 0 ? "Gratis" : `$${product.price.toFixed(2)}`}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => scrollToHomepageSection("products", () => setIsOpen(false))}
+                  className="flex w-full items-center justify-center gap-2 rounded-full border border-border bg-background/90 px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-background"
+                >
+                  Ver mas buggies
+                  <ArrowRight className="h-4 w-4" />
+                </button>
               </div>
             )}
 
@@ -259,14 +410,14 @@ export function CartPanel() {
               </button>
               <button
                 type="button"
-                disabled={!hasServiceSelected}
+                disabled={!canReserve}
                 onClick={() => {
-                  if (!hasServiceSelected) return;
+                  if (!canReserve) return;
                   setIsOpen(false);
                   setIsCheckoutOpen(true);
                 }}
                 className={`flex-1 rounded-full px-4 py-3 text-sm font-medium transition-all ${
-                  hasServiceSelected
+                  canReserve
                     ? "bg-foreground text-background hover:opacity-80"
                     : "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
                 }`}

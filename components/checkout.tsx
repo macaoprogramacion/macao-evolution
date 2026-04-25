@@ -305,6 +305,10 @@ export function CheckoutModal({
   const pickupDropdownRef = useRef<HTMLDivElement>(null);
 
   const hasPrivateTransport = items.some((item) => item.id === "private-transport");
+  const hasServiceSelected = items.some(
+    (item) => item.id === "service-colectivo" || item.id === "service-privado"
+  );
+  const hasProductSelected = items.some((item) => item.type === "product");
 
   const activeTimes = pickupHotel ? getHotelTimes(pickupHotel) : DEFAULT_TIMES;
   const activePickupPoint = pickupHotel ? getHotelPickupPoint(pickupHotel) : null;
@@ -336,6 +340,16 @@ export function CheckoutModal({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  useEffect(() => {
+    setErrors((prev) => {
+      if (!prev.cartSelection) return prev;
+      if (!hasServiceSelected || !hasProductSelected) return prev;
+
+      const { cartSelection, ...rest } = prev;
+      return rest;
+    });
+  }, [hasProductSelected, hasServiceSelected]);
 
   const depositAmount = totalPrice * 0.2;
   const remainingAmount = totalPrice * 0.8;
@@ -408,7 +422,23 @@ export function CheckoutModal({
 
   // --- Handlers ---
   function goToStep2() {
-    if (validateStep1()) {
+    const hasValidCustomer = validateStep1();
+
+    let cartSelectionError = "";
+    if (!hasServiceSelected && !hasProductSelected) {
+      cartSelectionError = "Debes seleccionar un servicio y al menos un buggy antes de pagar.";
+    } else if (!hasServiceSelected) {
+      cartSelectionError = "Debes seleccionar un servicio antes de pagar.";
+    } else if (!hasProductSelected) {
+      cartSelectionError = "Debes seleccionar al menos un buggy antes de pagar.";
+    }
+
+    if (cartSelectionError) {
+      setErrors((prev) => ({ ...prev, cartSelection: cartSelectionError }));
+      return;
+    }
+
+    if (hasValidCustomer) {
       if (hasPrivateTransport) {
         setStep(3);
       } else {
@@ -713,6 +743,12 @@ export function CheckoutModal({
                   )}
                 </div>
               </div>
+
+              {errors.cartSelection && (
+                <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+                  {errors.cartSelection}
+                </div>
+              )}
 
               {/* Continue button */}
               <button

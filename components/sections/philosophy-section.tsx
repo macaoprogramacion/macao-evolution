@@ -127,7 +127,7 @@ export function PhilosophySection() {
   return (
     <section id="services" className="bg-background">
       {/* Scroll-Animated Product Grid — static on mobile, animated on desktop */}
-      <div ref={sectionRef} className="relative md:h-[200vh]">
+      <div ref={sectionRef} className="relative md:h-[150vh]">
         <div className="md:sticky md:top-0 md:h-screen flex items-center justify-center py-10 md:py-0">
           <div className="relative w-full">
             {/* Title - positioned behind the blocks */}
