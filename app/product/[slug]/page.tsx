@@ -4,7 +4,7 @@ import { use, useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { getProductBySlug, fetchProductBySlug, type Product } from "@/lib/products";
-import { fetchProductReviews, type ProductReview } from "@/lib/product-reviews";
+import { computeAverageRating, fetchProductReviews, type ProductReview } from "@/lib/product-reviews";
 import { useCart } from "@/context/cart-context";
 import {
   ArrowLeft,
@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
+  Star,
   XCircle,
   CreditCard,
   Globe,
@@ -33,6 +34,7 @@ function ProductDetailContent({
   const [currentImage, setCurrentImage] = useState(0);
   const [isAdded, setIsAdded] = useState(false);
   const [reviews, setReviews] = useState<ProductReview[]>([]);
+  const avgRating = computeAverageRating(reviews);
   const galleryRef = useRef<HTMLDivElement>(null);
 
   // Fetch from Supabase on mount
@@ -526,9 +528,29 @@ function ProductDetailContent({
 
           <section className="border-t border-border py-16 md:py-20">
             <div className="max-w-4xl">
-              <h2 className="text-2xl md:text-3xl font-medium tracking-tight text-foreground font-title">
-                Reseñas de clientes
-              </h2>
+              <div className="flex flex-wrap items-end gap-4">
+                <h2 className="text-2xl md:text-3xl font-medium tracking-tight text-foreground font-title">
+                  Reseñas de clientes
+                </h2>
+                {avgRating !== null && (
+                  <div className="mb-1 flex items-center gap-2">
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={`h-4 w-4 ${
+                            star <= Math.round(avgRating)
+                              ? "fill-amber-400 text-amber-400"
+                              : "fill-none text-muted-foreground/30"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-sm font-semibold text-foreground">{avgRating.toFixed(1)}</span>
+                    <span className="text-sm text-muted-foreground">({reviews.length} reseña{reviews.length !== 1 ? "s" : ""})</span>
+                  </div>
+                )}
+              </div>
               <p className="mt-3 text-sm text-muted-foreground">
                 Opiniones reales de clientes que ya vivieron esta experiencia.
               </p>
@@ -551,6 +573,20 @@ function ProductDetailContent({
                               day: "numeric",
                             })}
                           </p>
+                          {review.rating != null && review.rating > 0 && (
+                            <div className="mt-1.5 flex items-center gap-0.5">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Star
+                                  key={star}
+                                  className={`h-3.5 w-3.5 ${
+                                    star <= review.rating!
+                                      ? "fill-amber-400 text-amber-400"
+                                      : "fill-none text-muted-foreground/20"
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <div className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-600">
                           <Star className="h-3.5 w-3.5 fill-current" />

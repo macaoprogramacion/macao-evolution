@@ -40,6 +40,10 @@ export interface StoredCustomerReservation {
     pickupStatus?: PickupStatus;
     pickupRespondedAt?: string;
     reviewedProductIds?: string[];
+    notificationsSent?: {
+      dayBefore?: string;   // ISO timestamp of when sent
+      oneHour?: string;     // ISO timestamp of when sent
+    };
   };
 }
 
