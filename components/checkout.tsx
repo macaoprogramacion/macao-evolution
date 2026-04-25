@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useCart } from "@/context/cart-context";
+import { saveCustomerReservation, type StoredCustomerReservation } from "@/lib/customer-reservations";
 import { products } from "@/lib/products";
 import {
   X,
@@ -55,30 +56,6 @@ interface CardInfo {
   expiry: string;
   cvc: string;
 }
-
-type StoredCustomerReservation = {
-  id: string;
-  createdAt: string;
-  customer: CustomerInfo;
-  items: { id: string; name: string; quantity: number; price: number; image: string }[];
-  totals: {
-    totalPrice: number;
-    totalPaid: number;
-    remainingAmount: number;
-    paymentOption: PaymentOption;
-    paymentMethod: PaymentMethod;
-  };
-  pickup?: {
-    mode: "hotel" | "custom";
-    hotel?: string;
-    custom?: string;
-    date?: string;
-    time?: string;
-    point?: string;
-  };
-};
-
-const CUSTOMER_RESERVATIONS_KEY = "macao-customer-reservations";
 const GIFT_DRAFT_KEY = "macao-gift-draft";
 
 type GiftDraft = {
@@ -255,16 +232,6 @@ function getMaxDate(): Date {
 function formatDateDisplay(iso: string): string {
   const d = new Date(iso + "T12:00:00");
   return d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-}
-
-function saveCustomerReservation(reservation: StoredCustomerReservation) {
-  try {
-    const current = JSON.parse(localStorage.getItem(CUSTOMER_RESERVATIONS_KEY) || "[]") as StoredCustomerReservation[];
-    current.unshift(reservation);
-    localStorage.setItem(CUSTOMER_RESERVATIONS_KEY, JSON.stringify(current));
-  } catch {
-    // Ignore storage failures to avoid blocking checkout completion.
-  }
 }
 
 export function CheckoutModal({

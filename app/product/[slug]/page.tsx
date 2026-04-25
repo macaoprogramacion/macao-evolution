@@ -4,6 +4,7 @@ import { use, useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { getProductBySlug, fetchProductBySlug, type Product } from "@/lib/products";
+import { fetchProductReviews, type ProductReview } from "@/lib/product-reviews";
 import { useCart } from "@/context/cart-context";
 import {
   ArrowLeft,
@@ -31,6 +32,7 @@ function ProductDetailContent({
   const { addItem, hasServiceSelected, items } = useCart();
   const [currentImage, setCurrentImage] = useState(0);
   const [isAdded, setIsAdded] = useState(false);
+  const [reviews, setReviews] = useState<ProductReview[]>([]);
   const galleryRef = useRef<HTMLDivElement>(null);
 
   // Fetch from Supabase on mount
@@ -39,6 +41,20 @@ function ProductDetailContent({
       if (data) setProduct(data);
     });
   }, [slug]);
+
+  useEffect(() => {
+    let active = true;
+
+    fetchProductReviews(product?.id || slug).then((data) => {
+      if (active) {
+        setReviews(data);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [product?.id, slug]);
 
   // Touch handling for gallery swipe
   const touchStartX = useRef(0);
@@ -505,6 +521,47 @@ function ProductDetailContent({
                   </div>
                 </div>
               </div>
+            </div>
+          </section>
+
+          <section className="border-t border-border py-16 md:py-20">
+            <div className="max-w-4xl">
+              <h2 className="text-2xl md:text-3xl font-medium tracking-tight text-foreground font-title">
+                Reseñas de clientes
+              </h2>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Opiniones reales de clientes que ya vivieron esta experiencia.
+              </p>
+
+              {reviews.length === 0 ? (
+                <div className="mt-8 rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
+                  Aún no hay reseñas para este producto. Las primeras opiniones aparecerán aquí cuando los clientes terminen su tour.
+                </div>
+              ) : (
+                <div className="mt-8 space-y-4">
+                  {reviews.map((review) => (
+                    <article key={review.id} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-base font-semibold text-foreground">{review.customer_name}</p>
+                          <p className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">
+                            {new Date(review.created_at).toLocaleDateString("es-DO", {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            })}
+                          </p>
+                        </div>
+                        <div className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-600">
+                          <Star className="h-3.5 w-3.5 fill-current" />
+                          Cliente verificado
+                        </div>
+                      </div>
+                      <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{review.review_text}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
         </div>
