@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import PhotoCard from '@/components/photographer/PhotoCard';
 import { GlassCard, GlassButton } from '@/components/photographer/ui';
 import { CheckCircle, Package, Video, Download, Play, Receipt, ShieldCheck, AlertCircle, Phone, User, Loader2 } from 'lucide-react';
@@ -21,6 +22,64 @@ const DEFAULT_PLANS = [
   { id: 'standard', name: 'Estándar', price: 50, minPhotos: 3, maxPhotos: 4, description: '3-4 fotos' },
   { id: 'full', name: 'Completo', price: 70, minPhotos: 5, maxPhotos: Infinity, description: '5+ fotos' },
 ];
+
+const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || '';
+const PAYPAL_OPTIONS = {
+  clientId: PAYPAL_CLIENT_ID,
+  currency: 'USD',
+  intent: 'capture',
+  enableFunding: 'card',
+  disableFunding: 'paylater,venmo',
+  locale: 'es_DO',
+};
+
+function formatExpiryInput(value) {
+  const digits = value.replace(/\D/g, '').slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function isValidCardNumber(value) {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length < 13 || digits.length > 19) return false;
+
+  let sum = 0;
+  let shouldDouble = false;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let digit = Number(digits[i]);
+    if (shouldDouble) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+    shouldDouble = !shouldDouble;
+  }
+  return sum % 10 === 0;
+}
+
+function isValidExpiry(value) {
+  if (!/^\d{2}\/\d{2}$/.test(value)) return false;
+  const [mmRaw, yyRaw] = value.split('/');
+  const mm = Number(mmRaw);
+  const yy = Number(yyRaw);
+  if (mm < 1 || mm > 12) return false;
+
+  const now = new Date();
+  const expiry = new Date(2000 + yy, mm, 0, 23, 59, 59, 999);
+  return expiry >= now;
+}
+
+function sanitizeCardholderName(value) {
+  return value
+    .replace(/[0-9]/g, '')
+    .replace(/[^A-Za-zÀ-ÿ'\-\s]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trimStart();
+}
+
+function isValidCardholderName(value) {
+  return /^[A-Za-zÀ-ÿ'\-\s]{2,}$/.test(value.trim());
+}
 
 export default function ClientGalleryPage() {
   return (
@@ -141,12 +200,14 @@ function ClientGallery() {
   const [visibleCount, setVisibleCount] = useState(4);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [purchaseTarget, setPurchaseTarget] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState('card');
   const [paymentForm, setPaymentForm] = useState({
     name: '',
     cardNumber: '',
     exp: '',
     cvc: '',
   });
+  const [paymentErrors, setPaymentErrors] = useState({});
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const LOAD_MORE_COUNT = 12;
 
@@ -204,66 +265,104 @@ function ClientGallery() {
   const openPaymentForPlan = (plan) => {
     if (!isPlanActive(plan)) return;
     setPurchaseTarget({ type: 'plan', plan });
+    setPaymentMethod('card');
+    setPaymentErrors({});
     setShowPaymentModal(true);
   };
 
   const openPaymentForVideo = () => {
     if (videoSelected && portfolioVideo) {
       setPurchaseTarget({ type: 'video' });
+      setPaymentMethod('card');
+      setPaymentErrors({});
       setShowPaymentModal(true);
     } else if (videoSelected) {
       alert('El video aún no está disponible.');
     }
   };
 
+  const getPaymentAmount = () => {
+    if (purchaseTarget?.type === 'plan') return Number(purchaseTarget?.plan?.price || 0);
+    if (purchaseTarget?.type === 'video') return Number(videoPrice || 0);
+    return 0;
+  };
+
+  const validateCardPayment = () => {
+    const nextErrors = {};
+
+    if (!isValidCardholderName(paymentForm.name)) {
+      nextErrors.name = 'El nombre debe tener solo letras y espacios.';
+    }
+    if (!isValidCardNumber(paymentForm.cardNumber)) {
+      nextErrors.cardNumber = 'Número de tarjeta inválido.';
+    }
+    if (!isValidExpiry(paymentForm.exp)) {
+      nextErrors.exp = 'Fecha inválida o expirada.';
+    }
+    if (!/^\d{3,4}$/.test(paymentForm.cvc)) {
+      nextErrors.cvc = 'CVC inválido.';
+    }
+
+    setPaymentErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const completePurchase = async (method = 'card') => {
+    if (purchaseTarget?.type === 'plan') {
+      const plan = purchaseTarget.plan;
+      addPhotoSale({
+        id: `sale_${Date.now()}`,
+        phone,
+        clientName,
+        plan: plan.name,
+        amount: plan.price,
+        photos: selectedIds.length,
+        date: new Date().toLocaleDateString('es-DO'),
+        source: method === 'paypal' ? 'paypal' : 'online',
+      });
+      logActivity('Venta online', `${clientName} - Plan ${plan.name} - US$ ${plan.price}`);
+      await updateAllPortfoliosStatus('Vendido');
+      await handleDownloadSelected();
+      alert(`Pago aprobado. Plan ${plan.name} comprado y descarga iniciada.`);
+    }
+
+    if (purchaseTarget?.type === 'video' && portfolioVideo) {
+      addPhotoSale({
+        id: `sale_video_${Date.now()}`,
+        phone,
+        clientName,
+        plan: 'Video',
+        amount: videoPrice,
+        photos: 0,
+        date: new Date().toLocaleDateString('es-DO'),
+        source: method === 'paypal' ? 'paypal' : 'online',
+      });
+      logActivity('Venta video online', `${clientName} - US$ ${videoPrice}`);
+      await updateAllPortfoliosStatus('Vendido');
+      await downloadImage(portfolioVideo, 'macao-video-aventura.mp4');
+      await updateAllPortfoliosStatus('Descargado');
+      alert('Pago aprobado. Video comprado y descargado.');
+    }
+
+    setShowPaymentModal(false);
+    setPurchaseTarget(null);
+    setPaymentMethod('card');
+    setPaymentErrors({});
+    setPaymentForm({ name: '', cardNumber: '', exp: '', cvc: '' });
+  };
+
   const handleConfirmPayment = async () => {
-    if (!paymentForm.name || !paymentForm.cardNumber || !paymentForm.exp || !paymentForm.cvc) {
-      alert('Completa todos los datos de pago.');
+    if (paymentMethod !== 'card') {
+      alert('Selecciona PayPal o usa tarjeta para completar el pago.');
       return;
     }
+
+    if (!validateCardPayment()) return;
 
     setIsProcessingPayment(true);
 
     try {
-      if (purchaseTarget?.type === 'plan') {
-        const plan = purchaseTarget.plan;
-        addPhotoSale({
-          id: `sale_${Date.now()}`,
-          phone,
-          clientName,
-          plan: plan.name,
-          amount: plan.price,
-          photos: selectedIds.length,
-          date: new Date().toLocaleDateString('es-DO'),
-          source: 'online',
-        });
-        logActivity('Venta online', `${clientName} - Plan ${plan.name} - US$ ${plan.price}`);
-        await updateAllPortfoliosStatus('Vendido');
-        await handleDownloadSelected();
-        alert(`Pago aprobado. Plan ${plan.name} comprado y descarga iniciada.`);
-      }
-
-      if (purchaseTarget?.type === 'video' && portfolioVideo) {
-        addPhotoSale({
-          id: `sale_video_${Date.now()}`,
-          phone,
-          clientName,
-          plan: 'Video',
-          amount: videoPrice,
-          photos: 0,
-          date: new Date().toLocaleDateString('es-DO'),
-          source: 'online',
-        });
-        logActivity('Venta video online', `${clientName} - US$ ${videoPrice}`);
-        await updateAllPortfoliosStatus('Vendido');
-        await downloadImage(portfolioVideo, 'macao-video-aventura.mp4');
-        await updateAllPortfoliosStatus('Descargado');
-        alert('Pago aprobado. Video comprado y descargado.');
-      }
-
-      setShowPaymentModal(false);
-      setPurchaseTarget(null);
-      setPaymentForm({ name: '', cardNumber: '', exp: '', cvc: '' });
+      await completePurchase('card');
     } finally {
       setIsProcessingPayment(false);
     }
@@ -804,35 +903,62 @@ function ClientGallery() {
               className="w-full max-w-md"
             >
               <GlassCard className="p-6" hover={false}>
-                <h3 className="text-white text-xl font-semibold mb-1">Pasarela de Pago</h3>
+                <h3 className="text-white text-xl font-semibold mb-1">Pagar ahora</h3>
                 <p className="text-white/60 text-sm mb-5">
                   {purchaseTarget?.type === 'plan'
                     ? `Plan ${purchaseTarget?.plan?.name} - US$ ${purchaseTarget?.plan?.price}`
                     : `Video Aventura - US$ ${videoPrice}`}
                 </p>
 
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <GlassButton
+                    variant={paymentMethod === 'card' ? 'primary' : 'secondary'}
+                    onClick={() => setPaymentMethod('card')}
+                  >
+                    Tarjeta
+                  </GlassButton>
+                  <GlassButton
+                    variant={paymentMethod === 'paypal' ? 'primary' : 'secondary'}
+                    onClick={() => setPaymentMethod('paypal')}
+                  >
+                    PayPal
+                  </GlassButton>
+                </div>
+
+                {paymentMethod === 'card' && (
                 <div className="space-y-3">
                   <input
                     type="text"
                     placeholder="Nombre en tarjeta"
                     value={paymentForm.name}
-                    onChange={(e) => setPaymentForm((prev) => ({ ...prev, name: e.target.value }))}
+                    onChange={(e) => {
+                      setPaymentErrors((prev) => ({ ...prev, name: '' }));
+                      setPaymentForm((prev) => ({ ...prev, name: sanitizeCardholderName(e.target.value) }));
+                    }}
                     className="w-full px-4 py-3 bg-black/30 rounded-xl border border-white/20 text-white placeholder:text-white/40 focus:outline-none"
                   />
+                  {paymentErrors.name && <p className="text-xs text-red-400">{paymentErrors.name}</p>}
                   <input
                     type="text"
                     inputMode="numeric"
                     placeholder="Numero de tarjeta"
                     value={paymentForm.cardNumber}
-                    onChange={(e) => setPaymentForm((prev) => ({ ...prev, cardNumber: e.target.value.replace(/[^0-9\s]/g, '') }))}
+                    onChange={(e) => {
+                      setPaymentErrors((prev) => ({ ...prev, cardNumber: '' }));
+                      setPaymentForm((prev) => ({ ...prev, cardNumber: e.target.value.replace(/[^0-9\s]/g, '').slice(0, 23) }));
+                    }}
                     className="w-full px-4 py-3 bg-black/30 rounded-xl border border-white/20 text-white placeholder:text-white/40 focus:outline-none"
                   />
+                  {paymentErrors.cardNumber && <p className="text-xs text-red-400">{paymentErrors.cardNumber}</p>}
                   <div className="grid grid-cols-2 gap-3">
                     <input
                       type="text"
                       placeholder="MM/AA"
                       value={paymentForm.exp}
-                      onChange={(e) => setPaymentForm((prev) => ({ ...prev, exp: e.target.value }))}
+                      onChange={(e) => {
+                        setPaymentErrors((prev) => ({ ...prev, exp: '' }));
+                        setPaymentForm((prev) => ({ ...prev, exp: formatExpiryInput(e.target.value) }));
+                      }}
                       className="w-full px-4 py-3 bg-black/30 rounded-xl border border-white/20 text-white placeholder:text-white/40 focus:outline-none"
                     />
                     <input
@@ -840,19 +966,88 @@ function ClientGallery() {
                       inputMode="numeric"
                       placeholder="CVC"
                       value={paymentForm.cvc}
-                      onChange={(e) => setPaymentForm((prev) => ({ ...prev, cvc: e.target.value.replace(/[^0-9]/g, '') }))}
+                      onChange={(e) => {
+                        setPaymentErrors((prev) => ({ ...prev, cvc: '' }));
+                        setPaymentForm((prev) => ({ ...prev, cvc: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) }));
+                      }}
                       className="w-full px-4 py-3 bg-black/30 rounded-xl border border-white/20 text-white placeholder:text-white/40 focus:outline-none"
                     />
                   </div>
+                  {(paymentErrors.exp || paymentErrors.cvc) && (
+                    <p className="text-xs text-red-400">{paymentErrors.exp || paymentErrors.cvc}</p>
+                  )}
                 </div>
+                )}
+
+                {paymentMethod === 'paypal' && (
+                  <div className="rounded-xl border border-white/15 p-3 bg-black/20">
+                    {!PAYPAL_CLIENT_ID ? (
+                      <p className="text-sm text-yellow-300">Falta configurar PayPal. Define `NEXT_PUBLIC_PAYPAL_CLIENT_ID` para habilitarlo.</p>
+                    ) : (
+                      <PayPalScriptProvider options={PAYPAL_OPTIONS}>
+                        <p className="text-xs text-white/70 mb-3">
+                          Puedes pagar con cuenta PayPal o con tarjeta sin crear cuenta.
+                        </p>
+                        <PayPalButtons
+                          fundingSource="paypal"
+                          style={{ layout: 'vertical', shape: 'pill', label: 'pay' }}
+                          createOrder={(_data, actions) => actions.order.create({
+                            purchase_units: [{ amount: { value: getPaymentAmount().toFixed(2), currency_code: 'USD' } }],
+                          })}
+                          onApprove={async (_data, actions) => {
+                            setIsProcessingPayment(true);
+                            try {
+                              await actions.order.capture();
+                              await completePurchase('paypal');
+                            } finally {
+                              setIsProcessingPayment(false);
+                            }
+                          }}
+                          onError={(err) => {
+                            console.error('PayPal error:', err);
+                            alert('No se pudo completar el pago con PayPal. Intenta de nuevo.');
+                          }}
+                        />
+                        <div className="mt-2">
+                          <PayPalButtons
+                            fundingSource="card"
+                            style={{ layout: 'vertical', shape: 'pill', label: 'pay' }}
+                            createOrder={(_data, actions) => actions.order.create({
+                              purchase_units: [{ amount: { value: getPaymentAmount().toFixed(2), currency_code: 'USD' } }],
+                            })}
+                            onApprove={async (_data, actions) => {
+                              setIsProcessingPayment(true);
+                              try {
+                                await actions.order.capture();
+                                await completePurchase('paypal');
+                              } finally {
+                                setIsProcessingPayment(false);
+                              }
+                            }}
+                            onError={(err) => {
+                              console.error('PayPal Card error:', err);
+                              alert('No se pudo completar el pago con tarjeta. Intenta de nuevo.');
+                            }}
+                          />
+                        </div>
+                      </PayPalScriptProvider>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex gap-3 mt-6">
                   <GlassButton variant="secondary" className="flex-1" onClick={() => setShowPaymentModal(false)}>
                     Cancelar
                   </GlassButton>
-                  <GlassButton variant="primary" className="flex-1" onClick={handleConfirmPayment} disabled={isProcessingPayment}>
-                    {isProcessingPayment ? 'Procesando...' : 'Pagar'}
-                  </GlassButton>
+                  {paymentMethod === 'card' ? (
+                    <GlassButton variant="primary" className="flex-1" onClick={handleConfirmPayment} disabled={isProcessingPayment}>
+                      {isProcessingPayment ? 'Procesando...' : 'Pagar'}
+                    </GlassButton>
+                  ) : (
+                    <GlassButton variant="primary" className="flex-1" disabled>
+                      PayPal
+                    </GlassButton>
+                  )}
                 </div>
               </GlassCard>
             </motion.div>
