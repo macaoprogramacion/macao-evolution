@@ -24,7 +24,7 @@ export function WhatsAppFloat() {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Contactar por WhatsApp"
-      className="fixed bottom-24 right-5 z-50 inline-flex items-center gap-2 rounded-full bg-[#25D366] px-4 py-3 text-white shadow-lg transition-transform duration-200 hover:scale-105 hover:bg-[#20ba5a]"
+      className="fixed bottom-6 right-5 z-50 inline-flex items-center gap-2 rounded-full bg-[#25D366] px-4 py-3 text-white shadow-lg transition-transform duration-200 hover:scale-105 hover:bg-[#20ba5a]"
     >
       <MessageCircle className="h-5 w-5" />
       <span className="text-sm font-semibold">WhatsApp</span>
