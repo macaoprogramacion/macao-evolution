@@ -38,6 +38,7 @@ export default function PortfoliosPage() {
   const [uploadedPhotos, setUploadedPhotos] = useState([]);
   const fileInputRef = useRef(null);
   const dropZoneRef = useRef(null);
+  const normalizePhoneInput = (value) => value.replace(/[^0-9+()\-\s]/g, '');
 
   // Calculate stats
   const expiringCount = portfolios.filter(p => p.expiringSoon).length;
@@ -149,10 +150,10 @@ export default function PortfoliosPage() {
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
               >
-                <option value="Todos">Todos</option>
-                <option value="Pendiente">Pendiente</option>
-                <option value="Vendido">Vendido</option>
-                <option value="Descargado">Descargado</option>
+                <option value="Todos" style={{ color: '#111827' }}>Todos</option>
+                <option value="Pendiente" style={{ color: '#111827' }}>Pendiente</option>
+                <option value="Vendido" style={{ color: '#111827' }}>Vendido</option>
+                <option value="Descargado" style={{ color: '#111827' }}>Descargado</option>
               </select>
             </GlassCard>
 
@@ -329,9 +330,10 @@ export default function PortfoliosPage() {
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60" />
                     <input
                       type="tel"
+                      inputMode="numeric"
                       placeholder="809-000-0000"
                       value={uploadForm.phone}
-                      onChange={(e) => setUploadForm({...uploadForm, phone: e.target.value})}
+                      onChange={(e) => setUploadForm({...uploadForm, phone: normalizePhoneInput(e.target.value)})}
                       className="w-full pl-10 pr-4 py-3 bg-black/30 rounded-2xl border border-white/20 
                                 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-red-500"
                     />

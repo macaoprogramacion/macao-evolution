@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Mail, Lock, User, Phone, Eye, EyeOff, ChevronRight, Briefcase, Users, Building2, Shield } from "lucide-react";
 import { authenticateByEmail } from "@/lib/supabase-users";
+import { loginCustomer, registerCustomer } from "@/lib/customer-accounts";
 
 type UserRole = "cliente" | "representante" | "colaborador";
 
@@ -13,35 +14,47 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
+const SESSION_KEY = "macao-user";
+const LEGACY_REGISTERED_USERS_KEY = "macao-registered-users";
 
-interface RegisteredUser {
-  id: string;
+interface LegacyRegisteredUser {
   name: string;
   phone: string;
   email: string;
   password: string;
-  role: Exclude<UserRole, "colaborador">;
-  registeredAt: string;
+  role: "cliente" | "representante";
 }
-
-const REGISTERED_USERS_KEY = "macao-registered-users";
-const SESSION_KEY = "macao-user";
 
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
-function getRegisteredUsers(): RegisteredUser[] {
+async function migrateLegacyUsersToDatabase() {
   try {
-    const raw = localStorage.getItem(REGISTERED_USERS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
+    const legacyRaw = localStorage.getItem(LEGACY_REGISTERED_USERS_KEY);
+    if (!legacyRaw) return;
 
-function saveRegisteredUsers(users: RegisteredUser[]) {
-  localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(users));
+    const legacyUsers = JSON.parse(legacyRaw) as LegacyRegisteredUser[];
+    if (!Array.isArray(legacyUsers) || legacyUsers.length === 0) {
+      localStorage.removeItem(LEGACY_REGISTERED_USERS_KEY);
+      return;
+    }
+
+    for (const legacy of legacyUsers) {
+      if (!legacy?.email || !legacy?.password || !legacy?.role) continue;
+      await registerCustomer({
+        name: legacy.name || "Usuario",
+        phone: legacy.phone || "",
+        email: legacy.email,
+        password: legacy.password,
+        role: legacy.role,
+      });
+    }
+
+    localStorage.removeItem(LEGACY_REGISTERED_USERS_KEY);
+  } catch {
+    // Ignore migration failures, users can still register/login manually.
+  }
 }
 
 function setSessionUser(data: Record<string, unknown>) {
@@ -91,6 +104,12 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     }
   }, [isOpen]);
 
+  // One-time migration from legacy localStorage accounts to Supabase
+  useEffect(() => {
+    if (!isOpen) return;
+    migrateLegacyUsersToDatabase();
+  }, [isOpen]);
+
   function validateLogin() {
     const newErrors: Record<string, string> = {};
     if (!loginEmail.trim()) newErrors.loginEmail = "El correo es obligatorio";
@@ -117,13 +136,6 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       newErrors.regPassword = "Mínimo 6 caracteres";
     if (regPassword !== regConfirmPassword)
       newErrors.regConfirmPassword = "Las contraseñas no coinciden";
-
-    const exists = getRegisteredUsers().some(
-      (u) => normalizeEmail(u.email) === normalizeEmail(regEmail)
-    );
-    if (exists) {
-      newErrors.regEmail = "Ya existe una cuenta con este correo";
-    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -175,35 +187,52 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setIsLoading(true);
 
     const email = normalizeEmail(loginEmail);
-    const registeredUsers = getRegisteredUsers();
-    const user = registeredUsers.find(
-      (u) => normalizeEmail(u.email) === email && u.role === loginRole
-    );
+
+    const { account: user, error: authError } = await loginCustomer({
+      email,
+      password: loginPassword,
+      role: loginRole === "representante" ? "representante" : "cliente",
+    });
 
     if (loginRole === "representante") {
-      const mockRepEmails: Record<string, string> = {
-        "carlos.mendez@excursionespcana.com": "REP-001",
-        "ana.rodriguez@viajesdominicanos.com": "REP-002",
-        "miguel.torres@barcelo.com": "REP-003",
-        "laura.pena@gmail.com": "REP-004",
-        "f.rosario@dreamsresort.com": "REP-005",
-      };
+      if (user) {
+        const repId = `REP-${String(user.id).replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+        const initials = user.name
+          .split(" ")
+          .map((w) => w[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2);
 
-      const registeredReps = JSON.parse(localStorage.getItem("macao-registered-reps") || "[]");
-      const registeredRep = registeredReps.find((r: any) => normalizeEmail(r.email) === email);
-      const mockRepId = mockRepEmails[email];
+        const registeredReps = JSON.parse(localStorage.getItem("macao-registered-reps") || "[]");
+        const existingRepIndex = registeredReps.findIndex(
+          (r: { email?: string }) => normalizeEmail(r.email || "") === normalizeEmail(user.email),
+        );
+        const repPayload = {
+          id: repId,
+          name: user.name,
+          phone: user.phone,
+          email: user.email,
+          company: "Independiente",
+          type: "local_seller",
+          commissionPercent: 15,
+          initials,
+        };
 
-      if (user && user.password !== loginPassword) {
-        setErrors({ loginPassword: "Contraseña incorrecta" });
-        setIsLoading(false);
-        return;
-      }
+        if (existingRepIndex >= 0) {
+          registeredReps[existingRepIndex] = { ...registeredReps[existingRepIndex], ...repPayload };
+        } else {
+          registeredReps.push(repPayload);
+        }
 
-      if (registeredRep) {
-        localStorage.setItem("sellers-rep-id", registeredRep.id);
+        localStorage.setItem("macao-registered-reps", JSON.stringify(registeredReps));
+        localStorage.setItem("sellers-rep-id", repId);
+
         setSessionUser({
-          email: user?.email || loginEmail,
-          name: user?.name || registeredRep.name,
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          phone: user.phone,
           role: loginRole,
           loggedInAt: new Date().toISOString(),
         });
@@ -213,38 +242,13 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         return;
       }
 
-      if (user && !registeredRep) {
-        setErrors({ loginEmail: "Cuenta registrada, pero aún no está aprobada como representante." });
-        setIsLoading(false);
-        return;
-      }
-
-      if (mockRepId) {
-        localStorage.setItem("sellers-rep-id", mockRepId);
-        setSessionUser({
-          email: loginEmail,
-          role: loginRole,
-          loggedInAt: new Date().toISOString(),
-        });
-        setIsLoading(false);
-        onClose();
-        router.push("/sellers/dashboard");
-        return;
-      }
-
-      setErrors({ loginEmail: "No se encontró una cuenta de representante con este correo. Regístrate primero." });
+      setErrors({ loginEmail: authError || "No se encontró una cuenta de representante con este correo." });
       setIsLoading(false);
       return;
     }
 
     if (!user) {
-      setErrors({ loginEmail: "No existe una cuenta con este correo" });
-      setIsLoading(false);
-      return;
-    }
-
-    if (user.password !== loginPassword) {
-      setErrors({ loginPassword: "Contraseña incorrecta" });
+      setErrors({ loginEmail: authError || "No existe una cuenta con este correo" });
       setIsLoading(false);
       return;
     }
@@ -264,19 +268,19 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     if (!validateRegister()) return;
     setIsLoading(true);
 
-    const newUser: RegisteredUser = {
-      id: `USR-${Date.now()}`,
+    const { account: newUser, error } = await registerCustomer({
       name: regName.trim(),
       phone: regPhone.trim(),
       email: normalizeEmail(regEmail),
       password: regPassword,
-      role: regRole,
-      registeredAt: new Date().toISOString(),
-    };
+      role: regRole === "representante" ? "representante" : "cliente",
+    });
 
-    const registeredUsers = getRegisteredUsers();
-    registeredUsers.push(newUser);
-    saveRegisteredUsers(registeredUsers);
+    if (!newUser) {
+      setErrors({ regEmail: error || "No se pudo crear la cuenta" });
+      setIsLoading(false);
+      return;
+    }
 
     setSessionUser({
       id: newUser.id,
@@ -302,20 +306,21 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       // Ignore email send failures; account creation should not fail.
     }
 
-    // If representative, register and redirect to sellers panel
+    // If representative, mirror profile to sellers local cache and redirect
     if (regRole === "representante") {
-      const initials = regName
+      const repId = `REP-${String(newUser.id).replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+      const initials = newUser.name
         .split(" ")
         .map((w: string) => w[0])
         .join("")
         .toUpperCase()
         .slice(0, 2);
 
-      const newRep = {
-        id: `REP-${Date.now()}`,
-        name: regName,
-        phone: regPhone,
-        email: normalizeEmail(regEmail),
+      const repPayload = {
+        id: repId,
+        name: newUser.name,
+        phone: newUser.phone,
+        email: newUser.email,
         company: "Independiente",
         type: "local_seller",
         commissionPercent: 15,
@@ -323,9 +328,18 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       };
 
       const registeredReps = JSON.parse(localStorage.getItem("macao-registered-reps") || "[]");
-      registeredReps.push(newRep);
+      const existingRepIndex = registeredReps.findIndex(
+        (r: { email?: string }) => normalizeEmail(r.email || "") === normalizeEmail(newUser.email),
+      );
+
+      if (existingRepIndex >= 0) {
+        registeredReps[existingRepIndex] = { ...registeredReps[existingRepIndex], ...repPayload };
+      } else {
+        registeredReps.push(repPayload);
+      }
+
       localStorage.setItem("macao-registered-reps", JSON.stringify(registeredReps));
-      localStorage.setItem("sellers-rep-id", newRep.id);
+      localStorage.setItem("sellers-rep-id", repId);
 
       setIsLoading(false);
       onClose();

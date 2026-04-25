@@ -1,50 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import {
-  getPortfolios as lsGetPortfolios,
-  savePortfolios as lsSavePortfolios,
-  getPortfolioPhotos as lsGetPhotos,
-  savePortfolioPhotos as lsSavePhotos,
-  getPortfolioVideos as lsGetVideos,
-  savePortfolioVideos as lsSaveVideos,
-  getBillingClients,
-} from '@/lib/store';
-
-// Demo photos for each client (used as seed when localStorage is empty)
-const seedClientPhotos = {
-  1: [
-    'https://images.unsplash.com/photo-1682687220742-aba13b6e50ba?w=400',
-    'https://images.unsplash.com/photo-1682687221038-404670f01d03?w=400',
-    'https://images.unsplash.com/photo-1682687220063-4742bd7fd538?w=400',
-    'https://images.unsplash.com/photo-1682695796954-bad0d0f59ff1?w=400',
-    'https://images.unsplash.com/photo-1682695797221-8164ff1fafc9?w=400',
-    'https://images.unsplash.com/photo-1682687982501-1e58ab814714?w=400',
-  ],
-  2: [
-    'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400',
-    'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=400',
-    'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=400',
-    'https://images.unsplash.com/photo-1426604966848-d7adac402bff?w=400',
-  ],
-  3: [
-    'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=400',
-    'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400',
-    'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400',
-  ],
-  4: [
-    'https://images.unsplash.com/photo-1518173946687-a4c036bc4a7a?w=400',
-    'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?w=400',
-  ],
-  5: [
-    'https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?w=400',
-    'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=400',
-    'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=400',
-    'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=400',
-  ],
-  6: [
-    'https://images.unsplash.com/photo-1433086966358-54859d0ed716?w=400',
-    'https://images.unsplash.com/photo-1482938289607-e9573fc25ebb?w=400',
-  ],
-};
+import { getBillingClients } from '@/lib/store';
 
 // Portfolio duration in days
 const PORTFOLIO_DURATION_DAYS = 15;
@@ -70,183 +25,170 @@ const isExpired = (createdAt) => {
   return calculateRemainingDays(createdAt) === 0;
 };
 
-// Demo portfolio data with recent dates
-const initialPortfolios = [
-  {
-    id: 1,
-    image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-    clientName: 'Ana G.',
-    phone: '809-555-0101',
-    status: 'Vendido',
-    date: '20/01/2026',
-    dateLabel: 'Vendido el',
-    createdAt: new Date('2026-01-20').getTime(),
-  },
-  {
-    id: 2,
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-    clientName: 'Luis P.',
-    phone: '809-555-0102',
-    status: 'Descargado',
-    date: '25/01/2026',
-    dateLabel: 'Acceso el',
-    createdAt: new Date('2026-01-25').getTime(),
-  },
-  {
-    id: 3,
-    image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200',
-    clientName: 'Carla M.',
-    phone: '809-555-0103',
-    status: 'Pendiente',
-    date: '01/02/2026',
-    dateLabel: 'Subido el',
-    createdAt: new Date('2026-02-01').getTime(),
-  },
-  {
-    id: 4,
-    image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200',
-    clientName: 'María S.',
-    phone: '809-555-0104',
-    status: 'Pendiente',
-    date: '15/01/2026',
-    dateLabel: 'Subido el',
-    createdAt: new Date('2026-01-15').getTime(), // Expiring soon!
-  },
-  {
-    id: 5,
-    image: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200',
-    clientName: 'Elena R.',
-    phone: '809-555-0105',
-    status: 'Pendiente',
-    date: '03/02/2026',
-    dateLabel: 'Subido el',
-    createdAt: new Date('2026-02-03').getTime(),
-  },
-  {
-    id: 6,
-    image: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200',
-    clientName: 'Rosa J.',
-    phone: '809-555-0106',
-    status: 'Pendiente',
-    date: '10/01/2026',
-    dateLabel: 'Subido el',
-    createdAt: new Date('2026-01-10').getTime(), // Almost expired!
-  },
-];
-
 const PortfolioContext = createContext();
 
-// --- Initialise from localStorage or fall back to demo seed ---
-function loadInitialPortfolios() {
-  const stored = lsGetPortfolios();
-  return stored.length > 0 ? stored : initialPortfolios;
-}
-function loadInitialPhotos() {
-  const stored = lsGetPhotos();
-  return Object.keys(stored).length > 0 ? stored : seedClientPhotos;
-}
-function loadInitialVideos() {
-  return lsGetVideos();
-}
-
 export function PortfolioProvider({ children }) {
-  const [portfolios, setPortfolios] = useState(loadInitialPortfolios);
-  const [clientPhotos, setClientPhotos] = useState(loadInitialPhotos);
-  const [clientVideos, setClientVideos] = useState(loadInitialVideos);
+  const [portfolios, setPortfolios] = useState([]);
+  const [clientPhotos, setClientPhotos] = useState({});
+  const [clientVideos, setClientVideos] = useState({});
 
-  // ---- Persist every state change to localStorage ----
-  useEffect(() => { lsSavePortfolios(portfolios); }, [portfolios]);
-  useEffect(() => { lsSavePhotos(clientPhotos); }, [clientPhotos]);
-  useEffect(() => { lsSaveVideos(clientVideos); }, [clientVideos]);
+  const refreshFromApi = useCallback(async () => {
+    try {
+      const res = await fetch('/api/portfolios?all=true');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setPortfolios(Array.isArray(data.portfolios) ? data.portfolios : []);
+      setClientPhotos(data.photos || {});
+      setClientVideos(data.videos || {});
+    } catch (err) {
+      console.error('Error fetching portfolios from API:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshFromApi();
+  }, [refreshFromApi]);
 
   // ---- Listen for billing clients added by the cashier (cross-tab) ----
   useEffect(() => {
     const handleStorage = (e) => {
       if (e.key === 'macao_billing_clients') {
-        // New billing client may have been added — refresh portfolios from LS
-        setPortfolios(lsGetPortfolios());
+        refreshFromApi();
       }
     };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+  }, [refreshFromApi]);
 
   // Add new portfolio — saves to both localStorage (instant) and Supabase (persistent)
-  const addPortfolio = useCallback((newPortfolio, photos, video = null) => {
-    const id = Date.now();
-    const today = new Date();
-    const dateStr = today.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    
-    const portfolio = {
-      id,
-      image: photos[0] || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
-      clientName: newPortfolio.clientName,
-      phone: newPortfolio.phone,
-      status: 'Pendiente',
-      date: dateStr,
-      dateLabel: 'Subido el',
-      invoiceCode: newPortfolio.invoiceCode || null,
-      source: newPortfolio.source || 'photographer', // 'billing' | 'photographer'
-      turno: newPortfolio.turno || null,
-      photographerName: newPortfolio.photographerName || null,
-      createdAt: today.getTime(),
-    };
-
-    // Save to localStorage immediately (photographer's view)
-    setPortfolios(prev => [portfolio, ...prev]);
-    setClientPhotos(prev => ({ ...prev, [id]: photos }));
-    if (video) { setClientVideos(prev => ({ ...prev, [id]: video })); }
-
-    // Persist to Supabase (so clients can access the gallery from their own devices)
-    fetch('/api/portfolios', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clientName: newPortfolio.clientName,
-        phone: newPortfolio.phone,
-        invoiceCode: newPortfolio.invoiceCode || null,
-        source: newPortfolio.source || 'photographer',
-        turno: newPortfolio.turno || null,
-        photographerName: newPortfolio.photographerName || null,
-        photos,
-        video,
-      }),
-    }).catch(err => console.error('Error saving portfolio to Supabase:', err));
-
-    return id;
-  }, []);
+  const addPortfolio = useCallback(async (newPortfolio, photos, video = null) => {
+    try {
+      const res = await fetch('/api/portfolios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientName: newPortfolio.clientName,
+          phone: newPortfolio.phone,
+          invoiceCode: newPortfolio.invoiceCode || null,
+          source: newPortfolio.source || 'photographer',
+          turno: newPortfolio.turno || null,
+          photographerName: newPortfolio.photographerName || null,
+          photos,
+          video,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await refreshFromApi();
+    } catch (err) {
+      console.error('Error saving portfolio:', err);
+      throw err;
+    }
+  }, [refreshFromApi]);
 
   // Delete portfolio
-  const deletePortfolio = useCallback((id) => {
+  const deletePortfolio = useCallback(async (id) => {
     setPortfolios(prev => prev.filter(p => p.id !== id));
     setClientPhotos(prev => { const n = { ...prev }; delete n[id]; return n; });
     setClientVideos(prev => { const n = { ...prev }; delete n[id]; return n; });
-  }, []);
+
+    try {
+      const res = await fetch(`/api/portfolios?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      console.error('Error deleting portfolio:', err);
+      await refreshFromApi();
+    }
+  }, [refreshFromApi]);
 
   // Update portfolio
-  const updatePortfolio = useCallback((id, updates) => {
+  const updatePortfolio = useCallback(async (id, updates) => {
     setPortfolios(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
-  }, []);
+
+    try {
+      const res = await fetch(`/api/portfolios?id=${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      console.error('Error updating portfolio:', err);
+      await refreshFromApi();
+    }
+  }, [refreshFromApi]);
 
   // Add photos to portfolio
-  const addPhotosToPortfolio = useCallback((id, newPhotos) => {
+  const addPhotosToPortfolio = useCallback(async (id, newPhotos) => {
     setClientPhotos(prev => ({ ...prev, [id]: [...(prev[id] || []), ...newPhotos] }));
-  }, []);
+
+    try {
+      const res = await fetch(`/api/portfolios?id=${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add_photos', photosUrls: newPhotos }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await refreshFromApi();
+    } catch (err) {
+      console.error('Error adding photos:', err);
+      await refreshFromApi();
+    }
+  }, [refreshFromApi]);
 
   // Delete photos from portfolio
-  const deletePhotosFromPortfolio = useCallback((id, indices) => {
-    setClientPhotos(prev => ({ ...prev, [id]: prev[id].filter((_, i) => !indices.includes(i)) }));
-  }, []);
+  const deletePhotosFromPortfolio = useCallback(async (id, indices) => {
+    const current = clientPhotos[id] || [];
+    const remaining = current.filter((_, i) => !indices.includes(i));
+    setClientPhotos(prev => ({ ...prev, [id]: remaining }));
+
+    try {
+      const res = await fetch(`/api/portfolios?id=${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'replace_photos', photosUrls: remaining }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await refreshFromApi();
+    } catch (err) {
+      console.error('Error deleting photos:', err);
+      await refreshFromApi();
+    }
+  }, [clientPhotos, refreshFromApi]);
 
   // Add video to portfolio
-  const addVideoToPortfolio = useCallback((id, video) => {
+  const addVideoToPortfolio = useCallback(async (id, video) => {
     setClientVideos(prev => ({ ...prev, [id]: video }));
-  }, []);
+
+    try {
+      const res = await fetch(`/api/portfolios?id=${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_video', videoUrl: video }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await refreshFromApi();
+    } catch (err) {
+      console.error('Error adding video:', err);
+      await refreshFromApi();
+    }
+  }, [refreshFromApi]);
 
   // Delete video from portfolio
-  const deleteVideoFromPortfolio = useCallback((id) => {
+  const deleteVideoFromPortfolio = useCallback(async (id) => {
     setClientVideos(prev => { const n = { ...prev }; delete n[id]; return n; });
-  }, []);
+
+    try {
+      const res = await fetch(`/api/portfolios?id=${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove_video' }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      console.error('Error deleting video:', err);
+      await refreshFromApi();
+    }
+  }, [refreshFromApi]);
 
   // Get latest portfolios (for dashboard — last N)
   const getLatestPortfolios = useCallback((count = 6) => {

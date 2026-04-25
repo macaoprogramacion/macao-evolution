@@ -8,9 +8,6 @@ import {
   User, 
   Camera,
   Bell,
-  Palette,
-  Globe,
-  CreditCard,
   HelpCircle,
   LogOut,
   ChevronRight,
@@ -41,18 +38,6 @@ const settingsSections = [
     icon: Bell,
     title: 'Notificaciones',
     description: 'Preferencias de alertas y avisos',
-  },
-  {
-    id: 'appearance',
-    icon: Palette,
-    title: 'Apariencia',
-    description: 'Tema y personalización visual',
-  },
-  {
-    id: 'billing',
-    icon: CreditCard,
-    title: 'Facturación',
-    description: 'Métodos de pago y suscripción',
   },
   {
     id: 'help',

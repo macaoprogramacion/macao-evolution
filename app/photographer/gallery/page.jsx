@@ -139,6 +139,15 @@ function ClientGallery() {
   const [verifiedInvoice, setVerifiedInvoice] = useState(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [visibleCount, setVisibleCount] = useState(4);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [purchaseTarget, setPurchaseTarget] = useState(null);
+  const [paymentForm, setPaymentForm] = useState({
+    name: '',
+    cardNumber: '',
+    exp: '',
+    cvc: '',
+  });
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const LOAD_MORE_COUNT = 12;
 
   const visiblePhotos = galleryPhotos.slice(0, visibleCount);
@@ -173,42 +182,90 @@ function ClientGallery() {
     return count >= plan.minPhotos && count <= plan.maxPhotos;
   };
 
-  const handlePlanSelect = async (plan) => {
-    if (isPlanActive(plan)) {
-      addPhotoSale({
-        id: `sale_${Date.now()}`,
-        phone,
-        clientName,
-        plan: plan.name,
-        amount: plan.price,
-        photos: selectedIds.length,
-        date: new Date().toLocaleDateString('es-DO'),
-        source: 'online',
-      });
-      logActivity('Venta online', `${clientName} — Plan ${plan.name} — US$ ${plan.price}`);
-      // Download the selected photos
-      await handleDownloadSelected();
-      alert(`¡Compra exitosa! Plan ${plan.name} por $${plan.price}. Tus fotos se están descargando.`);
+  const updateAllPortfoliosStatus = async (status) => {
+    const ids = dbPortfolios.map((p) => p.id).filter(Boolean);
+    if (ids.length === 0) return;
+
+    await Promise.all(ids.map(async (id) => {
+      try {
+        await fetch(`/api/portfolios?id=${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'set_status', status }),
+        });
+      } catch (err) {
+        console.error(`Error updating status for portfolio ${id}:`, err);
+      }
+    }));
+
+    setDbPortfolios((prev) => prev.map((p) => ({ ...p, status })));
+  };
+
+  const openPaymentForPlan = (plan) => {
+    if (!isPlanActive(plan)) return;
+    setPurchaseTarget({ type: 'plan', plan });
+    setShowPaymentModal(true);
+  };
+
+  const openPaymentForVideo = () => {
+    if (videoSelected && portfolioVideo) {
+      setPurchaseTarget({ type: 'video' });
+      setShowPaymentModal(true);
+    } else if (videoSelected) {
+      alert('El video aún no está disponible.');
     }
   };
 
-  const handleVideoPurchase = async () => {
-    if (videoSelected && portfolioVideo) {
-      addPhotoSale({
-        id: `sale_video_${Date.now()}`,
-        phone,
-        clientName,
-        plan: 'Video',
-        amount: videoPrice,
-        photos: 0,
-        date: new Date().toLocaleDateString('es-DO'),
-        source: 'online',
-      });
-      logActivity('Venta video online', `${clientName} — US$ ${videoPrice}`);
-      await downloadImage(portfolioVideo, 'macao-video-aventura.mp4');
-      alert('¡Video comprado y descargado exitosamente!');
-    } else if (videoSelected) {
-      alert('El video aún no está disponible.');
+  const handleConfirmPayment = async () => {
+    if (!paymentForm.name || !paymentForm.cardNumber || !paymentForm.exp || !paymentForm.cvc) {
+      alert('Completa todos los datos de pago.');
+      return;
+    }
+
+    setIsProcessingPayment(true);
+
+    try {
+      if (purchaseTarget?.type === 'plan') {
+        const plan = purchaseTarget.plan;
+        addPhotoSale({
+          id: `sale_${Date.now()}`,
+          phone,
+          clientName,
+          plan: plan.name,
+          amount: plan.price,
+          photos: selectedIds.length,
+          date: new Date().toLocaleDateString('es-DO'),
+          source: 'online',
+        });
+        logActivity('Venta online', `${clientName} - Plan ${plan.name} - US$ ${plan.price}`);
+        await updateAllPortfoliosStatus('Vendido');
+        await handleDownloadSelected();
+        alert(`Pago aprobado. Plan ${plan.name} comprado y descarga iniciada.`);
+      }
+
+      if (purchaseTarget?.type === 'video' && portfolioVideo) {
+        addPhotoSale({
+          id: `sale_video_${Date.now()}`,
+          phone,
+          clientName,
+          plan: 'Video',
+          amount: videoPrice,
+          photos: 0,
+          date: new Date().toLocaleDateString('es-DO'),
+          source: 'online',
+        });
+        logActivity('Venta video online', `${clientName} - US$ ${videoPrice}`);
+        await updateAllPortfoliosStatus('Vendido');
+        await downloadImage(portfolioVideo, 'macao-video-aventura.mp4');
+        await updateAllPortfoliosStatus('Descargado');
+        alert('Pago aprobado. Video comprado y descargado.');
+      }
+
+      setShowPaymentModal(false);
+      setPurchaseTarget(null);
+      setPaymentForm({ name: '', cardNumber: '', exp: '', cvc: '' });
+    } finally {
+      setIsProcessingPayment(false);
     }
   };
 
@@ -300,6 +357,7 @@ function ClientGallery() {
       await downloadImage(portfolioVideo, 'macao-video-aventura.mp4');
     }
     logActivity('Descarga completa', `${clientName} descargó ${galleryPhotos.length} fotos${portfolioVideo ? ' + video' : ''}`);
+    await updateAllPortfoliosStatus('Descargado');
   };
 
   // Handle download only selected photos
@@ -313,6 +371,7 @@ function ClientGallery() {
       }
     }
     logActivity('Descarga parcial', `${clientName} descargó ${selected.length} fotos`);
+    await updateAllPortfoliosStatus('Descargado');
   };
 
   // Loading state
@@ -601,7 +660,7 @@ function ClientGallery() {
                   <GlassButton
                     variant={isActive ? "primary" : "secondary"}
                     className={`w-full ${!isActive ? 'cursor-not-allowed opacity-50' : ''}`}
-                    onClick={() => handlePlanSelect(plan)}
+                    onClick={() => openPaymentForPlan(plan)}
                     disabled={!isActive}
                   >
                     {isActive ? 'Comprar' : plan.description}
@@ -666,7 +725,7 @@ function ClientGallery() {
                     className={`flex items-center gap-2 ${!videoSelected ? 'opacity-50' : ''}`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleVideoPurchase();
+                      openPaymentForVideo();
                     }}
                     disabled={!videoSelected}
                   >
@@ -727,6 +786,79 @@ function ClientGallery() {
           </motion.div>
         )}
       </motion.div>
+
+      <AnimatePresence>
+        {showPaymentModal && (
+          <motion.div
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowPaymentModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md"
+            >
+              <GlassCard className="p-6" hover={false}>
+                <h3 className="text-white text-xl font-semibold mb-1">Pasarela de Pago</h3>
+                <p className="text-white/60 text-sm mb-5">
+                  {purchaseTarget?.type === 'plan'
+                    ? `Plan ${purchaseTarget?.plan?.name} - US$ ${purchaseTarget?.plan?.price}`
+                    : `Video Aventura - US$ ${videoPrice}`}
+                </p>
+
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Nombre en tarjeta"
+                    value={paymentForm.name}
+                    onChange={(e) => setPaymentForm((prev) => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-4 py-3 bg-black/30 rounded-xl border border-white/20 text-white placeholder:text-white/40 focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Numero de tarjeta"
+                    value={paymentForm.cardNumber}
+                    onChange={(e) => setPaymentForm((prev) => ({ ...prev, cardNumber: e.target.value.replace(/[^0-9\s]/g, '') }))}
+                    className="w-full px-4 py-3 bg-black/30 rounded-xl border border-white/20 text-white placeholder:text-white/40 focus:outline-none"
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      placeholder="MM/AA"
+                      value={paymentForm.exp}
+                      onChange={(e) => setPaymentForm((prev) => ({ ...prev, exp: e.target.value }))}
+                      className="w-full px-4 py-3 bg-black/30 rounded-xl border border-white/20 text-white placeholder:text-white/40 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="CVC"
+                      value={paymentForm.cvc}
+                      onChange={(e) => setPaymentForm((prev) => ({ ...prev, cvc: e.target.value.replace(/[^0-9]/g, '') }))}
+                      className="w-full px-4 py-3 bg-black/30 rounded-xl border border-white/20 text-white placeholder:text-white/40 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <GlassButton variant="secondary" className="flex-1" onClick={() => setShowPaymentModal(false)}>
+                    Cancelar
+                  </GlassButton>
+                  <GlassButton variant="primary" className="flex-1" onClick={handleConfirmPayment} disabled={isProcessingPayment}>
+                    {isProcessingPayment ? 'Procesando...' : 'Pagar'}
+                  </GlassButton>
+                </div>
+              </GlassCard>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       </div>
     </div>
   );

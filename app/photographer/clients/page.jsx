@@ -43,6 +43,7 @@ function ClientViewModal({ client, onClose, photos, onDeletePhoto, onUploadPhoto
     phone: client.phone,
   });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const normalizePhoneInput = (value) => value.replace(/[^0-9+()\-\s]/g, '');
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -105,7 +106,7 @@ function ClientViewModal({ client, onClose, photos, onDeletePhoto, onUploadPhoto
                       <input
                         type="tel"
                         value={editForm.phone}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, phone: normalizePhoneInput(e.target.value) }))}
                         className="px-3 py-1 bg-black/30 rounded-lg border border-white/20 text-white/70 text-sm block"
                       />
                     </div>
@@ -316,6 +317,7 @@ export default function ClientesPage() {
   const [uploadedPhotos, setUploadedPhotos] = useState([]);
   const fileInputRef = useRef(null);
   const dropZoneRef = useRef(null);
+  const normalizePhoneInput = (value) => value.replace(/[^0-9+()\-\s]/g, '');
 
   // Get all portfolios with expiration info
   const portfolios = getAllPortfoliosWithExpiration();
@@ -433,10 +435,10 @@ export default function ClientesPage() {
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
               >
-                <option value="Todos">Todos</option>
-                <option value="Pendiente">Pendiente</option>
-                <option value="Vendido">Vendido</option>
-                <option value="Descargado">Descargado</option>
+                <option value="Todos" style={{ color: '#111827' }}>Todos</option>
+                <option value="Pendiente" style={{ color: '#111827' }}>Pendiente</option>
+                <option value="Vendido" style={{ color: '#111827' }}>Vendido</option>
+                <option value="Descargado" style={{ color: '#111827' }}>Descargado</option>
               </select>
             </GlassCard>
 
@@ -680,9 +682,10 @@ export default function ClientesPage() {
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60" />
                     <input
                       type="tel"
+                      inputMode="numeric"
                       placeholder="809-000-0000"
                       value={uploadForm.phone}
-                      onChange={(e) => setUploadForm({...uploadForm, phone: e.target.value})}
+                      onChange={(e) => setUploadForm({...uploadForm, phone: normalizePhoneInput(e.target.value)})}
                       className="w-full pl-10 pr-4 py-3 bg-black/30 rounded-2xl border border-white/20 
                                 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-red-500"
                     />

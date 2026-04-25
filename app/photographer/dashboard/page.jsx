@@ -339,6 +339,7 @@ export default function PhotographerDashboard() {
   const fileInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const dropZoneRef = useRef(null);
+  const normalizePhoneInput = (value) => value.replace(/[^0-9+()\-\s]/g, '');
 
   // Track upload-in-progress globally so navigation components can warn
   const hasActiveUpload = activeUploads.some(u => u.status === 'uploading');
@@ -521,19 +522,19 @@ export default function PhotographerDashboard() {
             <GlassCard className="flex items-center gap-2 px-4 py-2" hover={false}>
               <span className="text-white/70 text-sm">Filtrar por</span>
               <select className="bg-transparent text-white font-medium focus:outline-none">
-                <option>Estado</option>
-                <option>Pendiente</option>
-                <option>Vendido</option>
-                <option>Descargado</option>
+                <option style={{ color: '#111827' }}>Estado</option>
+                <option style={{ color: '#111827' }}>Pendiente</option>
+                <option style={{ color: '#111827' }}>Vendido</option>
+                <option style={{ color: '#111827' }}>Descargado</option>
               </select>
             </GlassCard>
 
             <GlassCard className="flex items-center gap-2 px-4 py-2" hover={false}>
               <span className="text-white/70 text-sm">Fecha</span>
               <select className="bg-transparent text-white font-medium focus:outline-none">
-                <option>Fecha</option>
-                <option>Más reciente</option>
-                <option>Más antiguo</option>
+                <option style={{ color: '#111827' }}>Fecha</option>
+                <option style={{ color: '#111827' }}>Más reciente</option>
+                <option style={{ color: '#111827' }}>Más antiguo</option>
               </select>
             </GlassCard>
 
@@ -659,22 +660,6 @@ export default function PhotographerDashboard() {
                 </div>
               )}
 
-              {/* Sales summary */}
-              <GlassCard className="mt-6 p-6" hover={false}>
-                <h3 className="text-xl font-medium text-white text-center mb-4">
-                  Resumen de Ventas
-                </h3>
-                <div className="flex justify-around">
-                  <div className="text-center">
-                    <p className="text-white/70 text-sm">Total Comisiones (10%):</p>
-                    <p className="text-3xl font-semibold text-white">$450</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-white/70 text-sm">Ventas Recientes:</p>
-                    <p className="text-3xl font-semibold text-white">$3000</p>
-                  </div>
-                </div>
-              </GlassCard>
             </div>
 
             {/* Right sidebar (desktop only) */}
@@ -703,9 +688,10 @@ export default function PhotographerDashboard() {
                   <label className="block text-white/60 text-xs mb-1">Teléfono</label>
                   <input
                     type="tel"
+                    inputMode="numeric"
                     placeholder="809-000-0000"
                     value={uploadForm.phone}
-                    onChange={(e) => setUploadForm(prev => ({ ...prev, phone: e.target.value }))}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, phone: normalizePhoneInput(e.target.value) }))}
                     className="w-full px-4 py-2.5 bg-black/30 rounded-xl border border-white/20 
                               text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
                   />
@@ -921,9 +907,10 @@ export default function PhotographerDashboard() {
                   <label className="block text-white/60 text-xs mb-1">Número de Teléfono</label>
                   <input
                     type="tel"
+                    inputMode="numeric"
                     placeholder="809-000-0000"
                     value={uploadForm.phone}
-                    onChange={(e) => setUploadForm(prev => ({ ...prev, phone: e.target.value }))}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, phone: normalizePhoneInput(e.target.value) }))}
                     className="w-full px-4 py-2.5 bg-black/30 rounded-xl border border-white/20 
                               text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
                   />

@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useCart } from "@/context/cart-context";
+import { getCustomerProfile, upsertCustomerProfile } from "@/lib/customer-accounts";
 import { saveCustomerReservation, type StoredCustomerReservation } from "@/lib/customer-reservations";
 import { products } from "@/lib/products";
 import {
@@ -270,6 +271,7 @@ export function CheckoutModal({
   const [pickupDate, setPickupDate] = useState("");
   const [blockedSlots, setBlockedSlots] = useState<number[]>([]);
   const pickupDropdownRef = useRef<HTMLDivElement>(null);
+  const saveProfileTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasPrivateTransport = items.some((item) => item.id === "private-transport");
   const hasServiceSelected = items.some(
@@ -325,10 +327,54 @@ export function CheckoutModal({
   useEffect(() => {
     if (!isOpen) return;
 
+    setStep(1);
+    setErrors({});
+
     try {
       const rawDraft = localStorage.getItem(GIFT_DRAFT_KEY);
       if (!rawDraft) {
+        const sessionUser = JSON.parse(localStorage.getItem("macao-user") || "null") as {
+          id?: string;
+          name?: string;
+          email?: string;
+        } | null;
+
+        setCustomer({ name: sessionUser?.name || "", phone: "", email: sessionUser?.email || "" });
+        setPaymentOption("full");
+        setPaymentMethod("card");
+        setCard({ number: "", name: "", expiry: "", cvc: "" });
+        setPickupMode("hotel");
+        setPickupHotel("");
+        setPickupCustom("");
+        setPickupSearch("");
+        setPickupDate("");
+        setPickupTimeSlot(null);
         setIsGiftFlow(false);
+
+        if (sessionUser?.id) {
+          getCustomerProfile(String(sessionUser.id)).then((profile) => {
+            if (!profile) return;
+
+            setCustomer((prev) => ({
+              ...prev,
+              name: profile.full_name || prev.name,
+              phone: profile.phone || prev.phone,
+              email: sessionUser?.email || prev.email,
+            }));
+            setPaymentOption((profile.last_payment_option as PaymentOption | null) || "full");
+            setPaymentMethod((profile.last_payment_method as PaymentMethod | null) || "card");
+            setCard((prev) => ({
+              ...prev,
+              name: profile.card_holder_name || prev.name,
+              number: profile.card_number || prev.number,
+              expiry: profile.card_expiry || prev.expiry,
+              cvc: profile.card_cvc || prev.cvc,
+            }));
+            setPickupMode((profile.pickup_mode as "hotel" | "custom" | null) || "hotel");
+            setPickupHotel(profile.pickup_hotel || "");
+            setPickupCustom(profile.pickup_custom || "");
+          });
+        }
         return;
       }
 
@@ -343,14 +389,45 @@ export function CheckoutModal({
         phone: "",
         email: "",
       });
-      setStep(1);
-      setErrors({});
       setIsGiftFlow(true);
       localStorage.removeItem(GIFT_DRAFT_KEY);
     } catch {
       setIsGiftFlow(false);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    const sessionUser = JSON.parse(localStorage.getItem("macao-user") || "null") as { id?: string } | null;
+    if (!sessionUser?.id) return;
+
+    if (saveProfileTimeoutRef.current) {
+      clearTimeout(saveProfileTimeoutRef.current);
+    }
+
+    saveProfileTimeoutRef.current = setTimeout(() => {
+      upsertCustomerProfile({
+        accountId: String(sessionUser.id),
+        fullName: customer.name,
+        phone: customer.phone,
+        paymentOption,
+        paymentMethod,
+        cardNumber: card.number,
+        cardExpiry: card.expiry,
+        cardCvc: card.cvc,
+        cardLast4: card.number.replace(/\D/g, "").slice(-4) || undefined,
+        cardHolderName: card.name,
+        pickupMode,
+        pickupHotel: pickupHotel || undefined,
+        pickupCustom: pickupCustom || undefined,
+      });
+    }, 400);
+
+    return () => {
+      if (saveProfileTimeoutRef.current) {
+        clearTimeout(saveProfileTimeoutRef.current);
+      }
+    };
+  }, [customer, paymentOption, paymentMethod, card, pickupMode, pickupHotel, pickupCustom]);
 
   // --- Validation ---
   function validateStep1() {
@@ -488,13 +565,6 @@ export function CheckoutModal({
   function handleFinish() {
     clearCart();
     setStep(1);
-    setCustomer({ name: "", phone: "", email: "" });
-    setCard({ number: "", name: "", expiry: "", cvc: "" });
-    setPaymentOption("full");
-    setPaymentMethod("card");
-    setPickupMode("hotel");
-    setPickupHotel("");
-    setPickupCustom("");
     setPickupSearch("");
     setPickupTimeSlot(null);
     setPickupDate("");

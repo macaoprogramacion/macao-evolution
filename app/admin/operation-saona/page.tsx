@@ -285,6 +285,10 @@ export default function OperationSaonaPage() {
       ? '<div class="amount-box"><div class="label">MONTO A PAGAR</div><div class="amount">$' + res.amount.toFixed(2) + ' USD</div></div>'
       : ""
 
+    const pickupRef = `${res.location || ""} ${res.hotel || ""}`.toLowerCase()
+    const pickupPoint = pickupRef.includes("barrera") ? "Barrera" : "Lobby"
+    const tavisaLogoUrl = `${window.location.origin}/logo-tavisa/Logo%20Principal%20-%20Tavisa%20Travel.png`
+
     const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -296,6 +300,7 @@ export default function OperationSaonaPage() {
   body { font-family: 'Segoe UI', Arial, sans-serif; background: #f3f4f6; padding: 20px; }
   .ticket { max-width: 480px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.1); }
   .header { background: linear-gradient(135deg, #0891b2 0%, #065f73 100%); color: #fff; padding: 28px 24px; text-align: center; }
+  .logo { width: 170px; max-width: 80%; margin: 0 auto 12px; display: block; }
   .header h1 { font-size: 22px; font-weight: 800; letter-spacing: 2px; margin-bottom: 4px; }
   .header p { font-size: 12px; opacity: 0.85; letter-spacing: 1px; }
   .status { text-align: center; padding: 12px; background: #f0fdf4; border-bottom: 1px solid #e5e7eb; }
@@ -319,6 +324,7 @@ export default function OperationSaonaPage() {
 <body>
 <div class="ticket">
   <div class="header">
+    <img class="logo" src="${tavisaLogoUrl}" alt="Tavisa Travel" />
     <h1>SAONA ISLAND</h1>
     <p>EXPERIENCE TICKET</p>
   </div>
@@ -335,6 +341,7 @@ export default function OperationSaonaPage() {
     </div>
     <div class="section">
       <div class="section-title">Recogida</div>
+      <div class="row"><span class="label">Punto de recogida</span><span class="value">${pickupPoint}</span></div>
       <div class="row"><span class="label">Hotel</span><span class="value">${res.hotel}</span></div>
       <div class="row"><span class="label">Ubicación</span><span class="value">${res.location}</span></div>
       <div class="row"><span class="label">Hora de recogida</span><span class="value" style="font-size:16px;color:#0891b2;font-weight:800">${res.pickupTime}</span></div>
@@ -344,7 +351,7 @@ export default function OperationSaonaPage() {
   <hr class="divider" />
   <div class="footer">
     Ticket generado el ${new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}<br/>
-    Para cualquier consulta: info@macaooffroad.com
+    Para cualquier consulta: tavisatravel@gmail.com | +1 (809) 870-1130
   </div>
 </div>
 </body>
