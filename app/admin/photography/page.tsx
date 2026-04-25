@@ -57,7 +57,6 @@ import {
   getInvoices,
   getReturns,
   getPhotoSales,
-  getPortfolios,
   calculateSalesByTurno,
 } from "@/lib/store"
 
@@ -211,6 +210,7 @@ export default function PhotographyPage() {
   const [returns, setReturns] = useState<Return[]>([])
   const [photoSales, setPhotoSales] = useState<PhotoSale[]>([])
   const [portfolios, setPortfolios] = useState<Portfolio[]>([])
+  const [supabasePortfolios, setSupabasePortfolios] = useState<Portfolio[]>([])
   const [supabaseInvoices, setSupabaseInvoices] = useState<Invoice[]>([])
   const [supabaseReturns, setSupabaseReturns] = useState<Return[]>([])
   const [activeTab, setActiveTab] = useState("overview")
@@ -232,7 +232,6 @@ export default function PhotographyPage() {
       const localReturns = (getReturns() || []).map((r: any) => normalizeReturn(r))
       setReturns(localReturns)
       setPhotoSales(getPhotoSales())
-      setPortfolios(getPortfolios())
     } catch (err) {
       console.error("[Admin Photography] localStorage load error:", err)
     }
@@ -283,8 +282,25 @@ export default function PhotographyPage() {
       }
     }
 
+    async function fetchPortfoliosFromApi() {
+      try {
+        const res = await fetch("/api/portfolios?all=true", { cache: "no-store" })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+        const data = await res.json()
+        const rows = Array.isArray(data?.portfolios) ? data.portfolios : []
+        setSupabasePortfolios(rows)
+      } catch (err) {
+        console.error("[Admin Photography] Portfolios API fetch error:", err)
+      }
+    }
+
     fetchSupabase()
+    fetchPortfoliosFromApi()
     fetchPricing()
+
+    const interval = setInterval(fetchPortfoliosFromApi, 12000)
+    return () => clearInterval(interval)
   }, [])
 
   async function fetchPricing() {
@@ -411,6 +427,11 @@ export default function PhotographyPage() {
     return returns
   }, [returns, supabaseReturns])
 
+  const allPortfolios = useMemo(() => {
+    if (supabasePortfolios.length > 0) return supabasePortfolios
+    return portfolios
+  }, [portfolios, supabasePortfolios])
+
   // ─── Computed stats ───────────────────────────────────────────
   const stats = useMemo(() => {
     const now = new Date()
@@ -455,15 +476,15 @@ export default function PhotographyPage() {
     const onlineSalesToday = todayOnline.reduce((s, ps) => s + ps.amount, 0)
 
     // Portfolios
-    const paidAtCashier = portfolios.filter(
+    const paidAtCashier = allPortfolios.filter(
       (p) => (p.source === "billing" || p.invoice_code || p.invoiceCode) && p.status === "Vendido"
     ).length
-    const purchasedOnWeb = portfolios.filter(
+    const purchasedOnWeb = allPortfolios.filter(
       (p) => p.source === "web" || p.source === "gallery" || p.source === "online"
     ).length
-    const totalPortfolios = portfolios.length
-    const soldPortfolios = portfolios.filter((p) => p.status === "Vendido").length
-    const pendingPortfolios = portfolios.filter((p) => p.status === "Pendiente").length
+    const totalPortfolios = allPortfolios.length
+    const soldPortfolios = allPortfolios.filter((p) => p.status === "Vendido").length
+    const pendingPortfolios = allPortfolios.filter((p) => p.status === "Pendiente").length
 
     // By currency
     const byCurrency: Record<string, { total: number; count: number }> = {}
@@ -501,7 +522,7 @@ export default function PhotographyPage() {
       turnoData,
       ticketPromedio,
     }
-  }, [allInvoices, allReturns, photoSales, portfolios])
+  }, [allInvoices, allReturns, photoSales, allPortfolios])
 
   // ─── Filtered invoices ────────────────────────────────────────
   const filteredInvoices = useMemo(() => {
@@ -1103,7 +1124,7 @@ export default function PhotographyPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {portfolios.length === 0 ? (
+                      {allPortfolios.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={8} className="text-center py-12 text-gray-400">
                             <FolderOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -1111,7 +1132,7 @@ export default function PhotographyPage() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        portfolios.slice(0, 50).map((p) => (
+                        allPortfolios.slice(0, 50).map((p) => (
                           <TableRow key={p.id}>
                             <TableCell className="text-xs font-medium">{p.client_name || p.clientName || "—"}</TableCell>
                             <TableCell className="text-xs text-gray-500">{p.phone || "—"}</TableCell>
