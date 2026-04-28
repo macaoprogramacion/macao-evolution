@@ -1867,6 +1867,41 @@ export default function BillingPage() {
     });
     return maxNum + 1;
   };
+
+  const extractInvoiceCounter = (rawInvoiceNumber) => {
+    const raw = String(rawInvoiceNumber || '');
+    const match = raw.match(/FAC-(\d+)/i);
+    if (!match) return 0;
+    const parsed = Number.parseInt(match[1], 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+
+  const isInvoiceNumberConflict = (error) => {
+    if (!error) return false;
+    if (error.code !== '23505') return false;
+    const details = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`.toLowerCase();
+    return details.includes('invoice_number');
+  };
+
+  const resolveInvoiceInsertErrorMessage = (error) => {
+    if (!error) {
+      return 'No se pudo guardar la factura en la base de datos. Intenta nuevamente.';
+    }
+
+    if (error.code === '42P01') {
+      return 'No existe la tabla de facturas en la base de datos. Ejecuta las migraciones de fotografia.';
+    }
+
+    if (error.code === '42501') {
+      return 'No hay permisos para guardar facturas (RLS/policies). Revisa las politicas de Supabase.';
+    }
+
+    if (isInvoiceNumberConflict(error)) {
+      return 'El numero de factura ya existe. Recarga la pagina e intenta de nuevo.';
+    }
+
+    return `No se pudo guardar la factura: ${error.message || 'error desconocido'}`;
+  };
   
   // Load invoices, devoluciones y estado de cierre desde Supabase
   useEffect(() => {
@@ -2008,7 +2043,6 @@ export default function BillingPage() {
       return;
     }
     
-    const invoiceNum = formatInvoiceNumber(nextInvoiceNum);
     const itemsList = cart.map(item => ({
       id: item.id,
       name: item.name,
@@ -2019,7 +2053,51 @@ export default function BillingPage() {
     // Resolve photographer name from ID
     const photographerName = photographers.find(p => p.id.toString() === photographer)?.name || photographer || null;
 
-    // Create invoice object
+    let invoiceCounter = nextInvoiceNum;
+    let invoiceNum = formatInvoiceNumber(invoiceCounter);
+    let sbErr = null;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const supabaseRow = {
+        invoice_number: invoiceNum,
+        client_name: clientName || 'Cliente General',
+        client_phone: clientPhone || null,
+        turno: turno || 'Turno 9:00',
+        photographer: photographerName,
+        source: 'billing',
+        date: new Date().toLocaleDateString('es-DO'),
+        items: itemsList,
+        subtotal,
+        tax,
+        total,
+        currency: currency,
+        status: 'active',
+      };
+
+      const { error } = await supabase.from('photo_invoices').insert(supabaseRow);
+      sbErr = error || null;
+      if (!sbErr) break;
+
+      if (!isInvoiceNumberConflict(sbErr)) break;
+
+      const { data: latestRows } = await supabase
+        .from('photo_invoices')
+        .select('invoice_number')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      const latestCounter = extractInvoiceCounter(latestRows?.[0]?.invoice_number);
+      invoiceCounter = Math.max(invoiceCounter + 1, latestCounter + 1);
+      invoiceNum = formatInvoiceNumber(invoiceCounter);
+    }
+
+    if (sbErr) {
+      console.error('Error inserting invoice into photo_invoices:', sbErr);
+      alert(resolveInvoiceInsertErrorMessage(sbErr));
+      return;
+    }
+
+    // Create invoice object after DB write succeeds
     const newInvoice = {
       id: `inv_${Date.now()}`,
       invoiceNumber: invoiceNum,
@@ -2037,28 +2115,6 @@ export default function BillingPage() {
       currency: currency,
       status: 'active',
     };
-    
-    // Save to Supabase
-    const supabaseRow = {
-      invoice_number: invoiceNum,
-      client_name: clientName || 'Cliente General',
-      client_phone: clientPhone || null,
-      turno: turno || 'Turno 9:00',
-      photographer: photographerName,
-      source: 'billing',
-      date: new Date().toLocaleDateString('es-DO'),
-      items: itemsList,
-      subtotal,
-      tax,
-      total,
-      currency: currency,
-      status: 'active',
-    };
-    const { error: sbErr } = await supabase.from('photo_invoices').insert(supabaseRow);
-    if (sbErr) {
-      alert('No se pudo guardar la factura en la base de datos. Revisa la conexión e intenta nuevamente.');
-      return;
-    }
 
     await addPhotoSaleEvent({
       eventType: 'online_purchase',
@@ -2100,7 +2156,7 @@ export default function BillingPage() {
     logActivity('Factura generada', `${newInvoice.invoiceNumber} — US$ ${total.toFixed(2)} — ${clientName || 'Cliente General'}`);
     
     // Update invoice counter
-    const newNum = nextInvoiceNum + 1;
+    const newNum = invoiceCounter + 1;
     setNextInvoiceNum(newNum);
     
     // Set current invoice and show print modal
