@@ -31,12 +31,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  getRepById,
   experiences,
   hotels,
   pickupTimes,
   type Representative,
 } from "@/lib/sellers-data"
+import { getSellerPortalSession } from "@/lib/sellers-session"
 
 export default function NewBookingPage() {
   const router = useRouter()
@@ -54,17 +54,13 @@ export default function NewBookingPage() {
   const [notes, setNotes] = useState("")
 
   useEffect(() => {
-    const repId = localStorage.getItem("sellers-rep-id")
-    if (!repId) {
-      router.push("/sellers")
-      return
-    }
-    const found = getRepById(repId)
-    if (!found) {
-      router.push("/sellers")
-      return
-    }
-    setRep(found)
+    getSellerPortalSession().then((session) => {
+      if (!session) {
+        router.push("/sellers")
+        return
+      }
+      setRep(session)
+    })
   }, [router])
 
   // Auto-set base price when experience is selected

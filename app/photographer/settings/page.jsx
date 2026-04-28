@@ -23,6 +23,7 @@ import { GlassCard, GlassButton } from '@/components/photographer/ui';
 import { updateSupabaseUser } from '@/lib/supabase-users';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from 'next-themes';
+import { getDashboardSession, setDashboardSession } from '@/lib/dashboard-session';
 
 // Background image
 
@@ -67,8 +68,7 @@ export default function AjustesPage() {
 
   // Load real user data from session
   useEffect(() => {
-    try {
-      const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || 'null');
+    getDashboardSession().then((session) => {
       if (session) {
         setUserId(session.id);
         if (session.avatar_url) setAvatarUrl(session.avatar_url);
@@ -80,7 +80,7 @@ export default function AjustesPage() {
           role: session.role || '',
         }));
       }
-    } catch {}
+    });
   }, []);
 
   const handleAvatarUpload = useCallback(async (e) => {
@@ -113,8 +113,10 @@ export default function AjustesPage() {
       await updateSupabaseUser(userId, { avatar_url: publicUrl });
       setAvatarUrl(publicUrl);
       // Update session
-      const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || '{}');
-      sessionStorage.setItem('macao_auth_session', JSON.stringify({ ...session, avatar_url: publicUrl }));
+      const session = await getDashboardSession();
+      if (session) {
+        await setDashboardSession({ ...session, avatar_url: publicUrl, active: true });
+      }
       setSaveMessage('Foto de perfil actualizada');
       setTimeout(() => setSaveMessage(''), 3000);
     } catch (err) {
@@ -137,13 +139,16 @@ export default function AjustesPage() {
         phone: profile.phone,
       });
       // Update session with new data
-      const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || '{}');
-      sessionStorage.setItem('macao_auth_session', JSON.stringify({
-        ...session,
-        name: profile.name,
-        email: profile.email,
-        phone: profile.phone,
-      }));
+      const session = await getDashboardSession();
+      if (session) {
+        await setDashboardSession({
+          ...session,
+          name: profile.name,
+          email: profile.email,
+          phone: profile.phone,
+          active: true,
+        });
+      }
       setSaveMessage('Cambios guardados correctamente');
       setTimeout(() => setSaveMessage(''), 3000);
     } catch (err) {

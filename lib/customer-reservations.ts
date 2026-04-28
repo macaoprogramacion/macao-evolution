@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabase";
+
 export type PaymentOption = "full" | "partial";
 export type PaymentMethod = "card" | "paypal";
 export type PickupStatus = "pending" | "picked_up" | "driver_absent";
@@ -47,46 +49,65 @@ export interface StoredCustomerReservation {
   };
 }
 
-export const CUSTOMER_RESERVATIONS_KEY = "macao-customer-reservations";
-
 const NON_REVIEWABLE_ITEM_IDS = ["service-colectivo", "service-privado", "private-transport"];
 
-export function loadCustomerReservations(): StoredCustomerReservation[] {
-  if (typeof window === "undefined") return [];
+export async function loadCustomerReservations(ownerEmail: string): Promise<StoredCustomerReservation[]> {
+  const email = ownerEmail.trim().toLowerCase();
+  if (!email) return [];
 
-  try {
-    const stored = JSON.parse(localStorage.getItem(CUSTOMER_RESERVATIONS_KEY) || "[]") as StoredCustomerReservation[];
-    return Array.isArray(stored) ? stored : [];
-  } catch {
-    return [];
+  const { data, error } = await supabase
+    .from("customer_reservations_app")
+    .select("payload")
+    .eq("owner_email", email)
+    .order("created_at", { ascending: false });
+
+  if (error || !Array.isArray(data)) return [];
+
+  return data
+    .map((row) => row.payload as StoredCustomerReservation)
+    .filter((value) => !!value?.id);
+}
+
+export async function saveCustomerReservation(ownerEmail: string, reservation: StoredCustomerReservation) {
+  const email = ownerEmail.trim().toLowerCase();
+  if (!email) return;
+
+  const { error } = await supabase.from("customer_reservations_app").insert({
+    owner_email: email,
+    reservation_id: reservation.id,
+    payload: reservation,
+  });
+
+  if (error) {
+    console.error("Error saving customer reservation:", error);
   }
 }
 
-export function saveCustomerReservation(reservation: StoredCustomerReservation) {
-  if (typeof window === "undefined") return;
-
-  try {
-    const current = loadCustomerReservations();
-    current.unshift(reservation);
-    localStorage.setItem(CUSTOMER_RESERVATIONS_KEY, JSON.stringify(current));
-  } catch {
-    // Ignore storage failures to avoid blocking checkout completion.
-  }
-}
-
-export function updateCustomerReservation(
+export async function updateCustomerReservation(
+  ownerEmail: string,
   reservationId: string,
   updater: (reservation: StoredCustomerReservation) => StoredCustomerReservation,
 ) {
-  if (typeof window === "undefined") return;
+  const email = ownerEmail.trim().toLowerCase();
+  if (!email) return;
 
-  try {
-    const updated = loadCustomerReservations().map((reservation) =>
-      reservation.id === reservationId ? updater(reservation) : reservation,
-    );
-    localStorage.setItem(CUSTOMER_RESERVATIONS_KEY, JSON.stringify(updated));
-  } catch {
-    // Ignore storage failures on client state updates.
+  const { data, error } = await supabase
+    .from("customer_reservations_app")
+    .select("id, payload")
+    .eq("owner_email", email)
+    .eq("reservation_id", reservationId)
+    .maybeSingle();
+
+  if (error || !data?.id || !data.payload) return;
+
+  const updatedPayload = updater(data.payload as StoredCustomerReservation);
+  const { error: updateError } = await supabase
+    .from("customer_reservations_app")
+    .update({ payload: updatedPayload, updated_at: new Date().toISOString() })
+    .eq("id", data.id);
+
+  if (updateError) {
+    console.error("Error updating customer reservation:", updateError);
   }
 }
 

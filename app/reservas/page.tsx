@@ -30,6 +30,7 @@ import {
 } from "@/lib/customer-reservations";
 import { submitProductReview } from "@/lib/product-reviews";
 import { reportChoferIncident } from "@/lib/chofer-incidents";
+import { getCustomerSession } from "@/lib/customer-session";
 
 function formatMoney(value: number) {
   return `$${value.toFixed(2)}`;
@@ -138,16 +139,20 @@ export default function ReservasPage() {
   const sentEmailsThisSession = useRef(new Set<string>());
 
   const reloadReservations = useCallback(() => {
-    setReservations(loadCustomerReservations());
-  }, []);
+    if (!currentUserEmail) {
+      setReservations([]);
+      return;
+    }
+    loadCustomerReservations(currentUserEmail).then((rows) => setReservations(rows));
+  }, [currentUserEmail]);
 
   useEffect(() => {
-    try {
-      const session = JSON.parse(localStorage.getItem("macao-user") || "null") as { email?: string } | null;
+    getCustomerSession().then((session) => {
       setCurrentUserEmail(session?.email?.trim().toLowerCase() || "");
-    } catch {
-      setCurrentUserEmail("");
-    }
+    });
+  }, [reloadReservations]);
+
+  useEffect(() => {
     reloadReservations();
   }, [reloadReservations]);
 
@@ -175,7 +180,7 @@ export default function ReservasPage() {
 
       sentEmailsThisSession.current.add(sessionKey);
 
-      updateCustomerReservation(reservation.id, (r) => ({
+      await updateCustomerReservation(currentUserEmail, reservation.id, (r) => ({
         ...r,
         customerActions: {
           ...r.customerActions,
@@ -220,7 +225,7 @@ export default function ReservasPage() {
 
       reloadReservations();
     },
-    [reloadReservations],
+    [currentUserEmail, reloadReservations],
   );
 
   useEffect(() => {
@@ -250,7 +255,7 @@ export default function ReservasPage() {
   }, [now, myReservations, sendPickupReminder]);
 
   const handlePickupStatus = async (reservationId: string, pickupStatus: PickupStatus) => {
-    updateCustomerReservation(reservationId, (r) => ({
+    await updateCustomerReservation(currentUserEmail, reservationId, (r) => ({
       ...r,
       customerActions: {
         ...r.customerActions,
@@ -260,7 +265,7 @@ export default function ReservasPage() {
     }));
 
     if (pickupStatus === "driver_absent") {
-      const reservation = loadCustomerReservations().find((r) => r.id === reservationId);
+      const reservation = (await loadCustomerReservations(currentUserEmail)).find((r) => r.id === reservationId);
       if (reservation) {
         await reportChoferIncident({
           reservationId: reservation.id,
@@ -309,7 +314,7 @@ export default function ReservasPage() {
         reviewText: draft,
       });
 
-      updateCustomerReservation(reservation.id, (r) => ({
+      await updateCustomerReservation(currentUserEmail, reservation.id, (r) => ({
         ...r,
         customerActions: {
           ...r.customerActions,

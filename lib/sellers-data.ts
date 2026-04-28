@@ -314,24 +314,13 @@ export const mockBookings: Booking[] = [
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
-/** Retrieves all registered reps from localStorage (client-side only) */
-function getRegisteredReps(): Representative[] {
-  if (typeof window === "undefined") return []
-  try {
-    const stored = localStorage.getItem("macao-registered-reps")
-    return stored ? JSON.parse(stored) : []
-  } catch {
-    return []
-  }
-}
-
-/** Get all representatives (mock + dynamically registered) */
+/** Get all representatives available in the sellers portal */
 export function getAllRepresentatives(): Representative[] {
-  return [...representatives, ...getRegisteredReps()]
+  return representatives
 }
 
 export function getRepById(id: string) {
-  return representatives.find((r) => r.id === id) ?? getRegisteredReps().find((r) => r.id === id)
+  return representatives.find((r) => r.id === id)
 }
 
 export function getBookingsByRep(repId: string) {

@@ -43,7 +43,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { getRepById, getBookingsByRep, type Booking, type Representative } from "@/lib/sellers-data"
+import { getBookingsByRep, type Booking, type Representative } from "@/lib/sellers-data"
+import { getSellerPortalSession } from "@/lib/sellers-session"
 
 function statusBadge(status: Booking["status"]) {
   switch (status) {
@@ -67,12 +68,11 @@ export default function BookingsPage() {
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null)
 
   useEffect(() => {
-    const repId = localStorage.getItem("sellers-rep-id")
-    if (!repId) { router.push("/sellers"); return }
-    const found = getRepById(repId)
-    if (!found) { router.push("/sellers"); return }
-    setRep(found)
-    setBookings(getBookingsByRep(repId))
+    getSellerPortalSession().then((session) => {
+      if (!session) { router.push("/sellers"); return }
+      setRep(session)
+      setBookings(getBookingsByRep(session.id))
+    })
   }, [router])
 
   const filteredBookings = useMemo(() => {

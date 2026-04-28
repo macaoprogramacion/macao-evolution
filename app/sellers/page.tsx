@@ -9,64 +9,31 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { getAllRepresentatives, type Representative } from "@/lib/sellers-data"
+import { setSellerPortalSession } from "@/lib/sellers-session"
 
-// ─── Representatives (mock) ───────────────────────────────────────
-const representatives = [
-  {
-    id: "REP-001",
-    name: "Carlos Méndez",
-    company: "Excursiones Punta Cana",
-    type: "Tour Operador",
-    hotel: "Hard Rock Hotel & Casino",
-    phone: "+1 809-555-1001",
-    initials: "CM",
-    color: "bg-blue-100 text-blue-700",
-  },
-  {
-    id: "REP-002",
-    name: "Ana Rodríguez",
-    company: "Viajes Dominicanos",
-    type: "Agencia",
-    hotel: "",
-    phone: "+1 829-555-2002",
-    initials: "AR",
-    color: "bg-emerald-100 text-emerald-700",
-  },
-  {
-    id: "REP-003",
-    name: "Miguel Torres",
-    company: "Barceló Concierge",
-    type: "Concierge de Hotel",
-    hotel: "Barceló Bávaro Palace",
-    phone: "+1 849-555-3003",
-    initials: "MT",
-    color: "bg-purple-100 text-purple-700",
-  },
-  {
-    id: "REP-004",
-    name: "Laura Peña",
-    company: "Independiente",
-    type: "Vendedor Local",
-    hotel: "",
-    phone: "+1 809-555-4004",
-    initials: "LP",
-    color: "bg-amber-100 text-amber-700",
-  },
-  {
-    id: "REP-005",
-    name: "Fernando Rosario",
-    company: "Dreams Concierge",
-    type: "Concierge de Hotel",
-    hotel: "Dreams Macao Beach",
-    phone: "+1 829-555-5005",
-    initials: "FR",
-    color: "bg-rose-100 text-rose-700",
-  },
-]
+function getRepLabel(type: Representative["type"]) {
+  switch (type) {
+    case "tour_operator": return "Tour Operador"
+    case "agency": return "Agencia"
+    case "hotel_concierge": return "Concierge de Hotel"
+    default: return "Vendedor Local"
+  }
+}
+
+function getRepColor(type: Representative["type"]) {
+  switch (type) {
+    case "tour_operator": return "bg-blue-100 text-blue-700"
+    case "agency": return "bg-emerald-100 text-emerald-700"
+    case "hotel_concierge": return "bg-purple-100 text-purple-700"
+    default: return "bg-amber-100 text-amber-700"
+  }
+}
 
 export default function LoginPage() {
   const router = useRouter()
   const [search, setSearch] = useState("")
+  const representatives = getAllRepresentatives()
 
   const filtered = representatives.filter(
     (r) =>
@@ -74,9 +41,8 @@ export default function LoginPage() {
       r.company.toLowerCase().includes(search.toLowerCase())
   )
 
-  function selectRep(repId: string) {
-    // In production this would be a real auth flow
-    localStorage.setItem("sellers-rep-id", repId)
+  async function selectRep(rep: Representative) {
+    await setSellerPortalSession(rep)
     router.push("/sellers/dashboard")
   }
 
@@ -127,11 +93,11 @@ export default function LoginPage() {
               {filtered.map((rep) => (
                 <button
                   key={rep.id}
-                  onClick={() => selectRep(rep.id)}
+                  onClick={() => selectRep(rep)}
                   className="w-full flex items-center gap-4 p-4 rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50/50 transition-all text-left group"
                 >
                   <Avatar className="w-12 h-12">
-                    <AvatarFallback className={rep.color}>{rep.initials}</AvatarFallback>
+                    <AvatarFallback className={getRepColor(rep.type)}>{rep.initials}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -139,7 +105,7 @@ export default function LoginPage() {
                         {rep.name}
                       </span>
                       <Badge variant="secondary" className="text-[10px]">
-                        {rep.type}
+                        {getRepLabel(rep.type)}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">

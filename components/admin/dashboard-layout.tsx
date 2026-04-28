@@ -18,6 +18,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
 import { useTheme } from "next-themes"
+import { clearDashboardSession, getDashboardSession } from "@/lib/dashboard-session"
 
 const navigation = [
   { name: "Overview", href: "/admin", icon: Home },
@@ -51,16 +52,6 @@ function hasAccess(role: string, href: string): boolean {
   return allowed.some((path) => href === path || href.startsWith(path + "/"))
 }
 
-function getSessionRole(): { role: string; name: string } | null {
-  try {
-    const session = JSON.parse(sessionStorage.getItem("macao_auth_session") || "null")
-    if (session && session.active) {
-      return { role: session.role, name: session.name }
-    }
-  } catch {}
-  return null
-}
-
 interface DashboardLayoutProps {
   children: React.ReactNode
 }
@@ -75,13 +66,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [userName, setUserName] = useState<string>("")
 
   useEffect(() => {
-    const session = getSessionRole()
-    if (session) {
-      setUserRole(session.role)
-      setUserName(session.name)
-    } else {
-      setUserRole("admin") // fallback if no session (bypass mode)
-    }
+    getDashboardSession().then((session) => {
+      if (session && session.active) {
+        setUserRole(session.role)
+        setUserName(session.name)
+      } else {
+        setUserRole("admin") // fallback if no session (bypass mode)
+      }
+    })
   }, [])
 
   // Don't render until we know the role

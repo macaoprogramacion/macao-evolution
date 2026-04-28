@@ -54,11 +54,9 @@ import {
 } from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabase"
 import {
-  getInvoices,
-  getReturns,
-  getPhotoSales,
   calculateSalesByTurno,
 } from "@/lib/store"
+import { getPhotoSalesEvents } from "@/lib/photography-db"
 
 // ─── Types ──────────────────────────────────────────────────────────
 interface Invoice {
@@ -226,16 +224,6 @@ export default function PhotographyPage() {
 
   // ─── Load data ──────────────────────────────────────────────────
   useEffect(() => {
-    // localStorage data (wrapped defensively)
-    try {
-      setInvoices(getInvoices())
-      const localReturns = (getReturns() || []).map((r: any) => normalizeReturn(r))
-      setReturns(localReturns)
-      setPhotoSales(getPhotoSales())
-    } catch (err) {
-      console.error("[Admin Photography] localStorage load error:", err)
-    }
-
     // Supabase data
     async function fetchSupabase() {
       try {
@@ -277,6 +265,18 @@ export default function PhotographyPage() {
             sbReturns.map((r: any) => normalizeReturn(r))
           )
         }
+
+        const events = await getPhotoSalesEvents()
+        const mappedEvents: PhotoSale[] = (events || []).map((ev: any) => ({
+          id: ev.id,
+          phone: ev.phone || "",
+          client_name: ev.client_name || "",
+          plan: ev.plan_name || ev.event_type,
+          amount: Number.parseFloat(ev.amount) || 0,
+          timestamp: ev.created_at || "",
+          source: ev.source || ev.event_type,
+        }))
+        setPhotoSales(mappedEvents)
       } catch (err) {
         console.error("[Admin Photography] Supabase fetch error:", err)
       }
@@ -418,14 +418,12 @@ export default function PhotographyPage() {
 
   // ─── Merge data: prefer Supabase, fallback to localStorage ────
   const allInvoices = useMemo(() => {
-    if (supabaseInvoices.length > 0) return supabaseInvoices
-    return invoices
-  }, [invoices, supabaseInvoices])
+    return supabaseInvoices
+  }, [supabaseInvoices])
 
   const allReturns = useMemo(() => {
-    if (supabaseReturns.length > 0) return supabaseReturns
-    return returns
-  }, [returns, supabaseReturns])
+    return supabaseReturns
+  }, [supabaseReturns])
 
   const allPortfolios = useMemo(() => {
     if (supabasePortfolios.length > 0) return supabasePortfolios
@@ -465,9 +463,10 @@ export default function PhotographyPage() {
     const returnsTotal = approvedReturns.reduce((s, r) => s + r.amount, 0)
     const pendingReturns = allReturns.filter((r) => r.status === "pendiente")
 
-    // Photo sales (online)
-    const onlineSalesTotal = photoSales.reduce((s, ps) => s + ps.amount, 0)
-    const todayOnline = photoSales.filter(
+    // Photo sales events
+    const onlinePurchaseEvents = photoSales.filter((ps) => ps.source === "online" || ps.source === "paypal")
+    const onlineSalesTotal = onlinePurchaseEvents.reduce((s, ps) => s + ps.amount, 0)
+    const todayOnline = onlinePurchaseEvents.filter(
       (ps) => {
         const date = parseSafeDate(ps.timestamp)
         return !!date && date.toLocaleDateString("es-DO") === todayStr
@@ -512,7 +511,7 @@ export default function PhotographyPage() {
       totalReturnsCount: allReturns.length,
       onlineSalesTotal,
       onlineSalesToday,
-      onlineSalesCount: photoSales.length,
+      onlineSalesCount: onlinePurchaseEvents.length,
       paidAtCashier,
       purchasedOnWeb,
       totalPortfolios,
@@ -571,6 +570,11 @@ export default function PhotographyPage() {
     )
   }, [allReturns, searchReturn])
 
+  const onlinePurchaseSales = useMemo(
+    () => photoSales.filter((ps) => ps.source === "online" || ps.source === "paypal"),
+    [photoSales],
+  )
+
   // ─── Analytics: daily sales for chart ─────────────────────────
   const dailySales = useMemo(() => {
     const map: Record<string, { date: string; cashier: number; online: number }> = {}
@@ -594,7 +598,8 @@ export default function PhotographyPage() {
         if (map[key]) map[key].cashier += inv.total
       })
 
-    photoSales.forEach((ps) => {
+    const chartEvents = photoSales.filter((ps) => ps.source === "online" || ps.source === "paypal")
+    chartEvents.forEach((ps) => {
       const date = parseSafeDate(ps.timestamp)
       if (!date) return
       const key = date.toISOString().split("T")[0]
@@ -1284,7 +1289,7 @@ export default function PhotographyPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {photoSales.length === 0 ? (
+                      {onlinePurchaseSales.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={5} className="text-center py-12 text-gray-400">
                             <Globe className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -1292,7 +1297,7 @@ export default function PhotographyPage() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        photoSales.slice(0, 30).map((ps) => (
+                        onlinePurchaseSales.slice(0, 30).map((ps) => (
                           <TableRow key={ps.id}>
                             <TableCell className="text-xs">{ps.client_name || "—"}</TableCell>
                             <TableCell className="text-xs text-gray-500">{ps.phone}</TableCell>

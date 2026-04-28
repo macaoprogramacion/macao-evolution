@@ -6,6 +6,8 @@ import Image from "next/image";
 import { Menu, X, Sun, Moon, ChevronDown } from "lucide-react";
 import { useTheme } from "next-themes";
 import { AuthModal } from "@/components/auth-modal";
+import { clearCustomerSession, getCustomerSession } from "@/lib/customer-session";
+import { clearSellerPortalSession } from "@/lib/sellers-session";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -18,27 +20,15 @@ export function Header() {
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
-    const refreshUser = () => {
-      try {
-        const raw = localStorage.getItem("macao-user");
-        if (!raw) {
-          setUserName(null);
-          return;
-        }
-
-        const parsed = JSON.parse(raw) as { name?: string; email?: string };
-        setUserName(parsed?.name || parsed?.email || null);
-      } catch {
-        setUserName(null);
-      }
+    const refreshUser = async () => {
+      const session = await getCustomerSession();
+      setUserName(session?.name || session?.email || null);
     };
 
     refreshUser();
-    window.addEventListener("storage", refreshUser);
     window.addEventListener("macao-auth-changed", refreshUser);
 
     return () => {
-      window.removeEventListener("storage", refreshUser);
       window.removeEventListener("macao-auth-changed", refreshUser);
     };
   }, []);
@@ -57,10 +47,9 @@ export function Header() {
     return () => window.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem("macao-user");
-    localStorage.removeItem("sellers-rep-id");
-    window.dispatchEvent(new Event("macao-auth-changed"));
+  const handleLogout = async () => {
+    await clearCustomerSession();
+    await clearSellerPortalSession();
     setIsProfileMenuOpen(false);
     setIsMobileProfileOpen(false);
     setIsMenuOpen(false);
@@ -78,7 +67,7 @@ export function Header() {
   return (
     <>
     <header 
-      className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-3xl overflow-hidden transition-all duration-300 ${isMenuOpen ? "bg-background/95 backdrop-blur-md rounded-2xl" : isScrolled ? "bg-background/80 backdrop-blur-md rounded-full" : "bg-transparent"}`}
+      className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-3xl transition-all duration-300 ${isMenuOpen ? "overflow-hidden bg-background/95 backdrop-blur-md rounded-2xl" : isScrolled ? "bg-background/80 backdrop-blur-md rounded-full" : "bg-transparent overflow-visible"}`}
       style={{
         boxShadow: isScrolled ? "rgba(14, 63, 126, 0.04) 0px 0px 0px 1px, rgba(42, 51, 69, 0.04) 0px 1px 1px -0.5px, rgba(42, 51, 70, 0.04) 0px 3px 3px -1.5px, rgba(42, 51, 70, 0.04) 0px 6px 6px -3px, rgba(14, 63, 126, 0.04) 0px 12px 12px -6px, rgba(14, 63, 126, 0.04) 0px 24px 24px -12px" : "none"
       }}

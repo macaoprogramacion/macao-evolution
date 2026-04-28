@@ -7,10 +7,10 @@ import { Header } from "@/components/header";
 import { FooterSection } from "@/components/sections/footer-section";
 import { useCart } from "@/context/cart-context";
 import { fetchProducts, products as fallbackProducts, type Product } from "@/lib/products";
+import { getCustomerSession } from "@/lib/customer-session";
+import { saveGiftDraft } from "@/lib/customer-checkout-draft";
 
 type GiftService = "service-colectivo" | "service-privado" | "private-transport";
-
-const GIFT_DRAFT_KEY = "macao-gift-draft";
 
 const SERVICE_OPTIONS: {
   id: GiftService;
@@ -119,7 +119,7 @@ export default function RegalarPage() {
     return Object.keys(nextErrors).length === 0;
   }
 
-  function handleGiftCheckout() {
+  async function handleGiftCheckout() {
     if (!validateForm() || !selectedProduct || !selectedServiceData) return;
 
     setIsSubmitting(true);
@@ -144,14 +144,14 @@ export default function RegalarPage() {
         type: "product",
       });
 
-      localStorage.setItem(
-        GIFT_DRAFT_KEY,
-        JSON.stringify({
+      const session = await getCustomerSession();
+      if (session?.email) {
+        await saveGiftDraft(session.email, {
           receiverName: receiverName.trim(),
           receiverPhone: receiverPhone.trim(),
           receiverEmail: receiverEmail.trim(),
-        })
-      );
+        });
+      }
 
       requestAnimationFrame(() => {
         window.dispatchEvent(new Event("macao-open-checkout"));

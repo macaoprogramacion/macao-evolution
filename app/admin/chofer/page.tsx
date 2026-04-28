@@ -33,6 +33,7 @@ import {
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { findHotel } from "@/lib/hotel-locations"
 import { supabase } from "@/lib/supabase"
+import { getDashboardSession } from "@/lib/dashboard-session"
 
 type ChoferReservation = {
   id: string
@@ -93,7 +94,7 @@ export default function ChoferDashboard() {
   // Leer reservas desde Supabase
   const loadReservations = async () => {
     try {
-      const session = JSON.parse(sessionStorage.getItem("macao_auth_session") || "null")
+      const session = await getDashboardSession()
       if (!session) return
 
       const role = session.role

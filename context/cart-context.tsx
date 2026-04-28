@@ -1,6 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { getCustomerSession } from "@/lib/customer-session";
+import { loadCustomerCart, saveCustomerCart } from "@/lib/customer-cart";
 
 export interface CartItem {
   id: string;
@@ -29,28 +31,51 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-function loadCartFromStorage(): CartItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const saved = localStorage.getItem("macao-cart");
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
-}
-
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(loadCartFromStorage);
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [ownerEmail, setOwnerEmail] = useState<string>("");
   const [isOpen, setIsOpen] = useState(false);
 
-  // Persist cart to localStorage whenever items change
+  // Load authenticated customer cart from Supabase.
   useEffect(() => {
-    try {
-      localStorage.setItem("macao-cart", JSON.stringify(items));
-    } catch {
-      // Storage full or unavailable
-    }
-  }, [items]);
+    let mounted = true;
+    (async () => {
+      const session = await getCustomerSession();
+      const email = session?.email?.trim().toLowerCase() || "";
+      if (!mounted) return;
+      setOwnerEmail(email);
+      if (!email) return;
+      const remoteItems = await loadCustomerCart(email);
+      if (!mounted) return;
+      setItems(remoteItems);
+    })();
+
+    const onAuthChanged = async () => {
+      const session = await getCustomerSession();
+      const email = session?.email?.trim().toLowerCase() || "";
+      setOwnerEmail(email);
+      if (!email) {
+        setItems([]);
+        return;
+      }
+      setItems(await loadCustomerCart(email));
+    };
+
+    window.addEventListener("macao-auth-changed", onAuthChanged);
+    return () => {
+      mounted = false;
+      window.removeEventListener("macao-auth-changed", onAuthChanged);
+    };
+  }, []);
+
+  // Persist cart to Supabase whenever items change for authenticated users.
+  useEffect(() => {
+    if (!ownerEmail) return;
+    const timer = setTimeout(() => {
+      saveCustomerCart(ownerEmail, items);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [items, ownerEmail]);
 
   const addItem = useCallback((newItem: Omit<CartItem, "quantity">) => {
     setItems((prev) => {

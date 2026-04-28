@@ -7,6 +7,8 @@ import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { useCart } from "@/context/cart-context";
 import { getCustomerProfile, upsertCustomerProfile } from "@/lib/customer-accounts";
 import { saveCustomerReservation, type StoredCustomerReservation } from "@/lib/customer-reservations";
+import { getCustomerSession } from "@/lib/customer-session";
+import { loadGiftDraft, clearGiftDraft, type GiftDraft } from "@/lib/customer-checkout-draft";
 import { products } from "@/lib/products";
 import {
   X,
@@ -68,13 +70,6 @@ interface CardInfo {
   expiry: string;
   cvc: string;
 }
-const GIFT_DRAFT_KEY = "macao-gift-draft";
-
-type GiftDraft = {
-  receiverName?: string;
-  receiverPhone?: string;
-  receiverEmail?: string;
-};
 
 const DEFAULT_TIMES = [
   { id: 0, label: "Mañana", time: "8:00 AM", hour: 8, minute: 0 },
@@ -261,6 +256,8 @@ export function CheckoutModal({
     email: "",
   });
   const [isGiftFlow, setIsGiftFlow] = useState(false);
+  const [sessionEmail, setSessionEmail] = useState("");
+  const [sessionUserId, setSessionUserId] = useState("");
   const [paymentOption, setPaymentOption] = useState<PaymentOption>("full");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [card, setCard] = useState<CardInfo>({
@@ -377,15 +374,13 @@ export function CheckoutModal({
     setStep(1);
     setErrors({});
 
-    try {
-      const rawDraft = localStorage.getItem(GIFT_DRAFT_KEY);
-      if (!rawDraft) {
-        const sessionUser = JSON.parse(localStorage.getItem("macao-user") || "null") as {
-          id?: string;
-          name?: string;
-          email?: string;
-        } | null;
+    (async () => {
+      const sessionUser = await getCustomerSession();
+      setSessionEmail(sessionUser?.email?.trim().toLowerCase() || "");
+      setSessionUserId(sessionUser?.id || "");
 
+      const draft = sessionUser?.email ? await loadGiftDraft(sessionUser.email) : null;
+      if (!draft || (!draft.receiverName && !draft.receiverPhone && !draft.receiverEmail)) {
         setCustomer({ name: sessionUser?.name || "", phone: "", email: sessionUser?.email || "" });
         setPaymentOption("full");
         setPaymentMethod("card");
@@ -399,35 +394,28 @@ export function CheckoutModal({
         setIsGiftFlow(false);
 
         if (sessionUser?.id) {
-          getCustomerProfile(String(sessionUser.id)).then((profile) => {
-            if (!profile) return;
+          const profile = await getCustomerProfile(String(sessionUser.id));
+          if (!profile) return;
 
-            setCustomer((prev) => ({
-              ...prev,
-              name: profile.full_name || prev.name,
-              phone: profile.phone || prev.phone,
-              email: sessionUser?.email || prev.email,
-            }));
-            setPaymentOption((profile.last_payment_option as PaymentOption | null) || "full");
-            setPaymentMethod((profile.last_payment_method as PaymentMethod | null) || "card");
-            setCard((prev) => ({
-              ...prev,
-              name: profile.card_holder_name || prev.name,
-              number: profile.card_number || prev.number,
-              expiry: profile.card_expiry || prev.expiry,
-              cvc: profile.card_cvc || prev.cvc,
-            }));
-            setPickupMode((profile.pickup_mode as "hotel" | "custom" | null) || "hotel");
-            setPickupHotel(profile.pickup_hotel || "");
-            setPickupCustom(profile.pickup_custom || "");
-          });
+          setCustomer((prev) => ({
+            ...prev,
+            name: profile.full_name || prev.name,
+            phone: profile.phone || prev.phone,
+            email: sessionUser?.email || prev.email,
+          }));
+          setPaymentOption((profile.last_payment_option as PaymentOption | null) || "full");
+          setPaymentMethod((profile.last_payment_method as PaymentMethod | null) || "card");
+          setCard((prev) => ({
+            ...prev,
+            name: profile.card_holder_name || prev.name,
+            number: profile.card_number || prev.number,
+            expiry: profile.card_expiry || prev.expiry,
+            cvc: profile.card_cvc || prev.cvc,
+          }));
+          setPickupMode((profile.pickup_mode as "hotel" | "custom" | null) || "hotel");
+          setPickupHotel(profile.pickup_hotel || "");
+          setPickupCustom(profile.pickup_custom || "");
         }
-        return;
-      }
-
-      const draft = JSON.parse(rawDraft) as GiftDraft;
-      if (!draft.receiverName && !draft.receiverPhone && !draft.receiverEmail) {
-        setIsGiftFlow(false);
         return;
       }
 
@@ -437,15 +425,14 @@ export function CheckoutModal({
         email: "",
       });
       setIsGiftFlow(true);
-      localStorage.removeItem(GIFT_DRAFT_KEY);
-    } catch {
-      setIsGiftFlow(false);
-    }
+      if (sessionUser?.email) {
+        await clearGiftDraft(sessionUser.email);
+      }
+    })();
   }, [isOpen]);
 
   useEffect(() => {
-    const sessionUser = JSON.parse(localStorage.getItem("macao-user") || "null") as { id?: string } | null;
-    if (!sessionUser?.id) return;
+    if (!sessionUserId) return;
 
     if (saveProfileTimeoutRef.current) {
       clearTimeout(saveProfileTimeoutRef.current);
@@ -453,7 +440,7 @@ export function CheckoutModal({
 
     saveProfileTimeoutRef.current = setTimeout(() => {
       upsertCustomerProfile({
-        accountId: String(sessionUser.id),
+        accountId: String(sessionUserId),
         fullName: customer.name,
         phone: customer.phone,
         paymentOption,
@@ -474,7 +461,7 @@ export function CheckoutModal({
         clearTimeout(saveProfileTimeoutRef.current);
       }
     };
-  }, [customer, paymentOption, paymentMethod, card, pickupMode, pickupHotel, pickupCustom]);
+  }, [sessionUserId, customer, paymentOption, paymentMethod, card, pickupMode, pickupHotel, pickupCustom]);
 
   // --- Validation ---
   function validateStep1() {
@@ -573,7 +560,10 @@ export function CheckoutModal({
         : undefined,
     };
 
-    saveCustomerReservation(reservationRecord);
+    const reservationOwnerEmail = (sessionEmail || customer.email || "").trim().toLowerCase();
+    if (reservationOwnerEmail) {
+      await saveCustomerReservation(reservationOwnerEmail, reservationRecord);
+    }
     setIsProcessing(false);
     setStep(4);
 

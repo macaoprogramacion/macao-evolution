@@ -5,22 +5,22 @@ import { motion } from 'framer-motion';
 import { LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { clearDashboardSession, getDashboardSession } from '@/lib/dashboard-session';
 
 export default function Navbar({ title = 'MACAO OFFROAD EXPERIENCE', mobileTitle = 'Panel del Fotógrafo' }) {
   const router = useRouter();
   const [userName, setUserName] = useState('');
 
   useEffect(() => {
-    try {
-      const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || 'null');
+    getDashboardSession().then((session) => {
       if (session && session.active) {
         setUserName(session.name);
       }
-    } catch {}
+    });
   }, []);
 
-  const handleLogout = () => {
-    sessionStorage.removeItem('macao_auth_session');
+  const handleLogout = async () => {
+    await clearDashboardSession();
     router.push('/photographer');
   };
 

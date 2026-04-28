@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { X, Mail, Lock, User, Phone, Eye, EyeOff, ChevronRight, Briefcase, Users, Building2, Shield } from "lucide-react";
 import { authenticateByEmail } from "@/lib/supabase-users";
 import { loginCustomer, registerCustomer } from "@/lib/customer-accounts";
+import { setCustomerSession, type CustomerSession } from "@/lib/customer-session";
+import { setDashboardSession } from "@/lib/dashboard-session";
+import { setSellerPortalSession } from "@/lib/sellers-session";
 
 type UserRole = "cliente" | "representante" | "colaborador";
 
@@ -14,52 +17,13 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
-const SESSION_KEY = "macao-user";
-const LEGACY_REGISTERED_USERS_KEY = "macao-registered-users";
-
-interface LegacyRegisteredUser {
-  name: string;
-  phone: string;
-  email: string;
-  password: string;
-  role: "cliente" | "representante";
-}
 
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
-async function migrateLegacyUsersToDatabase() {
-  try {
-    const legacyRaw = localStorage.getItem(LEGACY_REGISTERED_USERS_KEY);
-    if (!legacyRaw) return;
-
-    const legacyUsers = JSON.parse(legacyRaw) as LegacyRegisteredUser[];
-    if (!Array.isArray(legacyUsers) || legacyUsers.length === 0) {
-      localStorage.removeItem(LEGACY_REGISTERED_USERS_KEY);
-      return;
-    }
-
-    for (const legacy of legacyUsers) {
-      if (!legacy?.email || !legacy?.password || !legacy?.role) continue;
-      await registerCustomer({
-        name: legacy.name || "Usuario",
-        phone: legacy.phone || "",
-        email: legacy.email,
-        password: legacy.password,
-        role: legacy.role,
-      });
-    }
-
-    localStorage.removeItem(LEGACY_REGISTERED_USERS_KEY);
-  } catch {
-    // Ignore migration failures, users can still register/login manually.
-  }
-}
-
-function setSessionUser(data: Record<string, unknown>) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(data));
-  window.dispatchEvent(new Event("macao-auth-changed"));
+async function setSessionUser(data: CustomerSession) {
+  await setCustomerSession(data);
 }
 
 export function AuthModal({ isOpen, onClose }: AuthModalProps) {
@@ -102,12 +66,6 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setAdminEmail("");
       setAdminPin("");
     }
-  }, [isOpen]);
-
-  // One-time migration from legacy localStorage accounts to Supabase
-  useEffect(() => {
-    if (!isOpen) return;
-    migrateLegacyUsersToDatabase();
   }, [isOpen]);
 
   function validateLogin() {
@@ -159,7 +117,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       try {
         const user = await authenticateByEmail(adminEmail.trim().toLowerCase());
         if (user && String(user.pin) === String(adminPin)) {
-          sessionStorage.setItem('macao_auth_session', JSON.stringify({ id: user.id, name: user.name, role: user.role, active: true }));
+          await setDashboardSession({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, avatar_url: user.avatar_url || null, active: true });
           onClose();
           const roleRoutes: Record<string, string> = {
             admin: '/admin',
@@ -204,10 +162,6 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           .toUpperCase()
           .slice(0, 2);
 
-        const registeredReps = JSON.parse(localStorage.getItem("macao-registered-reps") || "[]");
-        const existingRepIndex = registeredReps.findIndex(
-          (r: { email?: string }) => normalizeEmail(r.email || "") === normalizeEmail(user.email),
-        );
         const repPayload = {
           id: repId,
           name: user.name,
@@ -218,17 +172,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           commissionPercent: 15,
           initials,
         };
+        await setSellerPortalSession(repPayload);
 
-        if (existingRepIndex >= 0) {
-          registeredReps[existingRepIndex] = { ...registeredReps[existingRepIndex], ...repPayload };
-        } else {
-          registeredReps.push(repPayload);
-        }
-
-        localStorage.setItem("macao-registered-reps", JSON.stringify(registeredReps));
-        localStorage.setItem("sellers-rep-id", repId);
-
-        setSessionUser({
+        await setSessionUser({
           id: user.id,
           email: user.email,
           name: user.name,
@@ -253,7 +199,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       return;
     }
 
-    setSessionUser({
+    await setSessionUser({
       id: user.id,
       name: user.name,
       email: user.email,
@@ -282,7 +228,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       return;
     }
 
-    setSessionUser({
+    await setSessionUser({
       id: newUser.id,
       name: newUser.name,
       phone: newUser.phone,
@@ -327,19 +273,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         initials,
       };
 
-      const registeredReps = JSON.parse(localStorage.getItem("macao-registered-reps") || "[]");
-      const existingRepIndex = registeredReps.findIndex(
-        (r: { email?: string }) => normalizeEmail(r.email || "") === normalizeEmail(newUser.email),
-      );
-
-      if (existingRepIndex >= 0) {
-        registeredReps[existingRepIndex] = { ...registeredReps[existingRepIndex], ...repPayload };
-      } else {
-        registeredReps.push(repPayload);
-      }
-
-      localStorage.setItem("macao-registered-reps", JSON.stringify(registeredReps));
-      localStorage.setItem("sellers-rep-id", repId);
+      await setSellerPortalSession(repPayload);
 
       setIsLoading(false);
       onClose();

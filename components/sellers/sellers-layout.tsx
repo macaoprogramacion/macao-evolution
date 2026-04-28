@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { LayoutDashboard, Plus, ClipboardList, LogOut, User, History } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { clearSellerPortalSession } from "@/lib/sellers-session"
 
 const navigation = [
   { name: "Dashboard", href: "/sellers/dashboard", icon: LayoutDashboard },
@@ -25,8 +26,8 @@ export function SellersLayout({ children, repName = "Representante", repInitials
   const pathname = usePathname()
   const router = useRouter()
 
-  function handleLogout() {
-    localStorage.removeItem("sellers-rep-id")
+  async function handleLogout() {
+    await clearSellerPortalSession()
     router.push("/sellers")
   }
 

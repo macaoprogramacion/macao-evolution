@@ -38,20 +38,21 @@ import {
 } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
+import { clearDashboardSession, getDashboardSession, setDashboardSession } from '@/lib/dashboard-session';
 import {
-  getInvoices as getStoredInvoices,
-  saveInvoices,
-  getInvoiceCounter as getNextInvoiceNumber,
-  setInvoiceCounter as saveInvoiceCounter,
   formatInvoiceNumber,
   addBillingClient,
-  getReturns,
-  saveReturns,
-  addReturn,
   logActivity,
   getActivity,
   calculateSalesByTurno,
 } from '@/lib/store';
+import {
+  addPhotoSaleEvent,
+  getPhotoExchangeRates,
+  getLatestDailyClosure,
+  savePhotoExchangeRates,
+  saveDailyClosure,
+} from '@/lib/photography-db';
 
 // Background image
 
@@ -91,25 +92,6 @@ const DEFAULT_PRODUCTS = [
   },
 ];
 
-const PRODUCTS_KEY = 'macao_billing_products';
-const loadProducts = () => {
-  try {
-    const stored = localStorage.getItem(PRODUCTS_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      // Merge with defaults to pick up any new products added in code
-      return DEFAULT_PRODUCTS.map(dp => {
-        const saved = parsed.find(p => p.id === dp.id);
-        return saved ? { ...dp, price: saved.price, name: saved.name } : dp;
-      });
-    }
-  } catch {}
-  return DEFAULT_PRODUCTS;
-};
-const persistProducts = (products) => {
-  localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
-};
-
 // Photographers will be loaded from Supabase
 
 // Sidebar menu items
@@ -123,7 +105,7 @@ const sidebarItems = [
 ];
 
 // Usuario Panel Component
-function UsuarioPanel({ user, invoices, onLogout }) {
+function UsuarioPanel({ user, invoices, onLogout, onSaveProfile, savingProfile }) {
   // Real stats from actual invoices
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -133,17 +115,35 @@ function UsuarioPanel({ user, invoices, onLogout }) {
   const totalMes = monthInvoices.reduce((s, i) => s + i.total, 0);
 
   // Exchange rates state — pesos dominicanos por unidad de moneda extranjera
-  const [rates, setRates] = useState(() => {
-    try {
-      const stored = localStorage.getItem('macao_exchange_rates');
-      return stored ? JSON.parse(stored) : { USD: 60, EUR: 65 };
-    } catch { return { USD: 60, EUR: 65 }; }
-  });
+  const [rates, setRates] = useState({ USD: 60, EUR: 65 });
   const [editingRates, setEditingRates] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: '', email: '', phone: '' });
+  const [activity, setActivity] = useState([]);
 
-  const saveRates = (newRates) => {
+  useEffect(() => {
+    getPhotoExchangeRates().then(setRates);
+  }, []);
+
+  useEffect(() => {
+    const loadActivity = async () => {
+      setActivity(await getActivity());
+    };
+    loadActivity();
+    const interval = setInterval(loadActivity, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    setProfileForm({
+      name: user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
+    });
+  }, [user?.name, user?.email, user?.phone]);
+
+  const saveRates = async (newRates) => {
     setRates(newRates);
-    localStorage.setItem('macao_exchange_rates', JSON.stringify(newRates));
+    await savePhotoExchangeRates(newRates, user?.email || user?.name || null);
   };
 
   const roleLabels = {
@@ -174,6 +174,41 @@ function UsuarioPanel({ user, invoices, onLogout }) {
               {user.email && <p className="text-white/50 text-sm mt-1">{user.email}</p>}
               {user.phone && <p className="text-white/50 text-sm">{user.phone}</p>}
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+            <input
+              type="text"
+              value={profileForm.name}
+              onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
+              placeholder="Nombre"
+              className="w-full px-4 py-2.5 bg-black/30 rounded-2xl border border-white/20 text-white text-sm placeholder:text-white/40"
+            />
+            <input
+              type="email"
+              value={profileForm.email}
+              onChange={(e) => setProfileForm((prev) => ({ ...prev, email: e.target.value }))}
+              placeholder="Email"
+              className="w-full px-4 py-2.5 bg-black/30 rounded-2xl border border-white/20 text-white text-sm placeholder:text-white/40"
+            />
+            <input
+              type="text"
+              value={profileForm.phone}
+              onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
+              placeholder="Teléfono"
+              className="w-full px-4 py-2.5 bg-black/30 rounded-2xl border border-white/20 text-white text-sm placeholder:text-white/40"
+            />
+          </div>
+
+          <div className="flex justify-end mb-5">
+            <button
+              type="button"
+              disabled={savingProfile}
+              onClick={() => onSaveProfile(profileForm)}
+              className="px-4 py-2 rounded-xl bg-[#DC2626] text-white text-sm font-medium hover:bg-[#b91c1c] disabled:opacity-60"
+            >
+              {savingProfile ? 'Guardando...' : 'Guardar perfil'}
+            </button>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
@@ -271,7 +306,7 @@ function UsuarioPanel({ user, invoices, onLogout }) {
       <div className="lg:w-80 bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20">
         <h3 className="text-white font-semibold mb-4">Actividad Reciente</h3>
         <div className="space-y-4">
-          {getActivity().slice(0, 5).map((activity) => {
+          {activity.slice(0, 5).map((activity) => {
             const elapsed = (() => {
               const diff = Date.now() - new Date(activity.time).getTime();
               const mins = Math.floor(diff / 60000);
@@ -292,7 +327,7 @@ function UsuarioPanel({ user, invoices, onLogout }) {
             </div>
             );
           })}
-          {getActivity().length === 0 && (
+          {activity.length === 0 && (
             <p className="text-white/50 text-sm text-center py-4">Sin actividad reciente</p>
           )}
         </div>
@@ -301,10 +336,9 @@ function UsuarioPanel({ user, invoices, onLogout }) {
   );
 }
 
-// Devolución Panel Component — reads real invoices from localStorage
-function DevolucionPanel({ invoices }) {
+// Devolución Panel Component
+function DevolucionPanel({ invoices, returns, setReturns }) {
   const [searchReturn, setSearchReturn] = useState('');
-  const [returns, setReturns] = useState(getReturns);
   const [showNewReturn, setShowNewReturn] = useState(false);
   const [newReturnInvoice, setNewReturnInvoice] = useState('');
   const [newReturnReason, setNewReturnReason] = useState('');
@@ -346,8 +380,7 @@ function DevolucionPanel({ invoices }) {
       .update({ status: 'cancelled', cancelled_at: new Date().toISOString(), cancel_reason: newReturnReason || 'Devolucion' })
       .eq('invoice_number', inv.invoiceNumber);
 
-    const updated = addReturn(ret);
-    setReturns(updated);
+    setReturns((prev) => [ret, ...prev]);
     logActivity('Devolucion creada', `${ret.invoice} — US$ ${ret.amount.toFixed(2)}`);
     setShowNewReturn(false);
     setNewReturnInvoice('');
@@ -356,7 +389,6 @@ function DevolucionPanel({ invoices }) {
 
   const handleApprove = async (id) => {
     const updated = returns.map(r => r.id === id ? { ...r, status: 'aprobada' } : r);
-    saveReturns(updated);
     setReturns(updated);
     const r = updated.find(x => x.id === id);
     logActivity('Devolucion aprobada', r.invoice);
@@ -369,7 +401,6 @@ function DevolucionPanel({ invoices }) {
 
   const handleReject = async (id) => {
     const updated = returns.map(r => r.id === id ? { ...r, status: 'rechazada' } : r);
-    saveReturns(updated);
     setReturns(updated);
     const r = updated.find(x => x.id === id);
 
@@ -658,10 +689,9 @@ const fmtMoney = (amount, cur = 'USD') =>
   `${currencyLabel(cur)} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
 
 // ─── Cierre Turno Panel ──────────────────────────────────────────
-function CierreTurnoPanel({ invoices }) {
+function CierreTurnoPanel({ invoices, returns }) {
   const [selectedTurno, setSelectedTurno] = useState('');
   const todayStr = new Date().toLocaleDateString('es-DO');
-  const returns = getReturns();
 
   // Only today's invoices
   const todayInvoices = invoices.filter(inv => inv.date === todayStr);
@@ -809,23 +839,21 @@ function CierreTurnoPanel({ invoices }) {
 }
 
 // ─── Cierre del Dia Panel ────────────────────────────────────────
-function CierreDiaPanel({ invoices }) {
+function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled, billingUser }) {
   const todayStr = new Date().toLocaleDateString('es-DO');
-  const returns = getReturns();
 
   // Exchange rates state — pesos dominicanos por unidad de moneda extranjera
-  const [rates, setRates] = useState(() => {
-    try {
-      const stored = localStorage.getItem('macao_exchange_rates');
-      return stored ? JSON.parse(stored) : { USD: 60, EUR: 65 };
-    } catch { return { USD: 60, EUR: 65 }; }
-  });
+  const [rates, setRates] = useState({ USD: 60, EUR: 65 });
   const [editingRates, setEditingRates] = useState(false);
   const [convertToDOP, setConvertToDOP] = useState(false);
 
-  const saveRates = (newRates) => {
+  useEffect(() => {
+    getPhotoExchangeRates().then(setRates);
+  }, []);
+
+  const saveRates = async (newRates) => {
     setRates(newRates);
-    localStorage.setItem('macao_exchange_rates', JSON.stringify(newRates));
+    await savePhotoExchangeRates(newRates, billingUser?.email || billingUser?.name || null);
   };
 
   // Today's invoices
@@ -870,6 +898,61 @@ function CierreDiaPanel({ invoices }) {
   const totalAllInDOP = Object.entries(byCurrency).reduce((sum, [cur, data]) => sum + toDOP(data.total, cur), 0);
 
   const turnoTimes = { 'Turno 9:00': '9:00 AM', 'Turno 12:00': '12:00 PM', 'Turno 3:00': '3:00 PM' };
+
+  const buildClosureReport = () => {
+    const lines = [];
+    lines.push('MACAO - CIERRE DEL DIA');
+    lines.push(`Fecha: ${todayStr}`);
+    lines.push(`Facturas: ${todayInvoices.length}`);
+    lines.push(`ITBIS en facturas nuevas: ${taxEnabled ? 'ACTIVO' : 'DESACTIVADO'}`);
+    lines.push('');
+    lines.push('RESUMEN POR MONEDA');
+    Object.entries(byCurrency).forEach(([cur, data]) => {
+      lines.push(`${cur} -> Facturas: ${data.count}, Subtotal: ${fmtMoney(data.subtotal, cur)}, ITBIS: ${fmtMoney(data.tax, cur)}, Total: ${fmtMoney(data.total, cur)}`);
+    });
+    lines.push('');
+    lines.push('VENTAS POR TURNO');
+    ['Turno 9:00', 'Turno 12:00', 'Turno 3:00'].forEach((turno) => {
+      const data = byTurno[turno] || { total: 0, count: 0 };
+      lines.push(`${turno} (${turnoTimes[turno]}): ${data.count} factura(s), Total ${fmtMoney(data.total, 'USD')}`);
+    });
+    lines.push('');
+    lines.push('DETALLE DE FACTURAS');
+    todayInvoices.forEach((inv) => {
+      const items = (inv.items || []).map((it) => `${it.quantity}x ${it.name}`).join(', ');
+      lines.push(`${inv.invoiceNumber} | ${inv.clientName} | ${inv.turno} | ${inv.currency} ${inv.total.toFixed(2)} | ${new Date(inv.timestamp).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}`);
+      lines.push(`  Items: ${items || 'Sin items'}`);
+    });
+    lines.push('');
+    lines.push(`Devoluciones aprobadas: US$ ${returnsTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`);
+    lines.push(`Total equivalente DOP: RD$ ${totalAllInDOP.toLocaleString('en-US', { minimumFractionDigits: 2 })}`);
+
+    return lines.join('\n');
+  };
+
+  const handleCloseAndDownload = async () => {
+    const closed = await onCloseDay({
+      closureDate: todayStr,
+      byCurrency,
+      totalInvoices: todayInvoices.length,
+    });
+
+    if (!closed) {
+      alert('No se pudo registrar el cierre del dia. Intenta nuevamente.');
+      return;
+    }
+
+    const report = buildClosureReport();
+    const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cierre-dia-${todayStr.replaceAll('/', '-')}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="flex-1 flex flex-col lg:flex-row gap-6">
@@ -1056,6 +1139,13 @@ function CierreDiaPanel({ invoices }) {
       <div className="lg:w-80 space-y-4">
         {/* Convert toggle */}
         <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20">
+          <button
+            onClick={handleCloseAndDownload}
+            disabled={closingDay}
+            className="w-full mb-3 py-3 rounded-2xl font-medium text-sm transition-all bg-[#DC2626] text-white hover:bg-[#b91c1c] disabled:opacity-60"
+          >
+            {closingDay ? 'Registrando cierre...' : 'Cerrar dia y descargar resumen'}
+          </button>
           <button
             onClick={() => setConvertToDOP(!convertToDOP)}
             className={`w-full py-3 rounded-2xl font-medium text-sm transition-all ${
@@ -1701,14 +1791,15 @@ export default function BillingPage() {
   const [products, setProducts] = useState(DEFAULT_PRODUCTS);
   const [editingProduct, setEditingProduct] = useState(null);
   const [billingUserName, setBillingUserName] = useState('');
+  const [billingUserId, setBillingUserId] = useState(null);
   const [billingUser, setBillingUser] = useState({ name: '', email: '', phone: '', role: 'billing' });
 
   // Read user from session
   useEffect(() => {
-    try {
-      const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || 'null');
+    getDashboardSession().then((session) => {
       if (session && session.active) {
         setBillingUserName(session.name);
+        setBillingUserId(session.id || null);
         setBillingUser({
           name: session.name || '',
           email: session.email || '',
@@ -1716,17 +1807,17 @@ export default function BillingPage() {
           role: session.role || 'billing',
         });
       }
-    } catch {}
+    });
   }, []);
 
-  const handleBillingLogout = () => {
-    sessionStorage.removeItem('macao_auth_session');
+  const handleBillingLogout = async () => {
+    await clearDashboardSession();
     window.location.reload();
   };
 
   // Load products from localStorage, then sync defaults from Supabase
   useEffect(() => {
-    setProducts(loadProducts());
+    setProducts(DEFAULT_PRODUCTS);
 
     // Fetch central pricing from Supabase and update defaults
     async function syncPricing() {
@@ -1746,7 +1837,6 @@ export default function BillingPage() {
             }
             return p;
           });
-          persistProducts(updated);
           return updated;
         });
       } catch (err) {
@@ -1758,45 +1848,83 @@ export default function BillingPage() {
   
   // Invoice management state
   const [invoices, setInvoices] = useState([]);
+  const [returns, setReturns] = useState([]);
   const [nextInvoiceNum, setNextInvoiceNum] = useState(1);
+  const [taxEnabled, setTaxEnabled] = useState(true);
+  const [closingDay, setClosingDay] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [currentInvoice, setCurrentInvoice] = useState(null);
-  
-  // Load invoices from localStorage on mount + sync ALL to Supabase
-  useEffect(() => {
-    const stored = getStoredInvoices();
-    setInvoices(stored);
-    setNextInvoiceNum(getNextInvoiceNumber());
 
-    // Sync all localStorage invoices to Supabase (upsert = safe for duplicates)
-    async function syncAllInvoicesToSupabase() {
-      try {
-        if (stored.length === 0) return;
-        // Build rows for Supabase from localStorage invoices
-        const rows = stored.filter(inv => inv.invoiceNumber && inv.status === 'active').map(inv => ({
-          invoice_number: inv.invoiceNumber,
-          client_name: inv.clientName || 'Cliente General',
-          client_phone: inv.clientPhone || null,
+  const parseInvoiceCounter = (rows) => {
+    let maxNum = 0;
+    rows.forEach((inv) => {
+      const raw = String(inv.invoiceNumber || inv.invoice_number || '');
+      const match = raw.match(/FAC-(\d+)/i);
+      if (!match) return;
+      const parsed = Number.parseInt(match[1], 10);
+      if (!Number.isNaN(parsed) && parsed > maxNum) maxNum = parsed;
+    });
+    return maxNum + 1;
+  };
+  
+  // Load invoices, devoluciones y estado de cierre desde Supabase
+  useEffect(() => {
+    async function loadBillingData() {
+      const { data: invRows, error: invErr } = await supabase
+        .from('photo_invoices')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (!invErr && Array.isArray(invRows)) {
+        const mapped = invRows.map((inv) => ({
+          id: inv.id,
+          invoiceNumber: inv.invoice_number,
+          timestamp: inv.created_at || new Date().toISOString(),
+          clientName: inv.client_name || 'Cliente General',
+          clientPhone: inv.client_phone || '',
           turno: inv.turno || 'Turno 9:00',
           photographer: inv.photographer || null,
           source: inv.source || 'billing',
-          date: inv.date || null,
+          date: inv.date || new Date(inv.created_at || Date.now()).toLocaleDateString('es-DO'),
           items: inv.items || [],
-          subtotal: inv.subtotal || 0,
-          tax: inv.tax || 0,
-          total: inv.total || 0,
+          subtotal: Number(inv.subtotal || 0),
+          tax: Number(inv.tax || 0),
+          total: Number(inv.total || 0),
           currency: inv.currency || 'USD',
           status: inv.status || 'active',
         }));
-        if (rows.length === 0) return;
-        const { error } = await supabase.from('photo_invoices').upsert(rows, { onConflict: 'invoice_number' });
-        if (error) console.warn('[Billing] Bulk sync error:', error.message);
-        else console.log(`[Billing] Synced ${rows.length} invoices to Supabase`);
-      } catch (err) {
-        console.warn('[Billing] Sync invoices failed:', err);
+        setInvoices(mapped);
+        setNextInvoiceNum(parseInvoiceCounter(mapped));
+      }
+
+      const { data: returnRows, error: retErr } = await supabase
+        .from('photo_returns')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!retErr && Array.isArray(returnRows)) {
+        setReturns(
+          returnRows.map((ret) => ({
+            id: ret.id,
+            invoice: ret.invoice_number,
+            client: ret.client_name || 'Cliente General',
+            amount: Number(ret.amount || 0),
+            reason: ret.reason || '',
+            date: new Date(ret.created_at || Date.now()).toLocaleDateString('es-DO'),
+            status: ret.status || 'pendiente',
+            timestamp: ret.created_at || null,
+          })),
+        );
+      }
+
+      const latestClosure = await getLatestDailyClosure();
+      if (latestClosure?.disable_tax_after_close) {
+        setTaxEnabled(false);
       }
     }
-    syncAllInvoicesToSupabase();
+
+    loadBillingData();
   }, []);
 
   // Load photographers from Supabase
@@ -1860,7 +1988,7 @@ export default function BillingPage() {
 
   // Calculate totals
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const tax = subtotal * 0.18; // 18% ITBIS
+  const tax = taxEnabled ? subtotal * 0.18 : 0;
   const total = subtotal + tax;
 
   // Clear cart
@@ -1910,7 +2038,7 @@ export default function BillingPage() {
       status: 'active',
     };
     
-    // Save to Supabase (awaited — with offline fallback queue)
+    // Save to Supabase
     const supabaseRow = {
       invoice_number: invoiceNum,
       client_name: clientName || 'Cliente General',
@@ -1926,34 +2054,41 @@ export default function BillingPage() {
       currency: currency,
       status: 'active',
     };
-    try {
-      const { error: sbErr } = await supabase.from('photo_invoices').insert(supabaseRow);
-      if (sbErr) {
-        console.warn('Supabase insert error, queuing for sync:', sbErr.message);
-        const pending = JSON.parse(localStorage.getItem('macao_invoices_pending_sync') || '[]');
-        pending.push(supabaseRow);
-        localStorage.setItem('macao_invoices_pending_sync', JSON.stringify(pending));
-      }
-    } catch (err) {
-      console.warn('Supabase insert failed (offline), queuing for sync:', err);
-      const pending = JSON.parse(localStorage.getItem('macao_invoices_pending_sync') || '[]');
-      pending.push(supabaseRow);
-      localStorage.setItem('macao_invoices_pending_sync', JSON.stringify(pending));
+    const { error: sbErr } = await supabase.from('photo_invoices').insert(supabaseRow);
+    if (sbErr) {
+      alert('No se pudo guardar la factura en la base de datos. Revisa la conexión e intenta nuevamente.');
+      return;
     }
 
-    // Also save to localStorage (offline fallback)
+    await addPhotoSaleEvent({
+      eventType: 'online_purchase',
+      phone: clientPhone || null,
+      clientName: clientName || 'Cliente General',
+      invoiceNumber: invoiceNum,
+      planName: 'Factura Caja',
+      amount: total,
+      currency,
+      source: 'billing',
+      metadata: {
+        turno: turno || 'Turno 9:00',
+        photographer: photographerName,
+        items: itemsList,
+        tax,
+        subtotal,
+      },
+    });
+
     const updatedInvoices = [...invoices, newInvoice];
     setInvoices(updatedInvoices);
-    saveInvoices(updatedInvoices);
 
     // Push billing client for photographer dashboard
     if (clientPhone) {
-      addBillingClient({
+      await addBillingClient({
         id: `bc_${Date.now()}`,
-        name: clientName || 'Cliente General',
+        clientName: clientName || 'Cliente General',
         phone: clientPhone,
         turno: turno || 'Turno 9:00',
-        photographer: photographerName,
+        photographerName,
         invoiceNumber: newInvoice.invoiceNumber,
         total: total,
         date: newInvoice.date,
@@ -1967,7 +2102,6 @@ export default function BillingPage() {
     // Update invoice counter
     const newNum = nextInvoiceNum + 1;
     setNextInvoiceNum(newNum);
-    saveInvoiceCounter(newNum);
     
     // Set current invoice and show print modal
     setCurrentInvoice(newInvoice);
@@ -1981,6 +2115,66 @@ export default function BillingPage() {
   const handleClosePrintModal = () => {
     setShowPrintModal(false);
     setCurrentInvoice(null);
+  };
+
+  const handleCloseDay = async ({ closureDate, byCurrency, totalInvoices }) => {
+    setClosingDay(true);
+    const saved = await saveDailyClosure({
+      closureDate,
+      closedBy: billingUserName || billingUser?.name || null,
+      totalInvoices,
+      byCurrency,
+      disableTaxAfterClose: true,
+    });
+    setClosingDay(false);
+
+    if (saved) {
+      setTaxEnabled(false);
+      logActivity('Cierre del dia', `${closureDate} - ${totalInvoices} factura(s)`);
+    }
+
+    return saved;
+  };
+
+  const handleSaveProfile = async (nextProfile) => {
+    if (!billingUserId) {
+      alert('No se encontro el usuario activo para actualizar el perfil.');
+      return;
+    }
+
+    setSavingProfile(true);
+    const payload = {
+      name: String(nextProfile?.name || '').trim(),
+      email: String(nextProfile?.email || '').trim(),
+      phone: String(nextProfile?.phone || '').trim(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from('dashboard_users')
+      .update(payload)
+      .eq('id', billingUserId);
+
+    setSavingProfile(false);
+
+    if (error) {
+      alert('No se pudo guardar el perfil. Intenta nuevamente.');
+      return;
+    }
+
+    setBillingUser((prev) => ({ ...prev, ...payload }));
+    setBillingUserName(payload.name || billingUserName);
+
+    const session = await getDashboardSession();
+    if (session) {
+      await setDashboardSession({
+        ...session,
+        ...payload,
+        active: true,
+      });
+    }
+
+    logActivity('Perfil actualizado', payload.name || 'Usuario');
   };
 
   return (
@@ -2348,13 +2542,19 @@ export default function BillingPage() {
 
       {activeTab === 'usuario' && (
         <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
-          <UsuarioPanel user={billingUser} invoices={invoices} onLogout={handleBillingLogout} />
+          <UsuarioPanel
+            user={billingUser}
+            invoices={invoices}
+            onLogout={handleBillingLogout}
+            onSaveProfile={handleSaveProfile}
+            savingProfile={savingProfile}
+          />
         </main>
       )}
 
       {activeTab === 'devolucion' && (
         <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
-          <DevolucionPanel invoices={invoices} />
+          <DevolucionPanel invoices={invoices} returns={returns} setReturns={setReturns} />
         </main>
       )}
 
@@ -2366,13 +2566,20 @@ export default function BillingPage() {
 
       {activeTab === 'cierre-turno' && (
         <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
-          <CierreTurnoPanel invoices={invoices} />
+          <CierreTurnoPanel invoices={invoices} returns={returns} />
         </main>
       )}
 
       {activeTab === 'cierre-dia' && (
         <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
-          <CierreDiaPanel invoices={invoices} />
+          <CierreDiaPanel
+            invoices={invoices}
+            returns={returns}
+            onCloseDay={handleCloseDay}
+            closingDay={closingDay}
+            taxEnabled={taxEnabled}
+            billingUser={billingUser}
+          />
         </main>
       )}
 
@@ -2389,10 +2596,18 @@ export default function BillingPage() {
           <ProductEditModal
             product={editingProduct}
             onClose={() => setEditingProduct(null)}
-            onSave={(updated) => {
+            onSave={async (updated) => {
+              await supabase
+                .from('photo_pricing')
+                .update({
+                  name: updated.name,
+                  price: Number(updated.price || 0),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('code', updated.code)
+
               const newProducts = products.map(p => p.id === updated.id ? { ...p, name: updated.name, price: updated.price } : p);
               setProducts(newProducts);
-              persistProducts(newProducts);
               setEditingProduct(null);
             }}
           />

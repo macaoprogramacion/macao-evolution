@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { KeyRound, LogOut, ShieldAlert, Mail } from 'lucide-react'
 import { authenticateByEmail } from '@/lib/supabase-users'
+import { clearDashboardSession, getDashboardSession, setDashboardSession } from '@/lib/dashboard-session'
 import Image from 'next/image'
 
 const backgroundImages = Array.from({ length: 11 }, (_, i) => `/photographer/branding/photos/bg-4k (${i + 1}).png`)
@@ -12,7 +13,7 @@ const backgroundImages = Array.from({ length: 11 }, (_, i) => `/photographer/bra
 /**
  * Wraps photographer / billing pages.
  * Requires a valid email + code to access. The authenticated user is stored in
- * sessionStorage so refreshes don't force re-login within the same tab.
+ * a signed cookie so refreshes don't force re-login.
  *
  * @param allowedRoles – which roles can pass ("billing" | "photographer" | "both" | "admin" | "operaciones" | "chofer" | "contabilidad")
  */
@@ -35,8 +36,7 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
 
   // Check if already authenticated in this session
   useEffect(() => {
-    try {
-      const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || 'null')
+    getDashboardSession().then((session) => {
       if (session && session.active) {
         const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles]
         if (roles.includes(session.role) || session.role === 'both' || session.role === 'admin') {
@@ -54,8 +54,8 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
           }
         }
       }
-    } catch {}
-    setChecking(false)
+      setChecking(false)
+    })
   }, [allowedRoles])
 
   const handlePinChange = (index, value) => {
@@ -101,7 +101,7 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
     const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles]
     if (!roles.includes(user.role) && user.role !== 'both' && user.role !== 'admin') {
       // User is valid but doesn't have access to THIS dashboard — redirect to correct one
-      sessionStorage.setItem('macao_auth_session', JSON.stringify({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, avatar_url: user.avatar_url || null, active: true }))
+      await setDashboardSession({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, avatar_url: user.avatar_url || null, active: true })
       const roleRoutes = {
         admin: '/admin',
         both: '/admin',
@@ -118,7 +118,7 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
     // Authenticated
     setAuthed(true)
     setUserName(user.name)
-    sessionStorage.setItem('macao_auth_session', JSON.stringify({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, avatar_url: user.avatar_url || null, active: true }))
+    await setDashboardSession({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, avatar_url: user.avatar_url || null, active: true })
     // Redirect restricted roles to their specific page after login
     const roleDefaultPage = {
       operaciones: '/admin/operation',
@@ -134,8 +134,8 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
     }
   }
 
-  const handleLogout = () => {
-    sessionStorage.removeItem('macao_auth_session')
+  const handleLogout = async () => {
+    await clearDashboardSession()
     setAuthed(false)
     setEmail('')
     setPin('')

@@ -7,7 +7,13 @@ import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import PhotoCard from '@/components/photographer/PhotoCard';
 import { GlassCard, GlassButton } from '@/components/photographer/ui';
 import { CheckCircle, Package, Video, Download, Play, Receipt, ShieldCheck, AlertCircle, Phone, User, Loader2 } from 'lucide-react';
-import { findInvoicesByPhone, findInvoiceByNumber, markInvoiceRedeemed, logActivity, addPhotoSale } from '@/lib/store';
+import { logActivity } from '@/lib/store';
+import {
+  addPhotoSaleEvent,
+  findInvoiceByNumberFromDb,
+  findInvoicesByPhoneFromDb,
+  markInvoiceRedeemedInDb,
+} from '@/lib/photography-db';
 import { supabase } from '@/lib/supabase';
 
 // Background image
@@ -163,8 +169,29 @@ function ClientGallery() {
     fetchPortfolios();
   }, [phone]);
 
-  // Lookup invoices by phone (still from localStorage — these are for invoice verification)
-  const phoneInvoices = useMemo(() => phone ? findInvoicesByPhone(phone) : [], [phone]);
+  const [phoneInvoices, setPhoneInvoices] = useState([]);
+  // Lookup invoices by phone from Supabase
+  useEffect(() => {
+    async function loadPhoneInvoices() {
+      if (!phone) {
+        setPhoneInvoices([]);
+        return;
+      }
+      const rows = await findInvoicesByPhoneFromDb(phone);
+      setPhoneInvoices(
+        rows.map((r) => ({
+          invoiceNumber: r.invoice_number,
+          clientName: r.client_name,
+          clientPhone: r.client_phone,
+          total: Number(r.total || 0),
+          currency: r.currency || 'USD',
+          redeemed: Boolean(r.redeemed),
+          redeemedAt: r.redeemed_at,
+        })),
+      );
+    }
+    loadPhoneInvoices();
+  }, [phone]);
   const hasInvoice = phoneInvoices.length > 0;
 
   // Build gallery photos from Supabase data, fall back to demo
@@ -310,15 +337,19 @@ function ClientGallery() {
   const completePurchase = async (method = 'card') => {
     if (purchaseTarget?.type === 'plan') {
       const plan = purchaseTarget.plan;
-      addPhotoSale({
-        id: `sale_${Date.now()}`,
+      await addPhotoSaleEvent({
+        eventType: 'online_purchase',
         phone,
         clientName,
-        plan: plan.name,
-        amount: plan.price,
-        photos: selectedIds.length,
-        date: new Date().toLocaleDateString('es-DO'),
+        planName: plan.name,
+        amount: Number(plan.price || 0),
+        currency: 'USD',
         source: method === 'paypal' ? 'paypal' : 'online',
+        metadata: {
+          photos: selectedIds.length,
+          type: 'plan',
+          selectedPhotoIds: selectedIds,
+        },
       });
       logActivity('Venta online', `${clientName} - Plan ${plan.name} - US$ ${plan.price}`);
       await updateAllPortfoliosStatus('Vendido');
@@ -327,15 +358,18 @@ function ClientGallery() {
     }
 
     if (purchaseTarget?.type === 'video' && portfolioVideo) {
-      addPhotoSale({
-        id: `sale_video_${Date.now()}`,
+      await addPhotoSaleEvent({
+        eventType: 'online_purchase',
         phone,
         clientName,
-        plan: 'Video',
-        amount: videoPrice,
-        photos: 0,
-        date: new Date().toLocaleDateString('es-DO'),
+        planName: 'Video',
+        amount: Number(videoPrice || 0),
+        currency: 'USD',
         source: method === 'paypal' ? 'paypal' : 'online',
+        metadata: {
+          photos: 0,
+          type: 'video',
+        },
       });
       logActivity('Venta video online', `${clientName} - US$ ${videoPrice}`);
       await updateAllPortfoliosStatus('Vendido');
@@ -369,7 +403,7 @@ function ClientGallery() {
   };
 
   // Verify invoice code
-  const handleVerifyInvoice = () => {
+  const handleVerifyInvoice = async () => {
     if (!invoiceCode.trim()) {
       setVerificationError('Por favor ingresa un código de factura');
       return;
@@ -377,31 +411,47 @@ function ClientGallery() {
 
     setIsVerifying(true);
     setVerificationError('');
+    const found = await findInvoiceByNumberFromDb(invoiceCode.trim());
 
-    setTimeout(() => {
-      const found = findInvoiceByNumber(invoiceCode.trim());
-
-      if (!found) {
-        setVerificationError('Código de factura no encontrado. Verifica que esté correcto.');
-        setIsVerifying(false);
-        return;
-      }
-
-      if (found.redeemed) {
-        setVerificationError('Esta factura ya fue canjeada anteriormente.');
-        setIsVerifying(false);
-        return;
-      }
-
-      // Mark invoice as redeemed
-      markInvoiceRedeemed(found.invoiceNumber);
-      logActivity('Factura canjeada', `${found.invoiceNumber} — ${clientName}`);
-
-      setVerifiedInvoice(found);
-      setIsVerified(true);
-      setVerificationError('');
+    if (!found) {
+      setVerificationError('Código de factura no encontrado. Verifica que esté correcto.');
       setIsVerifying(false);
-    }, 500);
+      return;
+    }
+
+    if (found.redeemed) {
+      setVerificationError('Esta factura ya fue canjeada anteriormente.');
+      setIsVerifying(false);
+      return;
+    }
+
+    const marked = await markInvoiceRedeemedInDb(found.invoice_number);
+    if (!marked) {
+      setVerificationError('No se pudo validar la factura en este momento. Intenta nuevamente.');
+      setIsVerifying(false);
+      return;
+    }
+
+    await addPhotoSaleEvent({
+      eventType: 'invoice_redeemed',
+      phone,
+      clientName: found.client_name || clientName,
+      invoiceNumber: found.invoice_number,
+      amount: Number(found.total || 0),
+      currency: found.currency || 'USD',
+      source: 'billing_redeem',
+    });
+
+    logActivity('Factura canjeada', `${found.invoice_number} — ${clientName}`);
+
+    setVerifiedInvoice({
+      invoiceNumber: found.invoice_number,
+      clientName: found.client_name,
+      redeemed: true,
+    });
+    setIsVerified(true);
+    setVerificationError('');
+    setIsVerifying(false);
   };
 
   // Download a single file by creating a temporary link
@@ -457,6 +507,19 @@ function ClientGallery() {
     }
     logActivity('Descarga completa', `${clientName} descargó ${galleryPhotos.length} fotos${portfolioVideo ? ' + video' : ''}`);
     await updateAllPortfoliosStatus('Descargado');
+    await addPhotoSaleEvent({
+      eventType: 'download',
+      phone,
+      clientName,
+      invoiceNumber: verifiedInvoice?.invoiceNumber || null,
+      amount: 0,
+      source: 'gallery',
+      metadata: {
+        photos: galleryPhotos.length,
+        includesVideo: Boolean(portfolioVideo),
+        mode: 'all',
+      },
+    });
   };
 
   // Handle download only selected photos
@@ -471,6 +534,19 @@ function ClientGallery() {
     }
     logActivity('Descarga parcial', `${clientName} descargó ${selected.length} fotos`);
     await updateAllPortfoliosStatus('Descargado');
+    await addPhotoSaleEvent({
+      eventType: 'download',
+      phone,
+      clientName,
+      invoiceNumber: verifiedInvoice?.invoiceNumber || null,
+      amount: 0,
+      source: 'gallery',
+      metadata: {
+        photos: selected.length,
+        includesVideo: false,
+        mode: 'selected',
+      },
+    });
   };
 
   // Loading state

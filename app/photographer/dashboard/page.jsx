@@ -316,12 +316,14 @@ export default function PhotographerDashboard() {
   const [selectedClient, setSelectedClient] = useState(null);
 
   // Billing clients from cashier
-  const [billingClients, setBillingClients] = useState(getBillingClients);
+  const [billingClients, setBillingClients] = useState([]);
   useEffect(() => {
-    const interval = setInterval(() => setBillingClients(getBillingClients()), 3000);
-    const handleStorage = (e) => { if (e.key === 'macao_billing_clients') setBillingClients(getBillingClients()); };
-    window.addEventListener('storage', handleStorage);
-    return () => { clearInterval(interval); window.removeEventListener('storage', handleStorage); };
+    const loadClients = async () => {
+      setBillingClients(await getBillingClients());
+    };
+    loadClients();
+    const interval = setInterval(loadClients, 3000);
+    return () => { clearInterval(interval); };
   }, []);
   
   // Upload form state

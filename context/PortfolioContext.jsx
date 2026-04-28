@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getBillingClients } from '@/lib/store';
 
 // Portfolio duration in days
 const PORTFOLIO_DURATION_DAYS = 15;
@@ -47,17 +46,6 @@ export function PortfolioProvider({ children }) {
 
   useEffect(() => {
     refreshFromApi();
-  }, [refreshFromApi]);
-
-  // ---- Listen for billing clients added by the cashier (cross-tab) ----
-  useEffect(() => {
-    const handleStorage = (e) => {
-      if (e.key === 'macao_billing_clients') {
-        refreshFromApi();
-      }
-    };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
   }, [refreshFromApi]);
 
   // Add new portfolio — saves to both localStorage (instant) and Supabase (persistent)
