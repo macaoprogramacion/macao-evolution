@@ -1205,7 +1205,7 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
 }
 
 // Product Card Component
-function ProductCard({ product, onAdd, onEdit }) {
+function ProductCard({ product, onAdd, onEdit, currency = 'USD' }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -1239,7 +1239,7 @@ function ProductCard({ product, onAdd, onEdit }) {
           {product.name}
         </h3>
         <p className="text-[#DC2626] font-medium text-lg">
-          US$ {product.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          {fmtMoney(product.price, currency)}
         </p>
       </div>
     </motion.div>
@@ -1319,7 +1319,7 @@ function ProductEditModal({ product, onSave, onClose }) {
 }
 
 // Cart Item Component
-function CartItem({ item, onUpdateQuantity, onRemove }) {
+function CartItem({ item, onUpdateQuantity, onRemove, currency = 'USD' }) {
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
@@ -1333,7 +1333,7 @@ function CartItem({ item, onUpdateQuantity, onRemove }) {
       <div className="flex-1 min-w-0">
         <p className="text-white font-medium text-sm truncate">{item.name}</p>
         <p className="text-[#DC2626] text-xs">
-          US$ {item.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          {fmtMoney(item.price, currency)}
         </p>
       </div>
       <div className="flex items-center gap-2">
@@ -1421,6 +1421,8 @@ function CustomSelect({ label, value, onChange, options, placeholder }) {
 // POS Receipt Component for printing (80mm width)
 function POSReceipt({ invoice, onClose }) {
   const receiptRef = useRef(null);
+  const invoiceCurrency = invoice.currency || 'USD';
+  const invoiceCurrencyLabel = currencyLabel(invoiceCurrency);
   
   const handlePrint = () => {
     const printWindow = window.open('', '', 'width=302,height=600');
@@ -1430,8 +1432,8 @@ function POSReceipt({ invoice, onClose }) {
       <tr>
         <td style="text-align: left; padding: 4px 0;">${item.name}</td>
         <td style="text-align: center; padding: 4px 0;">${item.quantity}</td>
-        <td style="text-align: right; padding: 4px 0;">$${item.price.toFixed(2)}</td>
-        <td style="text-align: right; padding: 4px 0;">$${(item.quantity * item.price).toFixed(2)}</td>
+        <td style="text-align: right; padding: 4px 0;">${invoiceCurrencyLabel} ${item.price.toFixed(2)}</td>
+        <td style="text-align: right; padding: 4px 0;">${invoiceCurrencyLabel} ${(item.quantity * item.price).toFixed(2)}</td>
       </tr>
     `).join('');
     
@@ -1617,15 +1619,15 @@ function POSReceipt({ invoice, onClose }) {
             <table class="totals-table">
               <tr>
                 <td>SUBTOTAL:</td>
-                <td>US$ ${invoice.subtotal.toFixed(2)}</td>
+                <td>${invoiceCurrencyLabel} ${invoice.subtotal.toFixed(2)}</td>
               </tr>
               <tr>
                 <td>ITBIS (18%):</td>
-                <td>US$ ${invoice.tax.toFixed(2)}</td>
+                <td>${invoiceCurrencyLabel} ${invoice.tax.toFixed(2)}</td>
               </tr>
               <tr class="total-row">
                 <td>TOTAL A PAGAR:</td>
-                <td>US$ ${invoice.total.toFixed(2)}</td>
+                <td>${invoiceCurrencyLabel} ${invoice.total.toFixed(2)}</td>
               </tr>
             </table>
             
@@ -1716,8 +1718,8 @@ function POSReceipt({ invoice, onClose }) {
                 <tr key={idx} className="border-b border-dotted border-gray-300">
                   <td className="py-2 text-left">{item.name}</td>
                   <td className="py-2 text-center">{item.quantity}</td>
-                  <td className="py-2 text-right">${item.price.toFixed(2)}</td>
-                  <td className="py-2 text-right">${(item.quantity * item.price).toFixed(2)}</td>
+                  <td className="py-2 text-right">{invoiceCurrencyLabel} {item.price.toFixed(2)}</td>
+                  <td className="py-2 text-right">{invoiceCurrencyLabel} {(item.quantity * item.price).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1730,15 +1732,15 @@ function POSReceipt({ invoice, onClose }) {
             <tbody>
               <tr>
                 <td className="py-1">SUBTOTAL:</td>
-                <td className="py-1 text-right font-semibold">US$ {invoice.subtotal.toFixed(2)}</td>
+                <td className="py-1 text-right font-semibold">{invoiceCurrencyLabel} {invoice.subtotal.toFixed(2)}</td>
               </tr>
               <tr>
                 <td className="py-1">ITBIS (18%):</td>
-                <td className="py-1 text-right font-semibold">US$ {invoice.tax.toFixed(2)}</td>
+                <td className="py-1 text-right font-semibold">{invoiceCurrencyLabel} {invoice.tax.toFixed(2)}</td>
               </tr>
               <tr className="border-t-2 border-black">
                 <td className="py-2 text-sm font-bold">TOTAL A PAGAR:</td>
-                <td className="py-2 text-right text-sm font-bold">US$ {invoice.total.toFixed(2)}</td>
+                <td className="py-2 text-right text-sm font-bold">{invoiceCurrencyLabel} {invoice.total.toFixed(2)}</td>
               </tr>
             </tbody>
           </table>
@@ -1916,7 +1918,7 @@ export default function BillingPage() {
           id: inv.id,
           invoiceNumber: inv.invoice_number,
           timestamp: inv.created_at || new Date().toISOString(),
-          clientName: inv.client_name || 'Cliente General',
+          clientName: String(inv.client_name || '').trim() || 'Cliente General',
           clientPhone: inv.client_phone || '',
           turno: inv.turno || 'Turno 9:00',
           photographer: inv.photographer || null,
@@ -2042,6 +2044,9 @@ export default function BillingPage() {
       alert('Agrega productos al carrito');
       return;
     }
+
+    const normalizedClientName = String(clientName || '').trim();
+    const effectiveClientName = normalizedClientName || 'Cliente General';
     
     const itemsList = cart.map(item => ({
       id: item.id,
@@ -2060,7 +2065,7 @@ export default function BillingPage() {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const supabaseRow = {
         invoice_number: invoiceNum,
-        client_name: clientName || 'Cliente General',
+        client_name: effectiveClientName,
         client_phone: clientPhone || null,
         turno: turno || 'Turno 9:00',
         photographer: photographerName,
@@ -2102,7 +2107,7 @@ export default function BillingPage() {
       id: `inv_${Date.now()}`,
       invoiceNumber: invoiceNum,
       timestamp: new Date().toISOString(),
-      clientName: clientName || 'Cliente General',
+      clientName: effectiveClientName,
       clientPhone: clientPhone,
       turno: turno || 'Turno 9:00',
       photographer: photographerName,
@@ -2119,7 +2124,7 @@ export default function BillingPage() {
     await addPhotoSaleEvent({
       eventType: 'online_purchase',
       phone: clientPhone || null,
-      clientName: clientName || 'Cliente General',
+      clientName: effectiveClientName,
       invoiceNumber: invoiceNum,
       planName: 'Factura Caja',
       amount: total,
@@ -2141,7 +2146,7 @@ export default function BillingPage() {
     if (clientPhone) {
       await addBillingClient({
         id: `bc_${Date.now()}`,
-        clientName: clientName || 'Cliente General',
+        clientName: effectiveClientName,
         phone: clientPhone,
         turno: turno || 'Turno 9:00',
         photographerName,
@@ -2153,7 +2158,7 @@ export default function BillingPage() {
     }
 
     // Log activity
-    logActivity('Factura generada', `${newInvoice.invoiceNumber} — US$ ${total.toFixed(2)} — ${clientName || 'Cliente General'}`);
+    logActivity('Factura generada', `${newInvoice.invoiceNumber} — ${currencyLabel(currency)} ${total.toFixed(2)} — ${effectiveClientName}`);
     
     // Update invoice counter
     const newNum = invoiceCounter + 1;
@@ -2376,7 +2381,7 @@ export default function BillingPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4">
                 <AnimatePresence mode="popLayout">
                   {filteredProducts.map((product) => (
-                    <ProductCard key={product.id} product={product} onAdd={addToCart} onEdit={setEditingProduct} />
+                    <ProductCard key={product.id} product={product} onAdd={addToCart} onEdit={setEditingProduct} currency={currency} />
                   ))}
                 </AnimatePresence>
               </div>
@@ -2539,6 +2544,7 @@ export default function BillingPage() {
                       item={item}
                       onUpdateQuantity={updateQuantity}
                       onRemove={removeFromCart}
+                      currency={currency}
                     />
                   ))
                 )}
@@ -2551,19 +2557,19 @@ export default function BillingPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-white/60">Subtotal</span>
                   <span className="text-white">
-                    US$ {subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    {fmtMoney(subtotal, currency)}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-white/60">ITBIS (18%)</span>
                   <span className="text-white">
-                    US$ {tax.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    {fmtMoney(tax, currency)}
                   </span>
                 </div>
                 <div className="flex justify-between text-lg font-semibold pt-2 border-t border-white/15">
                   <span className="text-white">Total</span>
                   <span className="text-[#DC2626]">
-                    US$ {total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    {fmtMoney(total, currency)}
                   </span>
                 </div>
               </div>
