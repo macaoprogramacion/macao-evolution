@@ -840,15 +840,64 @@ function CierreTurnoPanel({ invoices, returns }) {
 
 // ─── Cierre del Dia Panel ────────────────────────────────────────
 function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled, billingUser }) {
-  const todayStr = new Date().toLocaleDateString('es-DO');
+  const toDayKey = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const parseDayKey = (value) => {
+    if (!value) return null;
+    const fromIso = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (fromIso) return `${fromIso[1]}-${fromIso[2]}-${fromIso[3]}`;
+
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return toDayKey(parsed);
+
+    const fromEs = String(value).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (fromEs) {
+      const d = String(Number(fromEs[1])).padStart(2, '0');
+      const m = String(Number(fromEs[2])).padStart(2, '0');
+      const y = fromEs[3];
+      return `${y}-${m}-${d}`;
+    }
+
+    return null;
+  };
+
+  const formatDayLabel = (dayKey) => {
+    const parsed = new Date(`${dayKey}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return dayKey;
+    return parsed.toLocaleDateString('es-DO');
+  };
+
+  const invoiceDayKey = (inv) => parseDayKey(inv.timestamp) || parseDayKey(inv.date);
+  const returnDayKey = (ret) => parseDayKey(ret.timestamp) || parseDayKey(ret.date);
+
+  const todayKey = toDayKey(new Date());
 
   // Exchange rates state — pesos dominicanos por unidad de moneda extranjera
   const [rates, setRates] = useState({ USD: 60, EUR: 65 });
   const [editingRates, setEditingRates] = useState(false);
   const [convertToDOP, setConvertToDOP] = useState(false);
+  const [dailyClosures, setDailyClosures] = useState([]);
+  const [selectedClosureDate, setSelectedClosureDate] = useState(todayKey);
 
   useEffect(() => {
     getPhotoExchangeRates().then(setRates);
+  }, []);
+
+  useEffect(() => {
+    async function loadClosures() {
+      const { data } = await supabase
+        .from('photo_daily_closures')
+        .select('closure_date, closed_by, closed_at, total_invoices')
+        .order('closure_date', { ascending: false })
+        .limit(180);
+      setDailyClosures(Array.isArray(data) ? data : []);
+    }
+    loadClosures();
   }, []);
 
   const saveRates = async (newRates) => {
@@ -856,12 +905,34 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
     await savePhotoExchangeRates(newRates, billingUser?.email || billingUser?.name || null);
   };
 
-  // Today's invoices
-  const todayInvoices = invoices.filter(inv => inv.date === todayStr);
+  const availableDayKeys = Array.from(new Set(
+    invoices
+      .filter(inv => inv.status !== 'cancelled')
+      .map(invoiceDayKey)
+      .filter(Boolean),
+  )).sort((a, b) => (a > b ? -1 : 1));
+
+  useEffect(() => {
+    if (availableDayKeys.length === 0) {
+      if (selectedClosureDate !== todayKey) setSelectedClosureDate(todayKey);
+      return;
+    }
+
+    if (!availableDayKeys.includes(selectedClosureDate)) {
+      setSelectedClosureDate(availableDayKeys[0]);
+    }
+  }, [availableDayKeys, selectedClosureDate, todayKey]);
+
+  const selectedInvoices = invoices.filter(inv => (
+    inv.status !== 'cancelled' && invoiceDayKey(inv) === selectedClosureDate
+  ));
+
+  const selectedDateLabel = formatDayLabel(selectedClosureDate);
+  const existingClosure = dailyClosures.find((c) => String(c.closure_date || '').slice(0, 10) === selectedClosureDate) || null;
 
   // Group by currency
   const byCurrency = {};
-  todayInvoices.forEach(inv => {
+  selectedInvoices.forEach(inv => {
     const cur = inv.currency || 'USD';
     if (!byCurrency[cur]) byCurrency[cur] = { total: 0, subtotal: 0, tax: 0, count: 0 };
     byCurrency[cur].total += inv.total;
@@ -872,7 +943,7 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
 
   // Group by turno
   const byTurno = {};
-  todayInvoices.forEach(inv => {
+  selectedInvoices.forEach(inv => {
     const t = inv.turno || 'Turno 9:00';
     if (!byTurno[t]) byTurno[t] = { total: 0, count: 0, currencies: {} };
     byTurno[t].total += inv.total;
@@ -883,11 +954,11 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
   });
 
   // Returns
-  const todayReturns = returns.filter(r => {
-    const d = r.date || (r.timestamp ? new Date(r.timestamp).toLocaleDateString('es-DO') : '');
-    return d === todayStr && (r.status === 'aprobada' || r.status === 'procesada');
+  const selectedReturns = returns.filter(r => {
+    const d = returnDayKey(r);
+    return d === selectedClosureDate && (r.status === 'aprobada' || r.status === 'procesada');
   });
-  const returnsTotal = todayReturns.reduce((s, r) => s + (r.amount || 0), 0);
+  const returnsTotal = selectedReturns.reduce((s, r) => s + (r.amount || 0), 0);
 
   // Convert to DOP — rates = pesos por unidad (ej: USD: 60 = 1 USD = 60 DOP)
   const toDOP = (amount, cur) => {
@@ -902,9 +973,12 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
   const buildClosureReport = () => {
     const lines = [];
     lines.push('MACAO - CIERRE DEL DIA');
-    lines.push(`Fecha: ${todayStr}`);
-    lines.push(`Facturas: ${todayInvoices.length}`);
+    lines.push(`Fecha: ${selectedDateLabel}`);
+    lines.push(`Facturas: ${selectedInvoices.length}`);
     lines.push(`ITBIS en facturas nuevas: ${taxEnabled ? 'ACTIVO' : 'DESACTIVADO'}`);
+    if (existingClosure) {
+      lines.push(`Estado de cierre previo: YA EXISTIA (${existingClosure.closed_by || 'sin usuario'})`);
+    }
     lines.push('');
     lines.push('RESUMEN POR MONEDA');
     Object.entries(byCurrency).forEach(([cur, data]) => {
@@ -918,7 +992,7 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
     });
     lines.push('');
     lines.push('DETALLE DE FACTURAS');
-    todayInvoices.forEach((inv) => {
+    selectedInvoices.forEach((inv) => {
       const items = (inv.items || []).map((it) => `${it.quantity}x ${it.name}`).join(', ');
       lines.push(`${inv.invoiceNumber} | ${inv.clientName} | ${inv.turno} | ${inv.currency} ${inv.total.toFixed(2)} | ${new Date(inv.timestamp).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}`);
       lines.push(`  Items: ${items || 'Sin items'}`);
@@ -931,10 +1005,15 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
   };
 
   const handleCloseAndDownload = async () => {
+    if (selectedInvoices.length === 0) {
+      alert('No hay facturas en la fecha seleccionada para cerrar.');
+      return;
+    }
+
     const closed = await onCloseDay({
-      closureDate: todayStr,
+      closureDate: selectedClosureDate,
       byCurrency,
-      totalInvoices: todayInvoices.length,
+      totalInvoices: selectedInvoices.length,
     });
 
     if (!closed) {
@@ -947,7 +1026,7 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `cierre-dia-${todayStr.replaceAll('/', '-')}.txt`;
+    a.download = `cierre-dia-${selectedClosureDate}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -959,7 +1038,39 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
       <div className="flex-1 flex flex-col">
         <div className="flex items-center justify-between mb-6">
           <h1 className="font-title text-3xl lg:text-4xl text-white">Cierre del Dia</h1>
-          <p className="text-white/50 text-sm">{todayStr}</p>
+          <p className="text-white/50 text-sm">{selectedDateLabel}</p>
+        </div>
+
+        <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-4 border border-white/20 mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3 items-end">
+            <div>
+              <label className="block text-white/60 text-xs mb-1.5">Fecha a cerrar</label>
+              <select
+                value={selectedClosureDate}
+                onChange={(e) => setSelectedClosureDate(e.target.value)}
+                className="w-full px-4 py-2.5 bg-black/30 rounded-2xl border border-white/20 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#DC2626]/30"
+              >
+                {availableDayKeys.length === 0 ? (
+                  <option value={todayKey}>Sin ventas registradas</option>
+                ) : (
+                  availableDayKeys.map((dayKey) => (
+                    <option key={dayKey} value={dayKey}>
+                      {formatDayLabel(dayKey)}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+            {existingClosure ? (
+              <span className="inline-flex items-center rounded-xl px-3 py-2 text-xs font-semibold bg-emerald-500/20 text-emerald-300">
+                Cierre ya registrado
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-xl px-3 py-2 text-xs font-semibold bg-amber-500/20 text-amber-300">
+                Cierre pendiente
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Exchange Rate Config */}
@@ -1092,7 +1203,7 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
 
         {/* Invoice Detail Table */}
         <div className="flex-1 bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20 overflow-hidden">
-          <h3 className="text-white font-semibold mb-4">Todas las Facturas del D\u00eda</h3>
+          <h3 className="text-white font-semibold mb-4">Todas las Facturas de la Fecha Seleccionada</h3>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -1107,11 +1218,11 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
                 </tr>
               </thead>
               <tbody>
-                {todayInvoices.length === 0 ? (
+                {selectedInvoices.length === 0 ? (
                   <tr>
-                    <td colSpan={convertToDOP ? 7 : 6} className="py-8 text-center text-white/50">No hay facturas hoy</td>
+                    <td colSpan={convertToDOP ? 7 : 6} className="py-8 text-center text-white/50">No hay facturas para esta fecha</td>
                   </tr>
-                ) : todayInvoices.map(inv => {
+                ) : selectedInvoices.map(inv => {
                   const cur = inv.currency || 'USD';
                   return (
                     <tr key={inv.id} className="border-b border-white/5 hover:bg-black/10">
@@ -1144,7 +1255,7 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
             disabled={closingDay}
             className="w-full mb-3 py-3 rounded-2xl font-medium text-sm transition-all bg-[#DC2626] text-white hover:bg-[#b91c1c] disabled:opacity-60"
           >
-            {closingDay ? 'Registrando cierre...' : 'Cerrar dia y descargar resumen'}
+            {closingDay ? 'Registrando cierre...' : existingClosure ? 'Actualizar cierre y descargar resumen' : 'Cerrar dia y descargar resumen'}
           </button>
           <button
             onClick={() => setConvertToDOP(!convertToDOP)}
@@ -1160,11 +1271,11 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
 
         {/* Summary Card */}
         <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20">
-          <h3 className="text-white font-semibold mb-4">Resumen del Dia</h3>
+          <h3 className="text-white font-semibold mb-4">Resumen de la Fecha</h3>
           <div className="space-y-3">
             <div className="p-4 bg-[#DC2626]/20 rounded-2xl">
               <p className="text-white/70 text-xs mb-1">Total Facturas</p>
-              <p className="text-white text-2xl font-bold">{todayInvoices.length}</p>
+              <p className="text-white text-2xl font-bold">{selectedInvoices.length}</p>
             </div>
 
             {Object.entries(byCurrency).map(([cur, data]) => (
@@ -1191,8 +1302,8 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
             <div className="p-4 bg-black/15 rounded-2xl">
               <p className="text-white/70 text-xs mb-1">Ticket Promedio</p>
               <p className="text-white text-xl font-bold">
-                {todayInvoices.length > 0
-                  ? `US$ ${(todayInvoices.filter(i => (i.currency || 'USD') === 'USD').reduce((s, i) => s + i.total, 0) / Math.max(1, todayInvoices.filter(i => (i.currency || 'USD') === 'USD').length)).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                {selectedInvoices.length > 0
+                  ? `US$ ${(selectedInvoices.filter(i => (i.currency || 'USD') === 'USD').reduce((s, i) => s + i.total, 0) / Math.max(1, selectedInvoices.filter(i => (i.currency || 'USD') === 'USD').length)).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
                   : 'US$ 0.00'
                 }
               </p>
