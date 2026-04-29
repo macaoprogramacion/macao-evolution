@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 import { getPhotoSalesEvents } from "@/lib/photography-db"
 
@@ -98,16 +99,6 @@ const topProducts = [
 
 const COLORS = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fee2e2']
 
-// New users data
-const newUsers = [
-  { name: "Carlos Méndez", email: "carlos.mendez@email.com", phone: "+1 (809) 555-0123", date: "Hace 5 min", tours: 2 },
-  { name: "María García", email: "maria.garcia@email.com", phone: "+1 (809) 555-0456", date: "Hace 15 min", tours: 1 },
-  { name: "Juan Pérez", email: "juan.perez@email.com", phone: "+1 (809) 555-0789", date: "Hace 32 min", tours: 3 },
-  { name: "Ana Rodríguez", email: "ana.rodriguez@email.com", phone: "+1 (809) 555-0147", date: "Hace 1 hora", tours: 1 },
-  { name: "Luis Fernández", email: "luis.fernandez@email.com", phone: "+1 (809) 555-0258", date: "Hace 2 horas", tours: 2 },
-  { name: "Sofia Martínez", email: "sofia.martinez@email.com", phone: "+1 (809) 555-0369", date: "Hace 3 horas", tours: 1 },
-]
-
 // Canales de venta
 const salesChannels = [
   { name: "Macao Off Road", url: "macaooffroad.com", sales: 145, revenue: 18920, color: "#dc2626" },
@@ -117,16 +108,57 @@ const salesChannels = [
   { name: "GetYourGuide", url: "getyourguide.com", sales: 89, revenue: 11580, color: "#fee2e2" },
 ]
 
-// Recent sales
-const recentSales = [
-  { id: "ORD-1234", customer: "Carlos Méndez", tour: "Elite Family Experience", amount: "$200", status: "completed", time: "Hace 5 min", channel: "Macao Off Road" },
-  { id: "ORD-1233", customer: "María García", tour: "Flintstone Era", amount: "$85", status: "completed", time: "Hace 15 min", channel: "Viator" },
-  { id: "ORD-1232", customer: "Juan Pérez", tour: "THE COMBINED", amount: "$90", status: "pending", time: "Hace 30 min", channel: "GetYourGuide" },
-  { id: "ORD-1231", customer: "Ana Rodríguez", tour: "Apex Predator", amount: "$130", status: "completed", time: "Hace 1 hora", channel: "Caribe Buggy" },
-  { id: "ORD-1230", customer: "Luis Fernández", tour: "Elite Couple Experience", amount: "$160", status: "completed", time: "Hace 2 horas", channel: "Saona Island" },
-  { id: "ORD-1229", customer: "Emma Wilson", tour: "Apex Predator", amount: "$130", status: "completed", time: "Hace 3 horas", channel: "Viator" },
-  { id: "ORD-1228", customer: "Robert Johnson", tour: "ATV QUAD EXPERIENCE", amount: "$90", status: "completed", time: "Hace 4 horas", channel: "GetYourGuide" },
-]
+type PageKey = "all" | "macao-offroad" | "saona" | "caribe" | "macao-buggy" | "horseride"
+
+type RecentReservation = {
+  id: string
+  customer: string
+  email: string
+  phone: string
+  tour: string
+  amount: number
+  status: string
+  createdAt: string | null
+  channel: string
+  channelUrl: string
+  pageKey: Exclude<PageKey, "all">
+}
+
+const PAGE_LABELS: Record<Exclude<PageKey, "all">, string> = {
+  "macao-offroad": "Macao Offroad Experience",
+  saona: "Saona Island",
+  caribe: "Caribe Buggy",
+  "macao-buggy": "Macao Buggy",
+  horseride: "Punta Cana Horseride",
+}
+
+function getPageFromReservation(channel: string, channelUrl: string): Exclude<PageKey, "all"> {
+  const key = `${channel || ""} ${channelUrl || ""}`.toLowerCase()
+  if (key.includes("saona")) return "saona"
+  if (key.includes("caribe")) return "caribe"
+  if (key.includes("horse") || key.includes("horseride")) return "horseride"
+  if (key.includes("macao") && key.includes("buggy")) return "macao-buggy"
+  return "macao-offroad"
+}
+
+function formatOrderId(rawId: string) {
+  if (!rawId) return "—"
+  if (rawId.toUpperCase().startsWith("ORD-")) return rawId
+  return `RES-${rawId.slice(0, 8).toUpperCase()}`
+}
+
+function formatRelativeTime(ts: string | null) {
+  if (!ts) return "—"
+  const date = new Date(ts)
+  if (Number.isNaN(date.getTime())) return "—"
+  const diffMins = Math.floor((Date.now() - date.getTime()) / 60000)
+  if (diffMins < 1) return "Justo ahora"
+  if (diffMins < 60) return `Hace ${diffMins} min`
+  const hours = Math.floor(diffMins / 60)
+  if (hours < 24) return `Hace ${hours} hora${hours > 1 ? "s" : ""}`
+  const days = Math.floor(hours / 24)
+  return `Hace ${days} dia${days > 1 ? "s" : ""}`
+}
 
 const normalizeCurrencyCode = (currency: unknown) => {
   const cur = String(currency || "USD").toUpperCase()
@@ -175,6 +207,102 @@ export default function Dashboard() {
   const [photoEvents, setPhotoEvents] = useState<any[]>([])
   const [portfolioRows, setPortfolioRows] = useState<any[]>([])
   const [webSlideIndex, setWebSlideIndex] = useState(0)
+  const [recentReservations, setRecentReservations] = useState<RecentReservation[]>([])
+  const [recentPageFilter, setRecentPageFilter] = useState<PageKey>("macao-offroad")
+  const [newClientPageFilter, setNewClientPageFilter] = useState<PageKey>("macao-offroad")
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadRecentReservations() {
+      const { data, error } = await supabase
+        .from("reservations")
+        .select("id, customer_name, email, phone, experience, amount, status, created_at, channel, channel_url")
+        .order("created_at", { ascending: false })
+        .limit(200)
+
+      if (error || !Array.isArray(data) || cancelled) {
+        if (!cancelled) setRecentReservations([])
+        return
+      }
+
+      const mapped: RecentReservation[] = data.map((row: any) => {
+        const pageKey = getPageFromReservation(String(row.channel || ""), String(row.channel_url || ""))
+        return {
+          id: String(row.id || ""),
+          customer: String(row.customer_name || "Cliente"),
+          email: String(row.email || "").trim(),
+          phone: String(row.phone || "").trim(),
+          tour: String(row.experience || "Tour"),
+          amount: Number(row.amount || 0),
+          status: String(row.status || "pending").toLowerCase(),
+          createdAt: row.created_at || null,
+          channel: String(row.channel || "website"),
+          channelUrl: String(row.channel_url || ""),
+          pageKey,
+        }
+      })
+
+      if (!cancelled) setRecentReservations(mapped)
+    }
+
+    loadRecentReservations()
+    const interval = setInterval(loadRecentReservations, 15000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [])
+
+  const filteredRecentReservations = useMemo(() => {
+    if (recentPageFilter === "all") return recentReservations
+    return recentReservations.filter((row) => row.pageKey === recentPageFilter)
+  }, [recentPageFilter, recentReservations])
+
+  const newWebClients = useMemo(() => {
+    const scopedRows = newClientPageFilter === "all"
+      ? recentReservations
+      : recentReservations.filter((row) => row.pageKey === newClientPageFilter)
+
+    const byClient = new Map<string, { name: string; email: string; phone: string; tours: number; latestTs: string | null }>()
+
+    scopedRows.forEach((row) => {
+      const key = (row.email || row.phone || row.customer).toLowerCase()
+      if (!key) return
+
+      const prev = byClient.get(key)
+      if (!prev) {
+        byClient.set(key, {
+          name: row.customer || "Cliente",
+          email: row.email || "—",
+          phone: row.phone || "—",
+          tours: 1,
+          latestTs: row.createdAt,
+        })
+        return
+      }
+
+      const nextLatest = (() => {
+        if (!prev.latestTs) return row.createdAt
+        if (!row.createdAt) return prev.latestTs
+        return new Date(row.createdAt) > new Date(prev.latestTs) ? row.createdAt : prev.latestTs
+      })()
+
+      byClient.set(key, {
+        ...prev,
+        tours: prev.tours + 1,
+        latestTs: nextLatest,
+      })
+    })
+
+    return Array.from(byClient.values())
+      .sort((a, b) => {
+        const da = a.latestTs ? new Date(a.latestTs).getTime() : 0
+        const db = b.latestTs ? new Date(b.latestTs).getTime() : 0
+        return db - da
+      })
+      .slice(0, 50)
+  }, [newClientPageFilter, recentReservations])
 
   useEffect(() => {
     let cancelled = false
@@ -299,55 +427,46 @@ export default function Dashboard() {
 
   const webSlides = useMemo(() => {
     const webKeys = [
+      { key: "macao-offroad", name: "Macao Offroad", ready: true },
       { key: "saona", name: "Saona Island" },
       { key: "caribe", name: "Caribe Buggy" },
       { key: "macao", name: "Macao Buggy" },
       { key: "horseride", name: "Punta Cana Horseride" },
     ]
 
-    const channelRevenueByWeb: Record<string, number> = {
-      saona: 0,
-      caribe: 0,
-      macao: 0,
-      horseride: 0,
-    }
-
-    salesChannels.forEach((channel) => {
-      const keyName = String(channel.name || "").toLowerCase()
-      if (keyName.includes("saona")) channelRevenueByWeb.saona += Number(channel.revenue || 0)
-      else if (keyName.includes("caribe")) channelRevenueByWeb.caribe += Number(channel.revenue || 0)
-      else if (keyName.includes("macao")) channelRevenueByWeb.macao += Number(channel.revenue || 0)
-      else if (keyName.includes("horse") || keyName.includes("horseride")) channelRevenueByWeb.horseride += Number(channel.revenue || 0)
-    })
-
-    const soldPortfolioByWeb: Record<string, number> = {
-      saona: 0,
-      caribe: 0,
-      macao: 0,
-      horseride: 0,
-    }
-
-    portfolioRows.forEach((p) => {
-      const status = String(p.status || "").toLowerCase()
-      if (!(status === "vendido" || status === "descargado")) return
-      const source = String(p.source || "").toLowerCase()
-      if (source.includes("saona")) soldPortfolioByWeb.saona += 1
-      else if (source.includes("caribe")) soldPortfolioByWeb.caribe += 1
-      else if (source.includes("macao")) soldPortfolioByWeb.macao += 1
-      else if (source.includes("horse") || source.includes("horseride")) soldPortfolioByWeb.horseride += 1
-    })
+    // Policy for current stage: keep web circles in zero until web sales go live.
+    const forceZeroWebSales = true
 
     return webKeys.map((web) => {
-      const tours = channelRevenueByWeb[web.key]
-      const portfolios = soldPortfolioByWeb[web.key]
+      let tours = 0
+      let portfolios = 0
+
+      if (!forceZeroWebSales) {
+        const soldFromWeb = portfolioRows.filter((p) => {
+          const status = String(p.status || "").toLowerCase()
+          if (!(status === "vendido" || status === "descargado")) return false
+          const source = String(p.source || "").toLowerCase()
+          return source.includes(String(web.key).replace("-", ""))
+        }).length
+        portfolios = soldFromWeb
+      }
+
+      const hasSales = tours + portfolios > 0
       return {
         ...web,
         totalTours: tours,
         soldPortfolios: portfolios,
-        pieData: [
-          { name: "Tours", value: tours, color: "#dc2626" },
-          { name: "Portafolios", value: portfolios, color: "#f87171" },
-        ],
+        hasSales,
+        pieData: hasSales
+          ? [
+              { name: "Tours", value: tours, color: "#dc2626" },
+              { name: "Portafolios", value: portfolios, color: "#f87171" },
+            ]
+          : [
+              { name: "Sin ventas", value: 1, color: "#e5e7eb" },
+              { name: "Tours", value: 0, color: "#dc2626" },
+              { name: "Portafolios", value: 0, color: "#f87171" },
+            ],
       }
     })
   }, [portfolioRows])
@@ -466,10 +585,20 @@ export default function Dashboard() {
                   <CardDescription>Últimas transacciones y reservas de tours</CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm">
-                    <Filter className="w-4 h-4 mr-2" />
-                    Filtrar
-                  </Button>
+                  <Select value={recentPageFilter} onValueChange={(value) => setRecentPageFilter(value as PageKey)}>
+                    <SelectTrigger className="w-[230px] h-9">
+                      <Filter className="w-4 h-4 mr-2" />
+                      <SelectValue placeholder="Filtrar por pagina" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas las paginas</SelectItem>
+                      <SelectItem value="macao-offroad">Macao Offroad Experience</SelectItem>
+                      <SelectItem value="saona">Saona Island</SelectItem>
+                      <SelectItem value="caribe">Caribe Buggy</SelectItem>
+                      <SelectItem value="macao-buggy">Macao Buggy</SelectItem>
+                      <SelectItem value="horseride">Punta Cana Horseride</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </CardHeader>
@@ -488,18 +617,24 @@ export default function Dashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recentSales.map((sale) => (
+                  {filteredRecentReservations.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                        No hay reservas para el filtro seleccionado.
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredRecentReservations.map((sale) => (
                     <TableRow key={sale.id} className="hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800">
-                      <TableCell className="font-mono text-sm">{sale.id}</TableCell>
+                      <TableCell className="font-mono text-sm">{formatOrderId(sale.id)}</TableCell>
                       <TableCell className="font-medium">{sale.customer}</TableCell>
                       <TableCell className="text-gray-600 dark:text-gray-400 dark:text-gray-400">{sale.tour}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="bg-red-100 text-red-700">
                           <Globe className="w-3 h-3 mr-1" />
-                          {sale.channel}
+                          {PAGE_LABELS[sale.pageKey]}
                         </Badge>
                       </TableCell>
-                      <TableCell className="font-semibold text-red-600">{sale.amount}</TableCell>
+                      <TableCell className="font-semibold text-red-600">{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(sale.amount || 0)}</TableCell>
                       <TableCell>
                         {sale.status === "completed" && (
                           <Badge variant="secondary" className="bg-green-100 text-green-700">
@@ -507,14 +642,14 @@ export default function Dashboard() {
                             Completado
                           </Badge>
                         )}
-                        {sale.status === "pending" && (
+                        {sale.status !== "completed" && (
                           <Badge variant="secondary" className="bg-yellow-100 text-yellow-700">
                             <Calendar className="w-3 h-3 mr-1" />
                             Pendiente
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-gray-600 dark:text-gray-400 dark:text-gray-400">{sale.time}</TableCell>
+                      <TableCell className="text-gray-600 dark:text-gray-400 dark:text-gray-400">{formatRelativeTime(sale.createdAt)}</TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -544,12 +679,28 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-lg font-semibold">Nuevos Clientes</CardTitle>
-                  <CardDescription>Usuarios registrados recientemente</CardDescription>
+                  <CardDescription>Usuarios registrados recientemente desde paginas web</CardDescription>
                 </div>
-                <Button variant="outline" size="sm">
-                  <Download className="w-4 h-4 mr-2" />
-                  Exportar Lista
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Select value={newClientPageFilter} onValueChange={(value) => setNewClientPageFilter(value as PageKey)}>
+                    <SelectTrigger className="w-[230px] h-9">
+                      <Filter className="w-4 h-4 mr-2" />
+                      <SelectValue placeholder="Filtrar por pagina" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas las paginas</SelectItem>
+                      <SelectItem value="macao-offroad">Macao Offroad Experience</SelectItem>
+                      <SelectItem value="saona">Saona Island</SelectItem>
+                      <SelectItem value="caribe">Caribe Buggy</SelectItem>
+                      <SelectItem value="macao-buggy">Macao Buggy</SelectItem>
+                      <SelectItem value="horseride">Punta Cana Horseride</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="sm">
+                    <Download className="w-4 h-4 mr-2" />
+                    Exportar Lista
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -565,8 +716,14 @@ export default function Dashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {newUsers.map((user, index) => (
-                    <TableRow key={index} className="hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800">
+                  {newWebClients.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                        No hay clientes web para el filtro seleccionado.
+                      </TableCell>
+                    </TableRow>
+                  ) : newWebClients.map((user, index) => (
+                    <TableRow key={`${user.email}-${user.phone}-${index}`} className="hover:bg-gray-50 dark:bg-gray-900 dark:hover:bg-gray-800">
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="w-8 h-8 bg-red-100">
@@ -580,13 +737,13 @@ export default function Dashboard() {
                       <TableCell>
                         <div className="flex items-center gap-2 text-gray-600">
                           <Mail className="w-3 h-3" />
-                          {user.email}
+                          {user.email || "—"}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2 text-gray-600">
                           <Phone className="w-3 h-3" />
-                          {user.phone}
+                          {user.phone || "—"}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -594,7 +751,7 @@ export default function Dashboard() {
                           {user.tours} {user.tours === 1 ? "tour" : "tours"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-gray-600 dark:text-gray-400 dark:text-gray-400">{user.date}</TableCell>
+                      <TableCell className="text-gray-600 dark:text-gray-400 dark:text-gray-400">{formatRelativeTime(user.latestTs)}</TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -668,7 +825,9 @@ export default function Dashboard() {
                   </Button>
                 </div>
               </div>
-              <CardDescription>{selectedWebSlide?.name || "Saona Island"}</CardDescription>
+              <CardDescription>
+                {selectedWebSlide?.name || "Macao Offroad"} · {selectedWebSlide?.ready ? "Lista" : "No lista"}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-48 sm:h-56 lg:h-64">
@@ -693,12 +852,15 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               </div>
               <div className="mt-4 space-y-2">
-                {(selectedWebSlide?.pieData || []).map((item, index) => (
+                {(selectedWebSlide?.pieData || []).filter((item) => item.name !== "Sin ventas").map((item, index) => (
                   <div key={index} className="flex items-center gap-2 text-xs">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color || COLORS[index] }}></div>
                     <span className="text-gray-600 dark:text-gray-400 dark:text-gray-400">{item.name}: {item.value.toLocaleString()}</span>
                   </div>
                 ))}
+                <p className={`text-xs font-medium pt-2 ${selectedWebSlide?.hasSales ? "text-green-600" : "text-amber-600"}`}>
+                  Estado: {selectedWebSlide?.hasSales ? "Con ventas" : "Sin ventas"}
+                </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 pt-2">Incluye ventas de tours y portafolios vendidos por web.</p>
               </div>
             </CardContent>
