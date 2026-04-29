@@ -101,8 +101,8 @@ const sidebarItems = [
   { id: 'usuario', icon: User, label: 'Usuario' },
   { id: 'devolucion', icon: RotateCcw, label: 'Devolucion' },
   { id: 'turnos', icon: Clock, label: 'Ventas por Turno' },
-  { id: 'cierre-turno', icon: ClipboardList, label: 'Cierre Turno' },
-  { id: 'cierre-dia', icon: Sun, label: 'Cierre del Dia' },
+  { id: 'cierre-turno', icon: ClipboardList, label: 'Resumen Turno' },
+  { id: 'cierre-dia', icon: Sun, label: 'Historial Cierres' },
 ];
 
 // Usuario Panel Component
@@ -884,6 +884,7 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
   const [convertToDOP, setConvertToDOP] = useState(false);
   const [dailyClosures, setDailyClosures] = useState([]);
   const [selectedClosureDate, setSelectedClosureDate] = useState(todayKey);
+  const [historySearchDate, setHistorySearchDate] = useState('');
 
   useEffect(() => {
     getPhotoExchangeRates().then(setRates);
@@ -893,7 +894,7 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
     async function loadClosures() {
       const { data } = await supabase
         .from('photo_daily_closures')
-        .select('closure_date, closed_by, closed_at, total_invoices')
+        .select('closure_date, closed_by, closed_at, total_invoices, by_currency')
         .order('closure_date', { ascending: false })
         .limit(180);
       setDailyClosures(Array.isArray(data) ? data : []);
@@ -930,6 +931,10 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
 
   const selectedDateLabel = formatDayLabel(selectedClosureDate);
   const existingClosure = dailyClosures.find((c) => String(c.closure_date || '').slice(0, 10) === selectedClosureDate) || null;
+  const filteredClosures = dailyClosures.filter((c) => {
+    if (!historySearchDate) return true;
+    return String(c.closure_date || '').slice(0, 10) === historySearchDate;
+  });
 
   // Group by currency
   const byCurrency = {};
@@ -970,6 +975,16 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
   const totalAllInDOP = Object.entries(byCurrency).reduce((sum, [cur, data]) => sum + toDOP(data.total, cur), 0);
 
   const turnoTimes = { 'Turno 9:00': '9:00 AM', 'Turno 12:00': '12:00 PM', 'Turno 3:00': '3:00 PM' };
+
+  const getClosureTotalByCurrency = (closure, currencyCode) => {
+    const bucket = closure?.by_currency?.[currencyCode];
+    return Number(bucket?.total || 0);
+  };
+
+  const getClosureGrandTotal = (closure) => {
+    const byCurrencyRow = closure?.by_currency || {};
+    return Object.values(byCurrencyRow).reduce((sum, row) => sum + Number(row?.total || 0), 0);
+  };
 
   const handleCloseAndDownload = async () => {
     if (selectedInvoices.length === 0) {
@@ -1044,12 +1059,12 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
     <div className="flex-1 flex flex-col lg:flex-row gap-6">
       <div className="flex-1 flex flex-col">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="font-title text-3xl lg:text-4xl text-white">Cierre del Dia</h1>
+          <h1 className="font-title text-3xl lg:text-4xl text-white">Historial de Cierres y Ventas</h1>
           <p className="text-white/50 text-sm">{selectedDateLabel}</p>
         </div>
 
         <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-4 border border-white/20 mb-6">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3 items-end">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-3 items-end">
             <div>
               <label className="block text-white/60 text-xs mb-1.5">Fecha a cerrar</label>
               <select
@@ -1068,6 +1083,17 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
                 )}
               </select>
             </div>
+
+            <div>
+              <label className="block text-white/60 text-xs mb-1.5">Buscar historial por día</label>
+              <input
+                type="date"
+                value={historySearchDate}
+                onChange={(e) => setHistorySearchDate(e.target.value)}
+                className="w-full px-4 py-2.5 bg-black/30 rounded-2xl border border-white/20 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#DC2626]/30"
+              />
+            </div>
+
             {existingClosure ? (
               <span className="inline-flex items-center rounded-xl px-3 py-2 text-xs font-semibold bg-emerald-500/20 text-emerald-300">
                 Cierre ya registrado
@@ -1247,6 +1273,91 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20 mt-6 overflow-hidden">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-white font-semibold">Historial de Cierres Registrados</h3>
+            {historySearchDate && (
+              <button
+                onClick={() => setHistorySearchDate('')}
+                className="text-xs px-3 py-1.5 rounded-xl bg-white/10 text-white/70 hover:bg-white/20 transition-colors"
+              >
+                Limpiar filtro
+              </button>
+            )}
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-white/70 text-xs border-b border-white/10">
+                  <th className="text-left py-3 px-2">Fecha</th>
+                  <th className="text-right py-3 px-2">Facturas</th>
+                  <th className="text-right py-3 px-2">USD</th>
+                  <th className="text-right py-3 px-2">EUR</th>
+                  <th className="text-right py-3 px-2">DOP</th>
+                  <th className="text-right py-3 px-2">Total Ref.</th>
+                  <th className="text-left py-3 px-2">Cerrado por</th>
+                  <th className="text-left py-3 px-2">Hora cierre</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredClosures.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-white/50">No hay cierres para el filtro actual</td>
+                  </tr>
+                ) : filteredClosures.map((closure) => {
+                  const dayKey = String(closure.closure_date || '').slice(0, 10);
+                  const isSelected = dayKey === selectedClosureDate;
+                  return (
+                    <tr key={`${dayKey}-${closure.closed_at || 'no-time'}`} className={`border-b border-white/5 hover:bg-black/10 ${isSelected ? 'bg-white/5' : ''}`}>
+                      <td className="py-3 px-2 text-white text-sm">{formatDayLabel(dayKey)}</td>
+                      <td className="py-3 px-2 text-right text-white text-sm">{closure.total_invoices || 0}</td>
+                      <td className="py-3 px-2 text-right text-white/80 text-sm">{fmtMoney(getClosureTotalByCurrency(closure, 'USD'), 'USD')}</td>
+                      <td className="py-3 px-2 text-right text-white/80 text-sm">{fmtMoney(getClosureTotalByCurrency(closure, 'EUR'), 'EUR')}</td>
+                      <td className="py-3 px-2 text-right text-white/80 text-sm">{fmtMoney(getClosureTotalByCurrency(closure, 'DOP'), 'DOP')}</td>
+                      <td className="py-3 px-2 text-right text-white text-sm">{fmtMoney(getClosureGrandTotal(closure), 'USD')}</td>
+                      <td className="py-3 px-2 text-white/70 text-sm">{closure.closed_by || 'Sin usuario'}</td>
+                      <td className="py-3 px-2 text-white/70 text-sm">{closure.closed_at ? new Date(closure.closed_at).toLocaleString('es-DO') : '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20 mt-6 overflow-hidden">
+          <h3 className="text-white font-semibold mb-4">Devoluciones de la Fecha Seleccionada</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-white/70 text-xs border-b border-white/10">
+                  <th className="text-left py-3 px-2">Factura</th>
+                  <th className="text-left py-3 px-2">Cliente</th>
+                  <th className="text-left py-3 px-2">Motivo</th>
+                  <th className="text-left py-3 px-2">Estado</th>
+                  <th className="text-right py-3 px-2">Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedReturns.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-white/50">No hay devoluciones para esta fecha</td>
+                  </tr>
+                ) : selectedReturns.map((ret) => (
+                  <tr key={ret.id} className="border-b border-white/5 hover:bg-black/10">
+                    <td className="py-3 px-2 text-white text-sm">{ret.invoice || ret.invoiceNumber || '—'}</td>
+                    <td className="py-3 px-2 text-white text-sm">{ret.client || ret.clientName || 'Cliente General'}</td>
+                    <td className="py-3 px-2 text-white/70 text-sm">{ret.reason || 'Sin motivo'}</td>
+                    <td className="py-3 px-2 text-white/70 text-sm">{ret.status || 'pendiente'}</td>
+                    <td className="py-3 px-2 text-right text-white text-sm">{fmtMoney(ret.amount || 0, 'USD')}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
