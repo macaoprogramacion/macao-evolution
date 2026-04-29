@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import * as XLSX from 'xlsx';
 import DashboardAuthGate from '@/components/photographer/DashboardAuthGate';
 import {
   FileText,
@@ -970,40 +971,6 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
 
   const turnoTimes = { 'Turno 9:00': '9:00 AM', 'Turno 12:00': '12:00 PM', 'Turno 3:00': '3:00 PM' };
 
-  const buildClosureReport = () => {
-    const lines = [];
-    lines.push('MACAO - CIERRE DEL DIA');
-    lines.push(`Fecha: ${selectedDateLabel}`);
-    lines.push(`Facturas: ${selectedInvoices.length}`);
-    lines.push(`ITBIS en facturas nuevas: ${taxEnabled ? 'ACTIVO' : 'DESACTIVADO'}`);
-    if (existingClosure) {
-      lines.push(`Estado de cierre previo: YA EXISTIA (${existingClosure.closed_by || 'sin usuario'})`);
-    }
-    lines.push('');
-    lines.push('RESUMEN POR MONEDA');
-    Object.entries(byCurrency).forEach(([cur, data]) => {
-      lines.push(`${cur} -> Facturas: ${data.count}, Subtotal: ${fmtMoney(data.subtotal, cur)}, ITBIS: ${fmtMoney(data.tax, cur)}, Total: ${fmtMoney(data.total, cur)}`);
-    });
-    lines.push('');
-    lines.push('VENTAS POR TURNO');
-    ['Turno 9:00', 'Turno 12:00', 'Turno 3:00'].forEach((turno) => {
-      const data = byTurno[turno] || { total: 0, count: 0 };
-      lines.push(`${turno} (${turnoTimes[turno]}): ${data.count} factura(s), Total ${fmtMoney(data.total, 'USD')}`);
-    });
-    lines.push('');
-    lines.push('DETALLE DE FACTURAS');
-    selectedInvoices.forEach((inv) => {
-      const items = (inv.items || []).map((it) => `${it.quantity}x ${it.name}`).join(', ');
-      lines.push(`${inv.invoiceNumber} | ${inv.clientName} | ${inv.turno} | ${inv.currency} ${inv.total.toFixed(2)} | ${new Date(inv.timestamp).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}`);
-      lines.push(`  Items: ${items || 'Sin items'}`);
-    });
-    lines.push('');
-    lines.push(`Devoluciones aprobadas: US$ ${returnsTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`);
-    lines.push(`Total equivalente DOP: RD$ ${totalAllInDOP.toLocaleString('en-US', { minimumFractionDigits: 2 })}`);
-
-    return lines.join('\n');
-  };
-
   const handleCloseAndDownload = async () => {
     if (selectedInvoices.length === 0) {
       alert('No hay facturas en la fecha seleccionada para cerrar.');
@@ -1021,16 +988,56 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
       return;
     }
 
-    const report = buildClosureReport();
-    const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `cierre-dia-${selectedClosureDate}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const workbook = XLSX.utils.book_new();
+
+    const summaryRows = [
+      { Campo: 'Fecha', Valor: selectedDateLabel },
+      { Campo: 'Facturas', Valor: selectedInvoices.length },
+      { Campo: 'ITBIS en facturas nuevas', Valor: taxEnabled ? 'ACTIVO' : 'DESACTIVADO' },
+      { Campo: 'Estado de cierre previo', Valor: existingClosure ? 'YA EXISTIA' : 'PENDIENTE' },
+      { Campo: 'Devoluciones aprobadas (USD)', Valor: Number(returnsTotal.toFixed(2)) },
+      { Campo: 'Total equivalente DOP', Valor: Number(totalAllInDOP.toFixed(2)) },
+    ];
+
+    Object.entries(byCurrency).forEach(([cur, data]) => {
+      summaryRows.push({ Campo: `Total ${cur}`, Valor: Number((data?.total || 0).toFixed(2)) });
+      summaryRows.push({ Campo: `Subtotal ${cur}`, Valor: Number((data?.subtotal || 0).toFixed(2)) });
+      summaryRows.push({ Campo: `ITBIS ${cur}`, Valor: Number((data?.tax || 0).toFixed(2)) });
+      summaryRows.push({ Campo: `Facturas ${cur}`, Valor: data?.count || 0 });
+    });
+
+    const turnoRows = ['Turno 9:00', 'Turno 12:00', 'Turno 3:00'].map((turno) => {
+      const data = byTurno[turno] || { total: 0, count: 0, currencies: {} };
+      return {
+        Turno: turno,
+        Facturas: data.count || 0,
+        Total_USD_Ref: Number((data.total || 0).toFixed(2)),
+        USD: Number((data.currencies?.USD || 0).toFixed(2)),
+        EUR: Number((data.currencies?.EUR || 0).toFixed(2)),
+        DOP: Number((data.currencies?.DOP || 0).toFixed(2)),
+      };
+    });
+
+    const invoiceRows = selectedInvoices.map((inv) => ({
+      Factura: inv.invoiceNumber,
+      Cliente: inv.clientName,
+      Telefono: inv.clientPhone || '',
+      Turno: inv.turno || 'Turno 9:00',
+      Moneda: inv.currency || 'USD',
+      Subtotal: Number((inv.subtotal || 0).toFixed(2)),
+      ITBIS: Number((inv.tax || 0).toFixed(2)),
+      Total: Number((inv.total || 0).toFixed(2)),
+      Equiv_DOP: Number((toDOP(inv.total || 0, inv.currency || 'USD') || 0).toFixed(2)),
+      Hora: new Date(inv.timestamp).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }),
+      Fotografo: inv.photographer || '',
+      Items: (inv.items || []).map((it) => `${it.quantity}x ${it.name}`).join(' | '),
+    }));
+
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryRows), 'Resumen');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(turnoRows), 'Turnos');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(invoiceRows), 'Facturas');
+
+    XLSX.writeFile(workbook, `cierre-dia-${selectedClosureDate}.xlsx`);
   };
 
   return (
