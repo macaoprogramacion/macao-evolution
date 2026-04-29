@@ -54,9 +54,6 @@ import {
 } from "@/components/ui/dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { supabase } from "@/lib/supabase"
-import {
-  calculateSalesByTurno,
-} from "@/lib/store"
 import { getPhotoSalesEvents } from "@/lib/photography-db"
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -94,6 +91,7 @@ interface PhotoSale {
   client_name?: string
   plan: string
   amount: number
+  currency?: string
   timestamp: string
   source?: string
 }
@@ -137,11 +135,53 @@ interface DailyClosure {
 }
 
 type ReturnDecision = "aprobada" | "rechazada"
+type CurrencyTotals = Record<string, { total: number; count: number }>
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function fmtMoney(amount: number, currency = "USD") {
   const symbols: Record<string, string> = { USD: "US$", EUR: "€", DOP: "RD$" }
   return `${symbols[currency] || "$"} ${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+}
+
+function normalizeCurrencyCode(currency?: string | null) {
+  return String(currency || "USD").toUpperCase() || "USD"
+}
+
+function accumulateCurrencyTotals<T>(
+  items: T[],
+  getAmount: (item: T) => number,
+  getCurrency: (item: T) => string | undefined,
+) {
+  return items.reduce<CurrencyTotals>((acc, item) => {
+    const currency = normalizeCurrencyCode(getCurrency(item))
+    const amount = Number(getAmount(item) || 0)
+    if (!acc[currency]) acc[currency] = { total: 0, count: 0 }
+    acc[currency].total += amount
+    acc[currency].count += 1
+    return acc
+  }, {})
+}
+
+function formatCurrencyTotals(totals: CurrencyTotals, emptyCurrency = "USD") {
+  const order = ["USD", "EUR", "DOP"]
+  const entries = Object.entries(totals)
+    .filter(([, data]) => Number(data?.total || 0) !== 0)
+    .sort(([a], [b]) => {
+      const aIndex = order.indexOf(a)
+      const bIndex = order.indexOf(b)
+      return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex)
+    })
+
+  if (entries.length === 0) return fmtMoney(0, emptyCurrency)
+  return entries.map(([currency, data]) => fmtMoney(data.total, currency)).join(" · ")
+}
+
+function buildAverageCurrencyTotals(totals: CurrencyTotals) {
+  return Object.entries(totals).reduce<CurrencyTotals>((acc, [currency, data]) => {
+    if (!data.count) return acc
+    acc[currency] = { total: data.total / data.count, count: data.count }
+    return acc
+  }, {})
 }
 
 function parseSafeDate(value?: string | null) {
@@ -316,6 +356,7 @@ export default function PhotographyPage() {
           client_name: ev.client_name || "",
           plan: ev.plan_name || ev.event_type,
           amount: Number.parseFloat(ev.amount) || 0,
+          currency: ev.currency || "USD",
           timestamp: ev.created_at || "",
           source: ev.source || ev.event_type,
         }))
@@ -485,19 +526,17 @@ export default function PhotographyPage() {
     // Invoices
     const activeInvoices = allInvoices.filter((i) => i.status !== "cancelled")
     const todayInvoices = activeInvoices.filter((i) => dayKeyFromInvoice(i) === todayKey)
-    const salesToday = todayInvoices.reduce((s, i) => s + i.total, 0)
-    const salesWeek = activeInvoices
-      .filter((i) => {
-        const date = parseSafeDate(i.timestamp)
-        return !!date && date >= weekAgo
-      })
-      .reduce((s, i) => s + i.total, 0)
-    const salesMonth = activeInvoices
-      .filter((i) => {
-        const date = parseSafeDate(i.timestamp)
-        return !!date && date >= monthAgo
-      })
-      .reduce((s, i) => s + i.total, 0)
+    const weekInvoices = activeInvoices.filter((i) => {
+      const date = parseSafeDate(i.timestamp)
+      return !!date && date >= weekAgo
+    })
+    const monthInvoices = activeInvoices.filter((i) => {
+      const date = parseSafeDate(i.timestamp)
+      return !!date && date >= monthAgo
+    })
+    const salesTodayByCurrency = accumulateCurrencyTotals(todayInvoices, (i) => i.total, (i) => i.currency)
+    const salesWeekByCurrency = accumulateCurrencyTotals(weekInvoices, (i) => i.total, (i) => i.currency)
+    const salesMonthByCurrency = accumulateCurrencyTotals(monthInvoices, (i) => i.total, (i) => i.currency)
 
     // Returns
     const approvedReturns = allReturns.filter(
@@ -508,13 +547,13 @@ export default function PhotographyPage() {
 
     // Photo sales events
     const onlinePurchaseEvents = photoSales.filter((ps) => ps.source === "online" || ps.source === "paypal")
-    const onlineSalesTotal = onlinePurchaseEvents.reduce((s, ps) => s + ps.amount, 0)
     const todayOnline = onlinePurchaseEvents.filter(
       (ps) => {
         return dayKeyFromInput(ps.timestamp) === todayKey
       }
     )
-    const onlineSalesToday = todayOnline.reduce((s, ps) => s + ps.amount, 0)
+    const onlineSalesTotalByCurrency = accumulateCurrencyTotals(onlinePurchaseEvents, (ps) => ps.amount, (ps) => ps.currency)
+    const onlineSalesTodayByCurrency = accumulateCurrencyTotals(todayOnline, (ps) => ps.amount, (ps) => ps.currency)
 
     // Portfolios
     const paidAtCashier = allPortfolios.filter(
@@ -537,22 +576,29 @@ export default function PhotographyPage() {
     })
 
     // By turno (today)
-    const turnoData = calculateSalesByTurno(todayInvoices)
+    const turnoData = ["Turno 9:00", "Turno 12:00", "Turno 3:00"].map((shift) => {
+      const shiftInvoices = todayInvoices.filter((inv) => (inv.turno || "Turno 9:00") === shift)
+      return {
+        shift,
+        sales: shiftInvoices.length,
+        byCurrency: accumulateCurrencyTotals(shiftInvoices, (inv) => inv.total, (inv) => inv.currency),
+      }
+    })
 
     // Ticket promedio
-    const ticketPromedio = todayInvoices.length > 0 ? salesToday / todayInvoices.length : 0
+    const ticketPromedioByCurrency = buildAverageCurrencyTotals(salesTodayByCurrency)
 
     return {
-      salesToday,
-      salesWeek,
-      salesMonth,
+      salesTodayByCurrency,
+      salesWeekByCurrency,
+      salesMonthByCurrency,
       invoicesToday: todayInvoices.length,
       totalInvoices: activeInvoices.length,
       returnsTotal,
       pendingReturnsCount: pendingReturns.length,
       totalReturnsCount: allReturns.length,
-      onlineSalesTotal,
-      onlineSalesToday,
+      onlineSalesTotalByCurrency,
+      onlineSalesTodayByCurrency,
       onlineSalesCount: onlinePurchaseEvents.length,
       paidAtCashier,
       purchasedOnWeb,
@@ -561,7 +607,7 @@ export default function PhotographyPage() {
       pendingPortfolios,
       byCurrency,
       turnoData,
-      ticketPromedio,
+      ticketPromedioByCurrency,
     }
   }, [allInvoices, allReturns, photoSales, allPortfolios])
 
@@ -618,7 +664,7 @@ export default function PhotographyPage() {
 
   // ─── Analytics: daily sales for chart ─────────────────────────
   const dailySales = useMemo(() => {
-    const map: Record<string, { date: string; cashier: number; online: number }> = {}
+    const map: Record<string, { date: string; cashier: CurrencyTotals; online: CurrencyTotals; cashierCount: number; onlineCount: number }> = {}
     const daysBack = 14
     const now = new Date()
 
@@ -627,7 +673,7 @@ export default function PhotographyPage() {
       d.setDate(d.getDate() - i)
       const key = toDayKey(d)
       const label = d.toLocaleDateString("es-DO", { day: "numeric", month: "short" })
-      map[key] = { date: label, cashier: 0, online: 0 }
+      map[key] = { date: label, cashier: {}, online: {}, cashierCount: 0, onlineCount: 0 }
     }
 
     allInvoices
@@ -636,7 +682,12 @@ export default function PhotographyPage() {
         const date = parseSafeDate(inv.timestamp)
         if (!date) return
         const key = toDayKey(date)
-        if (map[key]) map[key].cashier += inv.total
+        if (!map[key]) return
+        const currency = normalizeCurrencyCode(inv.currency)
+        if (!map[key].cashier[currency]) map[key].cashier[currency] = { total: 0, count: 0 }
+        map[key].cashier[currency].total += inv.total
+        map[key].cashier[currency].count += 1
+        map[key].cashierCount += 1
       })
 
     const chartEvents = photoSales.filter((ps) => ps.source === "online" || ps.source === "paypal")
@@ -644,7 +695,12 @@ export default function PhotographyPage() {
       const date = parseSafeDate(ps.timestamp)
       if (!date) return
       const key = toDayKey(date)
-      if (map[key]) map[key].online += ps.amount
+      if (!map[key]) return
+      const currency = normalizeCurrencyCode(ps.currency)
+      if (!map[key].online[currency]) map[key].online[currency] = { total: 0, count: 0 }
+      map[key].online[currency].total += ps.amount
+      map[key].online[currency].count += 1
+      map[key].onlineCount += 1
     })
 
     return Object.values(map)
@@ -725,7 +781,7 @@ export default function PhotographyPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500 dark:text-gray-400">Ventas Hoy</p>
-                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{fmtMoney(stats.salesToday)}</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrencyTotals(stats.salesTodayByCurrency)}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{stats.invoicesToday} facturas</p>
                     </div>
                     <div className="w-10 h-10 bg-green-100 dark:bg-green-950 rounded-lg flex items-center justify-center">
@@ -740,7 +796,7 @@ export default function PhotographyPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500 dark:text-gray-400">Ventas Online</p>
-                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{fmtMoney(stats.onlineSalesToday)}</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrencyTotals(stats.onlineSalesTodayByCurrency)}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{stats.onlineSalesCount} compras total</p>
                     </div>
                     <div className="w-10 h-10 bg-blue-100 dark:bg-blue-950 rounded-lg flex items-center justify-center">
@@ -839,13 +895,13 @@ export default function PhotographyPage() {
                 <CardContent>
                   <div className="space-y-4">
                     {stats.turnoData.map((t, i) => {
-                      const maxAmount = Math.max(...stats.turnoData.map((td) => td.amount), 1)
-                      const pct = (t.amount / maxAmount) * 100
+                      const maxSales = Math.max(...stats.turnoData.map((td) => td.sales), 1)
+                      const pct = (t.sales / maxSales) * 100
                       return (
                         <div key={i}>
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.shift}</span>
-                            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmtMoney(t.amount)}</span>
+                            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrencyTotals(t.byCurrency)}</span>
                           </div>
                           <div className="flex items-center gap-3">
                             <Progress value={pct} className="flex-1" />
@@ -870,28 +926,28 @@ export default function PhotographyPage() {
                         <Calendar className="w-4 h-4 text-gray-500" />
                         <span className="text-sm text-gray-700 dark:text-gray-300">Hoy</span>
                       </div>
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">{fmtMoney(stats.salesToday)}</span>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrencyTotals(stats.salesTodayByCurrency)}</span>
                     </div>
                     <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-gray-500" />
                         <span className="text-sm text-gray-700 dark:text-gray-300">Última Semana</span>
                       </div>
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">{fmtMoney(stats.salesWeek)}</span>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrencyTotals(stats.salesWeekByCurrency)}</span>
                     </div>
                     <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-gray-500" />
                         <span className="text-sm text-gray-700 dark:text-gray-300">Último Mes</span>
                       </div>
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">{fmtMoney(stats.salesMonth)}</span>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrencyTotals(stats.salesMonthByCurrency)}</span>
                     </div>
                     <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                       <div className="flex items-center gap-2">
                         <CreditCard className="w-4 h-4 text-gray-500" />
                         <span className="text-sm text-gray-700 dark:text-gray-300">Ticket Promedio</span>
                       </div>
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">{fmtMoney(stats.ticketPromedio)}</span>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrencyTotals(stats.ticketPromedioByCurrency)}</span>
                     </div>
                     {Object.entries(stats.byCurrency).map(([cur, data]) => (
                       <div key={cur} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -1270,7 +1326,7 @@ export default function PhotographyPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500 dark:text-gray-400">Ventas Hoy</p>
-                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{fmtMoney(stats.salesToday)}</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrencyTotals(stats.salesTodayByCurrency)}</p>
                     </div>
                     <TrendingUp className="w-5 h-5 text-green-500" />
                   </div>
@@ -1281,7 +1337,7 @@ export default function PhotographyPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500 dark:text-gray-400">Ventas Semanal</p>
-                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{fmtMoney(stats.salesWeek)}</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrencyTotals(stats.salesWeekByCurrency)}</p>
                     </div>
                     <TrendingUp className="w-5 h-5 text-green-500" />
                   </div>
@@ -1292,7 +1348,7 @@ export default function PhotographyPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500 dark:text-gray-400">Ventas Mensual</p>
-                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{fmtMoney(stats.salesMonth)}</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrencyTotals(stats.salesMonthByCurrency)}</p>
                     </div>
                     <TrendingUp className="w-5 h-5 text-green-500" />
                   </div>
@@ -1309,9 +1365,9 @@ export default function PhotographyPage() {
               <CardContent>
                 <div className="space-y-3">
                   {dailySales.map((day, i) => {
-                    const maxVal = Math.max(...dailySales.map((d) => d.cashier + d.online), 1)
-                    const cashierPct = (day.cashier / maxVal) * 100
-                    const onlinePct = (day.online / maxVal) * 100
+                    const maxVal = Math.max(...dailySales.map((d) => d.cashierCount + d.onlineCount), 1)
+                    const cashierPct = (day.cashierCount / maxVal) * 100
+                    const onlinePct = (day.onlineCount / maxVal) * 100
                     return (
                       <div key={i} className="flex items-center gap-3">
                         <span className="text-xs text-gray-500 dark:text-gray-400 w-16 text-right shrink-0">{day.date}</span>
@@ -1320,23 +1376,24 @@ export default function PhotographyPage() {
                             <div
                               className="bg-red-500 rounded-l-sm h-full"
                               style={{ width: `${cashierPct}%` }}
-                              title={`Caja: ${fmtMoney(day.cashier)}`}
+                              title={`Caja: ${formatCurrencyTotals(day.cashier)}`}
                             />
                           )}
                           {onlinePct > 0 && (
                             <div
                               className="bg-blue-500 rounded-r-sm h-full"
                               style={{ width: `${onlinePct}%` }}
-                              title={`Web: ${fmtMoney(day.online)}`}
+                              title={`Web: ${formatCurrencyTotals(day.online)}`}
                             />
                           )}
                           {cashierPct === 0 && onlinePct === 0 && (
                             <div className="bg-gray-100 dark:bg-gray-800 rounded-sm h-full w-full" />
                           )}
                         </div>
-                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 w-20 text-right shrink-0">
-                          {fmtMoney(day.cashier + day.online)}
-                        </span>
+                        <div className="w-56 shrink-0 text-right">
+                          <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Caja: {formatCurrencyTotals(day.cashier)}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Web: {formatCurrencyTotals(day.online)}</p>
+                        </div>
                       </div>
                     )
                   })}
@@ -1388,7 +1445,7 @@ export default function PhotographyPage() {
                             <TableCell className="text-xs">
                               <Badge variant="secondary" className="text-[10px]">{ps.plan}</Badge>
                             </TableCell>
-                            <TableCell className="text-xs text-right font-semibold">{fmtMoney(ps.amount)}</TableCell>
+                            <TableCell className="text-xs text-right font-semibold">{fmtMoney(ps.amount, ps.currency || "USD")}</TableCell>
                             <TableCell className="text-xs text-gray-500">{fmtDate(ps.timestamp)}</TableCell>
                           </TableRow>
                         ))
