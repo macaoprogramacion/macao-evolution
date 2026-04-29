@@ -55,6 +55,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { supabase } from "@/lib/supabase"
 import { getPhotoSalesEvents } from "@/lib/photography-db"
+import * as XLSX from "xlsx"
 
 // ─── Types ──────────────────────────────────────────────────────────
 interface Invoice {
@@ -739,13 +740,29 @@ export default function PhotographyPage() {
               <Camera className="w-5 h-5 text-red-600" />
             </div>
             <div>
-              <h1 className="text-2xl font-title text-gray-900 dark:text-gray-100">Fotografía</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Fotografía</h1>
               <p className="text-gray-500 dark:text-gray-400 text-sm">
                 Ventas, devoluciones y analíticas del departamento de fotografía
               </p>
             </div>
           </div>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={() => {
+            const rows = allInvoices.map((inv) => ({
+              "N° Factura": inv.invoiceNumber,
+              "Cliente": inv.clientName,
+              "Fotógrafo": inv.photographer,
+              "Turno": inv.turno || "",
+              "Moneda": inv.currency || "USD",
+              "Total": inv.total,
+              "Estado": inv.status,
+              "Fecha": inv.timestamp ? new Date(inv.timestamp).toLocaleString("es-DO") : "",
+            }))
+            const ws = XLSX.utils.json_to_sheet(rows)
+            const wb = XLSX.utils.book_new()
+            XLSX.utils.book_append_sheet(wb, ws, "Facturas")
+            const today = new Date().toISOString().slice(0, 10)
+            XLSX.writeFile(wb, `fotografia-facturas-${today}.xlsx`)
+          }}>
             <Download className="w-4 h-4 mr-2" />
             Exportar
           </Button>
@@ -917,28 +934,37 @@ export default function PhotographyPage() {
               <Card className="border-gray-200 dark:border-gray-800">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base font-semibold">Resumen Financiero</CardTitle>
-                  <CardDescription>Acumulados por período</CardDescription>
+                  <CardDescription>Acumulados por período · Hoy: {new Date().toLocaleDateString("es-DO", { day: "2-digit", month: "short", year: "numeric" })}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-gray-500" />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">Hoy</span>
+                        <div>
+                          <span className="text-sm text-gray-700 dark:text-gray-300">Hoy</span>
+                          <p className="text-[10px] text-gray-400">{new Date().toLocaleDateString("es-DO", { day: "2-digit", month: "short", year: "numeric" })}</p>
+                        </div>
                       </div>
                       <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrencyTotals(stats.salesTodayByCurrency)}</span>
                     </div>
                     <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-gray-500" />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">Última Semana</span>
+                        <div>
+                          <span className="text-sm text-gray-700 dark:text-gray-300">Última Semana</span>
+                          <p className="text-[10px] text-gray-400">{new Date(Date.now() - 7*86400000).toLocaleDateString("es-DO", { day: "2-digit", month: "short" })} – hoy</p>
+                        </div>
                       </div>
                       <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrencyTotals(stats.salesWeekByCurrency)}</span>
                     </div>
                     <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-gray-500" />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">Último Mes</span>
+                        <div>
+                          <span className="text-sm text-gray-700 dark:text-gray-300">Último Mes</span>
+                          <p className="text-[10px] text-gray-400">{new Date(new Date().setMonth(new Date().getMonth()-1)).toLocaleDateString("es-DO", { day: "2-digit", month: "short" })} – hoy</p>
+                        </div>
                       </div>
                       <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrencyTotals(stats.salesMonthByCurrency)}</span>
                     </div>
@@ -953,7 +979,7 @@ export default function PhotographyPage() {
                       <div key={cur} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                         <div className="flex items-center gap-2">
                           <DollarSign className="w-4 h-4 text-gray-500" />
-                          <span className="text-sm text-gray-700 dark:text-gray-300">Total en {cur}</span>
+                          <span className="text-sm text-gray-700 dark:text-gray-300">Histórico total en {cur}</span>
                           <Badge variant="secondary" className="text-[10px]">{data.count}</Badge>
                         </div>
                         <span className="font-semibold text-gray-900 dark:text-gray-100">{fmtMoney(data.total, cur)}</span>
