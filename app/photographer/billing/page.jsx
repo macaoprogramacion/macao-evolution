@@ -347,6 +347,7 @@ function DevolucionPanel({ invoices, returns, setReturns }) {
   // Build returnable list from invoices that are not already returned
   const returnedInvoiceNums = new Set(returns.map(r => r.invoice));
   const returnableInvoices = invoices.filter(i => !returnedInvoiceNums.has(i.invoiceNumber) && i.status !== 'cancelled');
+  const getInvoiceCurrency = (invoiceNumber) => invoices.find((i) => i.invoiceNumber === invoiceNumber)?.currency || 'USD';
 
   const filteredReturns = returns.filter(r => {
     if (!searchReturn.trim()) return true;
@@ -362,6 +363,7 @@ function DevolucionPanel({ invoices, returns, setReturns }) {
       invoice: inv.invoiceNumber,
       client: inv.clientName || 'Cliente General',
       amount: inv.total,
+      currency: inv.currency || 'USD',
       reason: newReturnReason || 'Sin motivo especificado',
       date: new Date().toLocaleDateString('es-DO'),
       status: 'pendiente',
@@ -382,7 +384,7 @@ function DevolucionPanel({ invoices, returns, setReturns }) {
       .eq('invoice_number', inv.invoiceNumber);
 
     setReturns((prev) => [ret, ...prev]);
-    logActivity('Devolucion creada', `${ret.invoice} — US$ ${ret.amount.toFixed(2)}`);
+    logActivity('Devolucion creada', `${ret.invoice} — ${fmtMoney(ret.amount, ret.currency)}`);
     setShowNewReturn(false);
     setNewReturnInvoice('');
     setNewReturnReason('');
@@ -456,7 +458,7 @@ function DevolucionPanel({ invoices, returns, setReturns }) {
                   className="w-full px-4 py-2.5 bg-black/30 rounded-2xl border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-[#EF4444]/30 text-sm">
                   <option value="">Seleccionar factura...</option>
                   {returnableInvoices.map(inv => (
-                    <option key={inv.id} value={inv.invoiceNumber}>{inv.invoiceNumber} — {inv.clientName} (US$ {inv.total.toFixed(2)})</option>
+                    <option key={inv.id} value={inv.invoiceNumber}>{inv.invoiceNumber} — {inv.clientName} ({fmtMoney(inv.total, inv.currency || 'USD')})</option>
                   ))}
                 </select>
               </div>
@@ -500,7 +502,7 @@ function DevolucionPanel({ invoices, returns, setReturns }) {
                   <td className="py-4 px-3 text-white text-sm font-medium">{ret.invoice}</td>
                   <td className="py-4 px-3 text-white text-sm">{ret.client}</td>
                   <td className="py-4 px-3 text-right text-[#DC2626] text-sm font-medium">
-                    US$ {ret.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    {fmtMoney(ret.amount, ret.currency || getInvoiceCurrency(ret.invoice))}
                   </td>
                   <td className="py-4 px-3 text-white/70 text-sm">{ret.reason}</td>
                   <td className="py-4 px-3 text-white/70 text-sm">{ret.date}</td>
@@ -2176,6 +2178,7 @@ export default function BillingPage() {
             invoice: ret.invoice_number,
             client: ret.client_name || 'Cliente General',
             amount: Number(ret.amount || 0),
+            currency: ret.currency || null,
             reason: ret.reason || '',
             date: new Date(ret.created_at || Date.now()).toLocaleDateString('es-DO'),
             status: ret.status || 'pendiente',

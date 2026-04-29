@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import {
   TrendingUp,
@@ -19,6 +19,8 @@ import {
   CheckCircle,
   Globe,
   ExternalLink,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, PieChart, Pie, Cell, BarChart, Bar } from "recharts"
 import { Button } from "@/components/ui/button"
@@ -35,6 +37,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
+import { supabase } from "@/lib/supabase"
+import { getPhotoSalesEvents } from "@/lib/photography-db"
 
 // Tours data
 const tours = [
@@ -124,8 +128,161 @@ const recentSales = [
   { id: "ORD-1228", customer: "Robert Johnson", tour: "ATV QUAD EXPERIENCE", amount: "$90", status: "completed", time: "Hace 4 horas", channel: "GetYourGuide" },
 ]
 
+const normalizeCurrencyCode = (currency: unknown) => {
+  const cur = String(currency || "USD").toUpperCase()
+  return cur === "US" ? "USD" : cur
+}
+
+const parseSafeDate = (value: unknown) => {
+  if (!value) return null
+  const date = new Date(String(value))
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+const toDayKey = (date: Date) => {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
+}
+
+const moneyByCurrency = (amountByCurrency: Record<string, number>) => {
+  const entries = Object.entries(amountByCurrency)
+    .filter(([, amount]) => amount > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+
+  if (entries.length === 0) return "US$ 0.00"
+
+  return entries
+    .map(([currency, amount]) => {
+      try {
+        return new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency,
+          minimumFractionDigits: 2,
+        }).format(amount)
+      } catch {
+        return `${currency} ${Number(amount).toFixed(2)}`
+      }
+    })
+    .join(" · ")
+}
+
 export default function Dashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState<"daily" | "weekly" | "monthly">("daily")
+  const [photoInvoices, setPhotoInvoices] = useState<any[]>([])
+  const [photoReturns, setPhotoReturns] = useState<any[]>([])
+  const [photoEvents, setPhotoEvents] = useState<any[]>([])
+  const [portfolioRows, setPortfolioRows] = useState<any[]>([])
+  const [webSlideIndex, setWebSlideIndex] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadPhotographyOverviewData() {
+      const [{ data: invRows }, { data: retRows }] = await Promise.all([
+        supabase
+          .from("photo_invoices")
+          .select("invoice_number, client_name, turno, total, currency, status, created_at")
+          .order("created_at", { ascending: false })
+          .limit(500),
+        supabase
+          .from("photo_returns")
+          .select("id, status, amount, created_at")
+          .order("created_at", { ascending: false })
+          .limit(500),
+      ])
+
+      if (!cancelled) {
+        setPhotoInvoices(Array.isArray(invRows) ? invRows : [])
+        setPhotoReturns(Array.isArray(retRows) ? retRows : [])
+      }
+
+      try {
+        const events = await getPhotoSalesEvents()
+        if (!cancelled) setPhotoEvents(Array.isArray(events) ? events : [])
+      } catch {
+        if (!cancelled) setPhotoEvents([])
+      }
+
+      try {
+        const res = await fetch("/api/portfolios?all=true", { cache: "no-store" })
+        const payload = await res.json()
+        if (!cancelled) setPortfolioRows(Array.isArray(payload?.portfolios) ? payload.portfolios : [])
+      } catch {
+        if (!cancelled) setPortfolioRows([])
+      }
+    }
+
+    loadPhotographyOverviewData()
+
+    const interval = setInterval(loadPhotographyOverviewData, 15000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [])
+
+  const photographyStats = useMemo(() => {
+    const todayKey = toDayKey(new Date())
+
+    const activeInvoices = photoInvoices.filter((inv) => String(inv.status || "active") !== "cancelled")
+    const todayInvoices = activeInvoices.filter((inv) => {
+      const parsed = parseSafeDate(inv.created_at)
+      return !!parsed && toDayKey(parsed) === todayKey
+    })
+
+    const approvedReturns = photoReturns.filter(
+      (ret) => ret.status === "aprobada" || ret.status === "procesada"
+    )
+    const pendingReturns = photoReturns.filter((ret) => ret.status === "pendiente")
+
+    const todaySalesByCurrency: Record<string, number> = {}
+    todayInvoices.forEach((inv) => {
+      const cur = normalizeCurrencyCode(inv.currency)
+      todaySalesByCurrency[cur] = (todaySalesByCurrency[cur] || 0) + Number(inv.total || 0)
+    })
+
+    const onlineTodayByCurrency: Record<string, number> = {}
+    photoEvents.forEach((event) => {
+      const source = String(event.source || "").toLowerCase()
+      if (!(source === "online" || source === "paypal")) return
+      const parsed = parseSafeDate(event.created_at)
+      if (!parsed || toDayKey(parsed) !== todayKey) return
+      const cur = normalizeCurrencyCode(event.currency)
+      onlineTodayByCurrency[cur] = (onlineTodayByCurrency[cur] || 0) + Number(event.amount || 0)
+    })
+
+    const todayByTurno: Record<string, { totalByCurrency: Record<string, number>; sales: number }> = {
+      "Turno 9:00": { totalByCurrency: {}, sales: 0 },
+      "Turno 12:00": { totalByCurrency: {}, sales: 0 },
+      "Turno 3:00": { totalByCurrency: {}, sales: 0 },
+    }
+
+    todayInvoices.forEach((inv) => {
+      const turno = String(inv.turno || "Turno 9:00")
+      if (!todayByTurno[turno]) todayByTurno[turno] = { totalByCurrency: {}, sales: 0 }
+      const cur = normalizeCurrencyCode(inv.currency)
+      todayByTurno[turno].totalByCurrency[cur] = (todayByTurno[turno].totalByCurrency[cur] || 0) + Number(inv.total || 0)
+      todayByTurno[turno].sales += 1
+    })
+
+    const maxTurnoSales = Math.max(
+      ...Object.values(todayByTurno).map((row) => Number(row.sales || 0)),
+      1
+    )
+
+    return {
+      todaySalesByCurrency,
+      onlineTodayByCurrency,
+      invoicesToday: todayInvoices.length,
+      approvedReturnsCount: approvedReturns.length,
+      pendingReturnsCount: pendingReturns.length,
+      todayByTurno,
+      recentInvoices: activeInvoices.slice(0, 5),
+      maxTurnoSales,
+    }
+  }, [photoEvents, photoInvoices, photoReturns])
 
   const getSalesData = () => {
     switch (selectedPeriod) {
@@ -139,6 +296,63 @@ export default function Dashboard() {
         return salesDataDaily
     }
   }
+
+  const webSlides = useMemo(() => {
+    const webKeys = [
+      { key: "saona", name: "Saona Island" },
+      { key: "caribe", name: "Caribe Buggy" },
+      { key: "macao", name: "Macao Buggy" },
+      { key: "horseride", name: "Punta Cana Horseride" },
+    ]
+
+    const channelRevenueByWeb: Record<string, number> = {
+      saona: 0,
+      caribe: 0,
+      macao: 0,
+      horseride: 0,
+    }
+
+    salesChannels.forEach((channel) => {
+      const keyName = String(channel.name || "").toLowerCase()
+      if (keyName.includes("saona")) channelRevenueByWeb.saona += Number(channel.revenue || 0)
+      else if (keyName.includes("caribe")) channelRevenueByWeb.caribe += Number(channel.revenue || 0)
+      else if (keyName.includes("macao")) channelRevenueByWeb.macao += Number(channel.revenue || 0)
+      else if (keyName.includes("horse") || keyName.includes("horseride")) channelRevenueByWeb.horseride += Number(channel.revenue || 0)
+    })
+
+    const soldPortfolioByWeb: Record<string, number> = {
+      saona: 0,
+      caribe: 0,
+      macao: 0,
+      horseride: 0,
+    }
+
+    portfolioRows.forEach((p) => {
+      const status = String(p.status || "").toLowerCase()
+      if (!(status === "vendido" || status === "descargado")) return
+      const source = String(p.source || "").toLowerCase()
+      if (source.includes("saona")) soldPortfolioByWeb.saona += 1
+      else if (source.includes("caribe")) soldPortfolioByWeb.caribe += 1
+      else if (source.includes("macao")) soldPortfolioByWeb.macao += 1
+      else if (source.includes("horse") || source.includes("horseride")) soldPortfolioByWeb.horseride += 1
+    })
+
+    return webKeys.map((web) => {
+      const tours = channelRevenueByWeb[web.key]
+      const portfolios = soldPortfolioByWeb[web.key]
+      return {
+        ...web,
+        totalTours: tours,
+        soldPortfolios: portfolios,
+        pieData: [
+          { name: "Tours", value: tours, color: "#dc2626" },
+          { name: "Portafolios", value: portfolios, color: "#f87171" },
+        ],
+      }
+    })
+  }, [portfolioRows])
+
+  const selectedWebSlide = webSlides[webSlideIndex] || webSlides[0]
 
   return (
     <DashboardLayout>
@@ -433,24 +647,45 @@ export default function Dashboard() {
           {/* Product Distribution Chart */}
           <Card className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
             <CardHeader className="pb-4">
-              <CardTitle className="text-lg font-semibold">Distribución de Ventas</CardTitle>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-lg font-semibold">Distribucion de Ventas de Paginas Webs</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setWebSlideIndex((prev) => (prev - 1 + webSlides.length) % webSlides.length)}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setWebSlideIndex((prev) => (prev + 1) % webSlides.length)}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+              <CardDescription>{selectedWebSlide?.name || "Saona Island"}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-48 sm:h-56 lg:h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={topProducts}
+                      data={selectedWebSlide?.pieData || []}
                       cx="50%"
                       cy="50%"
                       labelLine={false}
                       label={false}
                       outerRadius={80}
                       fill="#8884d8"
-                      dataKey="percentage"
+                      dataKey="value"
                     >
-                      {topProducts.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      {(selectedWebSlide?.pieData || []).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip />
@@ -458,12 +693,13 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               </div>
               <div className="mt-4 space-y-2">
-                {topProducts.slice(0, 3).map((product, index) => (
+                {(selectedWebSlide?.pieData || []).map((item, index) => (
                   <div key={index} className="flex items-center gap-2 text-xs">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index] }}></div>
-                    <span className="text-gray-600 dark:text-gray-400 dark:text-gray-400">{product.name}</span>
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color || COLORS[index] }}></div>
+                    <span className="text-gray-600 dark:text-gray-400 dark:text-gray-400">{item.name}: {item.value.toLocaleString()}</span>
                   </div>
                 ))}
+                <p className="text-xs text-gray-500 dark:text-gray-400 pt-2">Incluye ventas de tours y portafolios vendidos por web.</p>
               </div>
             </CardContent>
           </Card>
@@ -499,52 +735,6 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Live Stats */}
-          <Card className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg font-semibold">Estadísticas en Vivo</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                      <Eye className="w-5 h-5 text-red-600" />
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Visitantes Hoy</div>
-                      <div className="text-xl font-semibold text-gray-900">2,847</div>
-                    </div>
-                  </div>
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                      <Smartphone className="w-5 h-5 text-red-600" />
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Dispositivos Activos</div>
-                      <div className="text-xl font-semibold text-gray-900">34</div>
-                    </div>
-                  </div>
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                      <ShoppingCart className="w-5 h-5 text-red-600" />
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Ventas Hoy</div>
-                      <div className="text-xl font-semibold text-gray-900">$1,840</div>
-                    </div>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -634,23 +824,23 @@ export default function Dashboard() {
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
           </div>
           <div>
-            <h2 className="text-lg font-title text-gray-900">Fotografia — Ventas en Tienda</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Resumen de Fotografia</h2>
             <p className="text-gray-500 dark:text-gray-400 text-sm">Resumen de facturación presencial y ventas de fotos en línea</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           {[
-            { label: "Ventas Hoy (Fotos)", value: "$1,240", change: "+18.2%", trend: "up" },
-            { label: "Facturas Generadas", value: "32", change: "+9.1%", trend: "up" },
-            { label: "Ventas Online (Fotos)", value: "$680", change: "+25.4%", trend: "up" },
-            { label: "Devoluciones", value: "2", change: "-3.1%", trend: "down" },
+            { label: "Ventas Hoy (Fotos)", value: moneyByCurrency(photographyStats.todaySalesByCurrency), change: "Tiempo real", trend: "up" },
+            { label: "Facturas Hoy", value: String(photographyStats.invoicesToday), change: "Tiempo real", trend: "up" },
+            { label: "Ventas Online (Fotos)", value: moneyByCurrency(photographyStats.onlineTodayByCurrency), change: "Tiempo real", trend: "up" },
+            { label: "Devoluciones Aprobadas", value: String(photographyStats.approvedReturnsCount), change: `${photographyStats.pendingReturnsCount} pendientes`, trend: "down" },
           ].map((m, i) => (
             <Card key={i} className="border-gray-200 dark:border-gray-800 dark:border-gray-800">
               <CardContent className="p-6">
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{m.label}</p>
-                <p className="text-2xl font-bold text-gray-900">{m.value}</p>
-                <span className={`text-xs font-medium ${m.trend === "up" ? "text-green-600" : "text-red-500"}`}>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{m.value}</p>
+                <span className={`text-xs font-medium ${m.trend === "up" ? "text-green-600" : "text-blue-600"}`}>
                   {m.change}
                 </span>
               </CardContent>
@@ -668,21 +858,24 @@ export default function Dashboard() {
             <CardContent>
               <div className="space-y-4">
                 {[
-                  { turno: "Turno 9:00 AM", amount: 4800, sales: 12, pct: 35 },
-                  { turno: "Turno 12:00 PM", amount: 8200, sales: 22, pct: 55 },
-                  { turno: "Turno 3:00 PM", amount: 1400, sales: 4, pct: 10 },
-                ].map((t, i) => (
-                  <div key={i}>
+                  { key: "Turno 9:00", label: "Turno 9:00 AM" },
+                  { key: "Turno 12:00", label: "Turno 12:00 PM" },
+                  { key: "Turno 3:00", label: "Turno 3:00 PM" },
+                ].map((shift) => {
+                  const data = photographyStats.todayByTurno[shift.key] || { totalByCurrency: {}, sales: 0 }
+                  const pct = Math.round((Number(data.sales || 0) / photographyStats.maxTurnoSales) * 100)
+                  return (
+                  <div key={shift.key}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-gray-700">{t.turno}</span>
-                      <span className="text-sm font-semibold text-gray-900">${t.amount.toLocaleString()}</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{shift.label}</span>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{moneyByCurrency(data.totalByCurrency)}</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Progress value={t.pct} className="flex-1" />
-                      <span className="text-xs text-gray-500 dark:text-gray-400 w-16 text-right">{t.sales} ventas</span>
+                      <Progress value={pct} className="flex-1" />
+                      <span className="text-xs text-gray-500 dark:text-gray-400 w-16 text-right">{data.sales} ventas</span>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             </CardContent>
           </Card>
@@ -704,20 +897,18 @@ export default function Dashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {[
-                    { num: "FAC-0032", client: "María García", turno: "9:00 AM", total: "$70.00" },
-                    { num: "FAC-0031", client: "Carlos Méndez", turno: "12:00 PM", total: "$50.00" },
-                    { num: "FAC-0030", client: "Ana Rodríguez", turno: "12:00 PM", total: "$30.00" },
-                    { num: "FAC-0029", client: "Juan Pérez", turno: "9:00 AM", total: "$70.00" },
-                    { num: "FAC-0028", client: "Luis Fernández", turno: "3:00 PM", total: "$50.00" },
-                  ].map((inv, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="text-xs font-medium">{inv.num}</TableCell>
-                      <TableCell className="text-xs">{inv.client}</TableCell>
+                  {photographyStats.recentInvoices.length === 0 ? (
+                    <TableRow>
+                      <TableCell className="text-xs text-center text-gray-500 py-6" colSpan={4}>Sin facturas en Supabase</TableCell>
+                    </TableRow>
+                  ) : photographyStats.recentInvoices.map((inv) => (
+                    <TableRow key={inv.invoice_number}>
+                      <TableCell className="text-xs font-medium">{inv.invoice_number}</TableCell>
+                      <TableCell className="text-xs">{inv.client_name || "Cliente General"}</TableCell>
                       <TableCell className="text-xs">
-                        <Badge variant="secondary" className="text-[10px]">{inv.turno}</Badge>
+                        <Badge variant="secondary" className="text-[10px]">{inv.turno || "Turno 9:00"}</Badge>
                       </TableCell>
-                      <TableCell className="text-xs text-right font-semibold">{inv.total}</TableCell>
+                      <TableCell className="text-xs text-right font-semibold">{moneyByCurrency({ [normalizeCurrencyCode(inv.currency)]: Number(inv.total || 0) })}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

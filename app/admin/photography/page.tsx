@@ -25,8 +25,6 @@ import {
   AlertCircle,
   FolderOpen,
   CreditCard,
-  Edit,
-  Save,
   Tag,
   Package,
   Video,
@@ -46,12 +44,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { supabase } from "@/lib/supabase"
 import { getPhotoSalesEvents } from "@/lib/photography-db"
@@ -292,8 +284,6 @@ export default function PhotographyPage() {
   const [detailInvoice, setDetailInvoice] = useState<Invoice | null>(null)
   const [pricing, setPricing] = useState<PricingItem[]>([])
   const [pricingLoading, setPricingLoading] = useState(true)
-  const [editingPrice, setEditingPrice] = useState<PricingItem | null>(null)
-  const [savingPrice, setSavingPrice] = useState(false)
   const [processingReturnId, setProcessingReturnId] = useState<string | null>(null)
 
   // ─── Load data ──────────────────────────────────────────────────
@@ -401,31 +391,6 @@ export default function PhotographyPage() {
       console.error("[Admin Photography] Pricing fetch error:", err)
     } finally {
       setPricingLoading(false)
-    }
-  }
-
-  async function handleSavePrice(item: PricingItem) {
-    setSavingPrice(true)
-    try {
-      const { error } = await supabase
-        .from("photo_pricing")
-        .update({
-          name: item.name,
-          price: item.price,
-          description: item.description,
-          min_photos: item.min_photos,
-          max_photos: item.max_photos,
-          active: item.active,
-        })
-        .eq("id", item.id)
-      if (error) throw error
-      setPricing((prev) => prev.map((p) => (p.id === item.id ? { ...p, ...item, updated_at: new Date().toISOString() } : p)))
-      setEditingPrice(null)
-    } catch (err) {
-      console.error("[Admin Photography] Price save error:", err)
-      alert("Error al guardar el precio")
-    } finally {
-      setSavingPrice(false)
     }
   }
 
@@ -1492,7 +1457,7 @@ export default function PhotographyPage() {
                 </CardTitle>
                 <CardDescription>
                   Estos precios se aplican tanto en la caja (POS) como en la galería web del cliente.
-                  Los cambios se reflejan inmediatamente.
+                  Solo lectura en admin. Los cambios de precio están bloqueados.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1555,16 +1520,6 @@ export default function PhotographyPage() {
                           </p>
                         </div>
 
-                        {/* Edit */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setEditingPrice({ ...item })}
-                          className="shrink-0"
-                        >
-                          <Edit className="w-3.5 h-3.5 mr-1" />
-                          Editar
-                        </Button>
                       </div>
                     ))}
                   </div>
@@ -1575,96 +1530,6 @@ export default function PhotographyPage() {
 
         </Tabs>
       </div>
-
-      {/* ─── Pricing Edit Dialog ──────────────────────────────────── */}
-      <Dialog open={!!editingPrice} onOpenChange={() => setEditingPrice(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Editar Precio</DialogTitle>
-          </DialogHeader>
-          {editingPrice && (
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Nombre</label>
-                <Input
-                  value={editingPrice.name}
-                  onChange={(e) => setEditingPrice({ ...editingPrice, name: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Precio (USD)</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={editingPrice.price}
-                  onChange={(e) => setEditingPrice({ ...editingPrice, price: parseFloat(e.target.value) || 0 })}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Descripción</label>
-                <Input
-                  value={editingPrice.description}
-                  onChange={(e) => setEditingPrice({ ...editingPrice, description: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-              {editingPrice.category === "package" && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Mín. Fotos</label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={editingPrice.min_photos ?? ""}
-                      onChange={(e) => setEditingPrice({ ...editingPrice, min_photos: e.target.value ? parseInt(e.target.value) : null })}
-                      className="mt-1"
-                      placeholder="—"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Máx. Fotos</label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={editingPrice.max_photos ?? ""}
-                      onChange={(e) => setEditingPrice({ ...editingPrice, max_photos: e.target.value ? parseInt(e.target.value) : null })}
-                      className="mt-1"
-                      placeholder="∞"
-                    />
-                  </div>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="pricing-active"
-                  checked={editingPrice.active}
-                  onChange={(e) => setEditingPrice({ ...editingPrice, active: e.target.checked })}
-                  className="rounded border-gray-300"
-                />
-                <label htmlFor="pricing-active" className="text-sm text-gray-700 dark:text-gray-300">Activo</label>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <Button variant="outline" className="flex-1" onClick={() => setEditingPrice(null)}>
-                  Cancelar
-                </Button>
-                <Button
-                  className="flex-1"
-                  disabled={savingPrice || !editingPrice.name.trim() || editingPrice.price < 0}
-                  onClick={() => handleSavePrice(editingPrice)}
-                >
-                  {savingPrice ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                  Guardar
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
       {/* ─── Invoice Detail Dialog ─────────────────────────────────── */}
       <Dialog open={!!detailInvoice} onOpenChange={() => setDetailInvoice(null)}>
         <DialogContent className="max-w-lg">
