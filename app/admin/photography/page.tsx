@@ -52,6 +52,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { supabase } from "@/lib/supabase"
 import {
   calculateSalesByTurno,
@@ -127,6 +128,14 @@ interface PricingItem {
   updated_at: string
 }
 
+interface DailyClosure {
+  id: string
+  closure_date: string
+  closed_at?: string
+  closed_by?: string
+  total_invoices?: number
+}
+
 type ReturnDecision = "aprobada" | "rechazada"
 
 // ─── Helpers ────────────────────────────────────────────────────────
@@ -139,6 +148,29 @@ function parseSafeDate(value?: string | null) {
   if (!value) return null
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date
+}
+
+function toDayKey(date: Date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
+}
+
+function dayKeyFromInput(value?: string | null) {
+  const date = parseSafeDate(value)
+  return date ? toDayKey(date) : null
+}
+
+function dayKeyFromInvoice(invoice: Invoice) {
+  return dayKeyFromInput(invoice.timestamp) || dayKeyFromInput(invoice.date)
+}
+
+function fmtDayKey(dayKey: string) {
+  const [y, m, d] = dayKey.split("-").map(Number)
+  const date = new Date(y, (m || 1) - 1, d || 1)
+  if (Number.isNaN(date.getTime())) return dayKey
+  return date.toLocaleDateString("es-DO", { day: "numeric", month: "short", year: "numeric" })
 }
 
 function fmtDate(ts?: string | null) {
@@ -211,6 +243,7 @@ export default function PhotographyPage() {
   const [supabasePortfolios, setSupabasePortfolios] = useState<Portfolio[]>([])
   const [supabaseInvoices, setSupabaseInvoices] = useState<Invoice[]>([])
   const [supabaseReturns, setSupabaseReturns] = useState<Return[]>([])
+  const [dailyClosures, setDailyClosures] = useState<DailyClosure[]>([])
   const [activeTab, setActiveTab] = useState("overview")
   const [searchInvoice, setSearchInvoice] = useState("")
   const [searchReturn, setSearchReturn] = useState("")
@@ -264,6 +297,16 @@ export default function PhotographyPage() {
           setSupabaseReturns(
             sbReturns.map((r: any) => normalizeReturn(r))
           )
+        }
+
+        const { data: sbClosures } = await supabase
+          .from("photo_daily_closures")
+          .select("id, closure_date, closed_at, closed_by, total_invoices")
+          .order("closure_date", { ascending: false })
+          .limit(120)
+
+        if (sbClosures) {
+          setDailyClosures(sbClosures)
         }
 
         const events = await getPhotoSalesEvents()
@@ -433,7 +476,7 @@ export default function PhotographyPage() {
   // ─── Computed stats ───────────────────────────────────────────
   const stats = useMemo(() => {
     const now = new Date()
-    const todayStr = now.toLocaleDateString("es-DO")
+    const todayKey = toDayKey(now)
     const weekAgo = new Date(now)
     weekAgo.setDate(weekAgo.getDate() - 7)
     const monthAgo = new Date(now)
@@ -441,7 +484,7 @@ export default function PhotographyPage() {
 
     // Invoices
     const activeInvoices = allInvoices.filter((i) => i.status !== "cancelled")
-    const todayInvoices = activeInvoices.filter((i) => i.date === todayStr)
+    const todayInvoices = activeInvoices.filter((i) => dayKeyFromInvoice(i) === todayKey)
     const salesToday = todayInvoices.reduce((s, i) => s + i.total, 0)
     const salesWeek = activeInvoices
       .filter((i) => {
@@ -468,8 +511,7 @@ export default function PhotographyPage() {
     const onlineSalesTotal = onlinePurchaseEvents.reduce((s, ps) => s + ps.amount, 0)
     const todayOnline = onlinePurchaseEvents.filter(
       (ps) => {
-        const date = parseSafeDate(ps.timestamp)
-        return !!date && date.toLocaleDateString("es-DO") === todayStr
+        return dayKeyFromInput(ps.timestamp) === todayKey
       }
     )
     const onlineSalesToday = todayOnline.reduce((s, ps) => s + ps.amount, 0)
@@ -537,11 +579,10 @@ export default function PhotographyPage() {
     }
     if (dateFilter !== "all") {
       const now = new Date()
+      const todayKey = toDayKey(now)
       const cutoff = new Date(now)
       if (dateFilter === "today") {
-        filtered = filtered.filter(
-          (i) => i.date === now.toLocaleDateString("es-DO")
-        )
+        filtered = filtered.filter((i) => dayKeyFromInvoice(i) === todayKey)
       } else if (dateFilter === "week") {
         cutoff.setDate(cutoff.getDate() - 7)
         filtered = filtered.filter((i) => {
@@ -584,7 +625,7 @@ export default function PhotographyPage() {
     for (let i = daysBack - 1; i >= 0; i--) {
       const d = new Date(now)
       d.setDate(d.getDate() - i)
-      const key = d.toISOString().split("T")[0]
+      const key = toDayKey(d)
       const label = d.toLocaleDateString("es-DO", { day: "numeric", month: "short" })
       map[key] = { date: label, cashier: 0, online: 0 }
     }
@@ -594,7 +635,7 @@ export default function PhotographyPage() {
       .forEach((inv) => {
         const date = parseSafeDate(inv.timestamp)
         if (!date) return
-        const key = date.toISOString().split("T")[0]
+        const key = toDayKey(date)
         if (map[key]) map[key].cashier += inv.total
       })
 
@@ -602,12 +643,35 @@ export default function PhotographyPage() {
     chartEvents.forEach((ps) => {
       const date = parseSafeDate(ps.timestamp)
       if (!date) return
-      const key = date.toISOString().split("T")[0]
+      const key = toDayKey(date)
       if (map[key]) map[key].online += ps.amount
     })
 
     return Object.values(map)
   }, [allInvoices, photoSales])
+
+  const pendingClosureDays = useMemo(() => {
+    const todayKey = toDayKey(new Date())
+    const daysWithSales = new Set<string>()
+
+    allInvoices
+      .filter((inv) => inv.status !== "cancelled")
+      .forEach((inv) => {
+        const dayKey = dayKeyFromInvoice(inv)
+        if (!dayKey || dayKey >= todayKey) return
+        daysWithSales.add(dayKey)
+      })
+
+    const closureDays = new Set(
+      dailyClosures
+        .map((closure) => String(closure.closure_date || "").slice(0, 10))
+        .filter(Boolean),
+    )
+
+    return Array.from(daysWithSales)
+      .filter((dayKey) => !closureDays.has(dayKey))
+      .sort((a, b) => (a < b ? 1 : -1))
+  }, [allInvoices, dailyClosures])
 
   return (
     <DashboardLayout>
@@ -644,6 +708,16 @@ export default function PhotographyPage() {
 
           {/* ═══════════ OVERVIEW TAB ═══════════ */}
           <TabsContent value="overview" className="space-y-6 mt-6">
+            {pendingClosureDays.length > 0 && (
+              <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Hay cierres diarios pendientes</AlertTitle>
+                <AlertDescription>
+                  Se detectaron {pendingClosureDays.length} día(s) con facturas y sin cierre enviado a administración. Último pendiente: {fmtDayKey(pendingClosureDays[0])}.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* KPI Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <Card className="border-gray-200 dark:border-gray-800">
@@ -1179,6 +1253,16 @@ export default function PhotographyPage() {
 
           {/* ═══════════ ANALYTICS TAB ═══════════ */}
           <TabsContent value="analytics" className="space-y-6 mt-6">
+            {pendingClosureDays.length > 0 && (
+              <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Cierre pendiente por enviar</AlertTitle>
+                <AlertDescription>
+                  Hay días con ventas sin cierre administrativo. Fechas pendientes: {pendingClosureDays.slice(0, 3).map(fmtDayKey).join(", ")}{pendingClosureDays.length > 3 ? ` y ${pendingClosureDays.length - 3} más` : ""}.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Period Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card className="border-gray-200 dark:border-gray-800">
