@@ -426,7 +426,7 @@ export default function ProductsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl md:text-3xl font-title text-gray-900">Gestion de Productos</h1>
+            <h1 className="text-xl md:text-3xl font-title whitespace-nowrap text-gray-900">Gestion de Productos</h1>
             <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">
               Administra precios, ofertas y fotos de tus experiencias
             </p>

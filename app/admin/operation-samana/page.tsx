@@ -899,7 +899,7 @@ ${t.getReady} 🐋⚓
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl md:text-3xl font-title text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <h1 className="text-xl md:text-3xl font-title whitespace-nowrap text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Mountain className="w-7 h-7 text-green-600" />
               Operacion Samana
             </h1>

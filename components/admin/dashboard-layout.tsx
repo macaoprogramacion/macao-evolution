@@ -110,10 +110,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               height={48}
               className="h-8 md:h-10 w-auto"
             />
-            <span className="font-title text-gray-900 dark:text-gray-100 hidden sm:inline">Dashboard</span>
           </Link>
           <div className="text-sm text-gray-500 dark:text-gray-400 hidden md:block">
-            <span>Dashboard</span> <span className="mx-1">/</span>
             <span className="capitalize">{pathname === "/admin" ? "Overview" : pathname.replace("/admin/", "")}</span>
           </div>
         </div>
