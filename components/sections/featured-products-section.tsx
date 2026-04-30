@@ -93,7 +93,7 @@ export function FeaturedProductsSection() {
       )}
 
       {/* Features Grid */}
-      <div className={`grid grid-cols-1 gap-4 px-6 pb-20 md:grid-cols-3 md:px-12 lg:px-20 transition-opacity duration-300 ${!hasServiceSelected ? 'opacity-60' : 'opacity-100'}`}>
+      <div className={`grid grid-cols-2 gap-4 px-6 pb-20 md:px-12 lg:px-20 transition-opacity duration-300 ${!hasServiceSelected ? 'opacity-60' : 'opacity-100'}`}>
         {productList.map((feature) => {
           const productId = feature.id;
           const isAdded = addedId === productId;
