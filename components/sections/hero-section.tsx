@@ -205,10 +205,10 @@ export function HeroSection() {
               {/* Overlay Text - Fades out first */}
               <div
                 ref={textRef}
-                className="absolute inset-0 flex items-end justify-center overflow-hidden select-none"
+                className="absolute inset-0 flex items-center md:items-end justify-center overflow-hidden select-none"
                 style={{ opacity: 1 }}
               >
-                <h1 className="text-[22vw] font-medium leading-[0.8] tracking-tighter text-white text-center font-title select-none pointer-events-none">
+                <h1 className="text-[20vw] md:text-[22vw] font-medium leading-[0.8] tracking-tighter text-white text-center font-title select-none pointer-events-none">
                   {word.split("").map((letter, index) => (
                     <span
                       key={index}
@@ -221,6 +221,14 @@ export function HeroSection() {
                     </span>
                   ))}
                 </h1>
+              </div>
+
+              {/* Mobile hint: scroll down */}
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 md:hidden pointer-events-none">
+                <div className="flex items-center gap-2 rounded-full bg-black/45 px-3 py-1.5 text-white/95 shadow-lg backdrop-blur-sm">
+                  <span className="text-[11px] tracking-wide uppercase">Desliza abajo</span>
+                  <span className="text-sm animate-bounce">↓</span>
+                </div>
               </div>
             </div>
 
