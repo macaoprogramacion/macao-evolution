@@ -151,6 +151,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const hasVacanciesByCategory = configuredVacanciesByCategory.length > 0
 
+      const vacanciesByCategoryValue = hasVacanciesByCategory
+        ? configuredVacanciesByCategory.map((vc) => ({
+            category: vc.category,
+            vacancies: dateStr < todayStr || isBlockedByOverride ? 0 : Math.max(0, vc.defaultVacancies - booked),
+          }))
+        : undefined
+
       if (product.type === "time_period" && product.openingTimes && product.openingTimes.length > 0) {
         // Time period entry: T00:00:00 with openingTimes
         const timePeriodDateTime = `${dateStr}T00:00:00${product.timezone}`
@@ -160,15 +167,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cutoffSeconds: product.cutoffSeconds,
           openingTimes: product.openingTimes,
           currency: product.currency,
-          vacancies,
+          ...(hasVacanciesByCategory
+            ? { vacanciesByCategory: vacanciesByCategoryValue }
+            : { vacancies }),
           pricesByCategory,
           ...(tieredPricesByCategory ? { tieredPricesByCategory } : {}),
-        }
-        if (hasVacanciesByCategory) {
-          item.vacanciesByCategory = configuredVacanciesByCategory.map((vc) => ({
-            category: vc.category,
-            vacancies: dateStr < todayStr || isBlockedByOverride ? 0 : Math.max(0, vc.defaultVacancies - booked),
-          }))
         }
         availabilities.push(item)
       } else {
@@ -179,15 +182,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           dateTime: timePointDateTime,
           cutoffSeconds: product.cutoffSeconds,
           currency: product.currency,
-          vacancies,
+          ...(hasVacanciesByCategory
+            ? { vacanciesByCategory: vacanciesByCategoryValue }
+            : { vacancies }),
           pricesByCategory,
           ...(tieredPricesByCategory ? { tieredPricesByCategory } : {}),
-        }
-        if (hasVacanciesByCategory) {
-          item.vacanciesByCategory = configuredVacanciesByCategory.map((vc) => ({
-            category: vc.category,
-            vacancies: dateStr < todayStr || isBlockedByOverride ? 0 : Math.max(0, vc.defaultVacancies - booked),
-          }))
         }
         availabilities.push(item)
       }
