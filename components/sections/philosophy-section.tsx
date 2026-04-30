@@ -83,7 +83,7 @@ export function PhilosophySection() {
 
   useEffect(() => {
     const checkMobile = () => {
-      isMobileRef.current = window.innerWidth < 768;
+      isMobileRef.current = window.innerWidth < 1024;
     };
     checkMobile();
     window.addEventListener("resize", checkMobile);
@@ -127,8 +127,8 @@ export function PhilosophySection() {
   return (
     <section id="services" className="bg-background">
       {/* Scroll-Animated Product Grid — static on mobile, animated on desktop */}
-      <div ref={sectionRef} className="relative md:h-[150vh]">
-        <div className="md:sticky md:top-0 md:h-screen flex items-center justify-center py-10 md:py-0">
+      <div ref={sectionRef} className="relative lg:h-[150vh]">
+        <div className="lg:sticky lg:top-0 lg:h-screen flex items-center justify-center py-10 lg:py-0">
           <div className="relative w-full">
             {/* Title - positioned behind the blocks */}
             <div 
@@ -142,7 +142,7 @@ export function PhilosophySection() {
             </div>
 
             {/* Product Grid */}
-            <div className="relative z-10 grid grid-cols-1 gap-4 px-6 md:grid-cols-2 md:px-12 lg:px-20">
+            <div className="relative z-10 grid grid-cols-1 gap-4 px-6 lg:grid-cols-2 lg:px-12 xl:px-20">
               {/* Colectivo Image - comes from left */}
               <div 
                 ref={colectivoRef}
