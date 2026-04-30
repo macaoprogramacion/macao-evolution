@@ -10,15 +10,6 @@ const specs = [
 export function EditorialSection() {
   return (
     <section className="bg-background">
-      {/* Newsletter Banner */}
-      
-
-      {/* Decorative Icons */}
-      <div className="flex items-center justify-center gap-6 pb-20">
-        
-        
-      </div>
-
       {/* Specs Grid */}
       <div className="grid grid-cols-2 border-t border-border md:grid-cols-4">
         {specs.map((spec) => (
@@ -39,10 +30,10 @@ export function EditorialSection() {
       {/* Full-width Video */}
       <div className="relative aspect-[16/9] w-full md:aspect-[21/9]">
         <video
-          autoPlay
           loop
           muted
           playsInline
+          preload="metadata"
           className="absolute inset-0 h-full w-full object-cover"
           src="/images/videos/0211(2).mp4"
         />
