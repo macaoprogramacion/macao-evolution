@@ -1,6 +1,29 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { type SyntheticEvent, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
+
+const STORAGE_BUCKET = "portfolio-media";
+const LOCAL_FALLBACK_VIDEO = "/images/videos/video-grande.mp4";
+
+function getStoragePublicUrl(storagePath: string) {
+  const withoutLeadingSlash = storagePath.replace(/^\/+/, "");
+  const normalizedPath = withoutLeadingSlash.startsWith(`${STORAGE_BUCKET}/`)
+    ? withoutLeadingSlash.slice(STORAGE_BUCKET.length + 1)
+    : withoutLeadingSlash;
+
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(normalizedPath);
+  return data.publicUrl;
+}
+
+function handleVideoError(event: SyntheticEvent<HTMLVideoElement>) {
+  const video = event.currentTarget;
+  if (video.dataset.fallbackApplied === "true") return;
+
+  video.dataset.fallbackApplied = "true";
+  video.src = LOCAL_FALLBACK_VIDEO;
+  video.load();
+}
 
 const specs = [
   { label: "Minimum Age", value: "4 y/o" },
@@ -12,6 +35,7 @@ const specs = [
 export function EditorialSection() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
+  const bucketVideoSrc = getStoragePublicUrl("videos/video-grande.mp4");
 
   const toggle = () => {
     const v = videoRef.current;
@@ -57,7 +81,8 @@ export function EditorialSection() {
           preload="metadata"
           poster="/images/foto-con-dimecion-arreglada/imagen-cuadrada-alta-calidad.webp"
           className="absolute inset-0 h-full w-full object-cover"
-          src="/images/videos/video-grande.mp4"
+          src={bucketVideoSrc}
+          onError={handleVideoError}
           onEnded={() => setPlaying(false)}
         />
         {/* Play / Pause overlay */}
