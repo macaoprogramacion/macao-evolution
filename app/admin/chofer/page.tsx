@@ -208,7 +208,7 @@ export default function ChoferDashboard() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
               <Navigation className="h-6 w-6 text-red-600" />
-              {isAdmin ? "Recogidas por Chofer" : "Mis Recogidas"}
+              {isAdmin ? "Recogida para Choferes" : "Mis Recogidas"}
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               {isAdmin ? "Todas las reservas enviadas a choferes" : "Reservas confirmadas por operaciones"}

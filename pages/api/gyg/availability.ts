@@ -137,8 +137,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         : undefined
 
-      // Build per-category or aggregated vacancies
-      const hasVacanciesByCategory = product.vacanciesByCategory && product.vacanciesByCategory.length > 0
+      // Build per-category or aggregated vacancies.
+      // If explicit per-category limits are not configured, derive them from priced categories
+      // so GYG "Availability By Ticket Category" tests still receive vacanciesByCategory.
+      const configuredVacanciesByCategory = product.vacanciesByCategory && product.vacanciesByCategory.length > 0
+        ? product.vacanciesByCategory
+        : (product.prices?.length > 1
+            ? product.prices.map((p) => ({
+                category: p.category as any,
+                defaultVacancies: product.defaultVacancies,
+              }))
+            : [])
+
+      const hasVacanciesByCategory = configuredVacanciesByCategory.length > 0
 
       if (product.type === "time_period" && product.openingTimes && product.openingTimes.length > 0) {
         // Time period entry: T00:00:00 with openingTimes
@@ -149,16 +160,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cutoffSeconds: product.cutoffSeconds,
           openingTimes: product.openingTimes,
           currency: product.currency,
+          vacancies,
           pricesByCategory,
           ...(tieredPricesByCategory ? { tieredPricesByCategory } : {}),
         }
         if (hasVacanciesByCategory) {
-          item.vacanciesByCategory = product.vacanciesByCategory!.map((vc) => ({
+          item.vacanciesByCategory = configuredVacanciesByCategory.map((vc) => ({
             category: vc.category,
             vacancies: dateStr < todayStr || isBlockedByOverride ? 0 : Math.max(0, vc.defaultVacancies - booked),
           }))
-        } else {
-          item.vacancies = vacancies
         }
         availabilities.push(item)
       } else {
@@ -169,16 +179,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           dateTime: timePointDateTime,
           cutoffSeconds: product.cutoffSeconds,
           currency: product.currency,
+          vacancies,
           pricesByCategory,
           ...(tieredPricesByCategory ? { tieredPricesByCategory } : {}),
         }
         if (hasVacanciesByCategory) {
-          item.vacanciesByCategory = product.vacanciesByCategory!.map((vc) => ({
+          item.vacanciesByCategory = configuredVacanciesByCategory.map((vc) => ({
             category: vc.category,
             vacancies: dateStr < todayStr || isBlockedByOverride ? 0 : Math.max(0, vc.defaultVacancies - booked),
           }))
-        } else {
-          item.vacancies = vacancies
         }
         availabilities.push(item)
       }

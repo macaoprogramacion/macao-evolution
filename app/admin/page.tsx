@@ -479,7 +479,7 @@ export default function Dashboard() {
       <div className="mb-6 md:mb-8">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-xl md:text-3xl font-title whitespace-nowrap text-gray-900 dark:text-gray-100 dark:text-gray-100">MACAO</h1>
+            <h1 className="text-xl md:text-3xl font-title whitespace-nowrap text-gray-900 dark:text-gray-100 dark:text-gray-100">Overview</h1>
             <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 dark:text-gray-400 mt-1">Panel de control de ventas y gestión de experiencias</p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">

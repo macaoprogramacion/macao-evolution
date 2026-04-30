@@ -120,7 +120,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="relative hidden sm:block">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
-              placeholder="Search workflows, logs..."
+              placeholder="Search"
               className="pl-10 w-48 md:w-64 lg:w-80 bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 focus:bg-white dark:focus:bg-gray-800"
             />
           </div>

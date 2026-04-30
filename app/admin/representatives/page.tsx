@@ -177,9 +177,7 @@ export default function RepresentativesAnalyticsPage() {
           <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">
             Rendimiento de ventas por representantes. Gestión de reservas en{" "}
             <a
-              href="http://localhost:3002"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/sellers"
               className="text-red-600 underline hover:text-red-700"
             >
               Sellers Portal
