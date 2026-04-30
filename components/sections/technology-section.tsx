@@ -188,8 +188,8 @@ export function TechnologySection() {
                     alt={img.alt}
                     fill
                     className="object-cover"
-                    sizes="22vw"
-                    quality={70}
+                    sizes="(max-width: 768px) 48vw, 22vw"
+                    quality={88}
                     loading="lazy"
                   />
                 </div>
@@ -212,7 +212,7 @@ export function TechnologySection() {
                 fill
                 className="object-cover"
                 sizes="(max-width: 768px) 100vw, 42vw"
-                quality={75}
+                quality={88}
                 loading="lazy"
               />
               <div className="absolute inset-0 bg-foreground/40" />
@@ -274,8 +274,8 @@ export function TechnologySection() {
                     alt={img.alt}
                     fill
                     className="object-cover"
-                    sizes="22vw"
-                    quality={70}
+                    sizes="(max-width: 768px) 48vw, 22vw"
+                    quality={88}
                     loading="lazy"
                   />
                 </div>
