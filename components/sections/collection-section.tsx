@@ -45,8 +45,6 @@ const localFallbackVideos = [
   },
 ];
 
-const localFeaturedFallbackVideo = "/images/videos/video-grande.mp4";
-
 const fallbackVideos = [
   {
     id: "macao-beach",
@@ -61,11 +59,6 @@ const fallbackVideos = [
     description: "Descubre los mejores paisajes en buggy",
   },
 ];
-
-const fallbackFeaturedVideo = {
-  src: getStoragePublicUrl("videos/video-grande.mp4"),
-  name: "Adventure Experience",
-};
 
 type HomepageMediaRow = {
   slot: string;
@@ -150,7 +143,6 @@ function VideoCard({
 
 export function CollectionSection() {
   const [videos, setVideos] = useState(fallbackVideos);
-  const [featuredVideo, setFeaturedVideo] = useState(fallbackFeaturedVideo);
 
   useEffect(() => {
     let active = true;
@@ -184,16 +176,7 @@ export function CollectionSection() {
         };
       });
 
-      const featuredRow = bySlot.get("featured-large");
-
       setVideos(lateralVideos);
-
-      if (featuredRow?.storage_path) {
-        setFeaturedVideo({
-          src: getStoragePublicUrl(featuredRow.storage_path),
-          name: featuredRow.title || fallbackFeaturedVideo.name,
-        });
-      }
     }
 
     loadHomepageMedia();
@@ -230,12 +213,6 @@ export function CollectionSection() {
               </div>
             ))}
           </div>
-
-          <VideoCard
-            src={featuredVideo.src}
-            fallbackSrc={localFeaturedFallbackVideo}
-            className="aspect-[16/10]"
-          />
         </div>
 
         {/* Desktop: Grid 2 columns */}
@@ -254,12 +231,6 @@ export function CollectionSection() {
               </div>
             ))}
           </div>
-
-          <VideoCard
-            src={featuredVideo.src}
-            fallbackSrc={localFeaturedFallbackVideo}
-            className="aspect-[21/9]"
-          />
         </div>
       </div>
     </section>

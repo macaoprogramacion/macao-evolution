@@ -55,6 +55,7 @@ export function EditorialSection() {
           muted
           playsInline
           preload="metadata"
+          poster="/images/foto-con-dimecion-arreglada/imagen-cuadrada-alta-calidad.webp"
           className="absolute inset-0 h-full w-full object-cover"
           src="/images/videos/0211(2).mp4"
           onEnded={() => setPlaying(false)}
