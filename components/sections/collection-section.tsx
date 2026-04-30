@@ -1,6 +1,6 @@
 "use client";
 
-import { type SyntheticEvent, useEffect, useState } from "react";
+import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
 
@@ -83,6 +83,71 @@ function handleVideoError(event: SyntheticEvent<HTMLVideoElement>, fallbackSrc: 
   video.load();
 }
 
+function VideoCard({
+  src,
+  fallbackSrc,
+  className = "",
+}: {
+  src: string;
+  fallbackSrc: string;
+  className?: string;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+
+  const toggle = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) {
+      v.play();
+      setPlaying(true);
+    } else {
+      v.pause();
+      setPlaying(false);
+    }
+  };
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl bg-secondary cursor-pointer group/vid ${className}`}
+      onClick={toggle}
+    >
+      <video
+        ref={videoRef}
+        loop
+        muted
+        playsInline
+        preload="metadata"
+        className="absolute inset-0 h-full w-full object-cover"
+        src={src}
+        onError={(e) => handleVideoError(e, fallbackSrc)}
+        onEnded={() => setPlaying(false)}
+      />
+      {/* Play / Pause overlay */}
+      <div
+        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${
+          playing ? "opacity-0 group-hover/vid:opacity-100" : "opacity-100"
+        }`}
+      >
+        <div className="rounded-full bg-black/50 p-5 backdrop-blur-sm">
+          {playing ? (
+            /* Pause icon */
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="h-8 w-8">
+              <rect x="5" y="3" width="4" height="18" rx="1" />
+              <rect x="15" y="3" width="4" height="18" rx="1" />
+            </svg>
+          ) : (
+            /* Play icon */
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="h-8 w-8 translate-x-0.5">
+              <polygon points="5,3 19,12 5,21" />
+            </svg>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CollectionSection() {
   const [videos, setVideos] = useState(fallbackVideos);
   const [featuredVideo, setFeaturedVideo] = useState(fallbackFeaturedVideo);
@@ -152,85 +217,49 @@ export function CollectionSection() {
         {/* Mobile: Horizontal Carousel */}
         <div className="space-y-8 px-6 md:hidden">
           <div className="flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide">
-            {videos.map((video) => (
-              <div key={video.id} className="group flex-shrink-0 w-[75vw] snap-center">
-                <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-secondary">
-                  <video
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    preload="metadata"
-                    className="absolute inset-0 h-full w-full object-cover"
-                    src={video.src}
-                    onError={(event) => handleVideoError(event, localFallbackVideos[0].id === video.id ? localFallbackVideos[0].src : localFallbackVideos[1].src)}
-                  />
-                </div>
+            {videos.map((video, idx) => (
+              <div key={video.id} className="flex-shrink-0 w-[75vw] snap-center">
+                <VideoCard
+                  src={video.src}
+                  fallbackSrc={localFallbackVideos[idx]?.src ?? localFallbackVideos[0].src}
+                  className="aspect-[4/3]"
+                />
                 <div className="py-6">
-                  <h3 className="text-lg font-medium leading-snug text-foreground">
-                    {video.name}
-                  </h3>
+                  <h3 className="text-lg font-medium leading-snug text-foreground">{video.name}</h3>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="group">
-            <div className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-secondary">
-              <video
-                autoPlay
-                loop
-                muted
-                playsInline
-                preload="metadata"
-                className="absolute inset-0 h-full w-full object-cover"
-                src={featuredVideo.src}
-                onError={(event) => handleVideoError(event, localFeaturedFallbackVideo)}
-              />
-            </div>
-          </div>
+          <VideoCard
+            src={featuredVideo.src}
+            fallbackSrc={localFeaturedFallbackVideo}
+            className="aspect-[16/10]"
+          />
         </div>
 
         {/* Desktop: Grid 2 columns */}
         <div className="hidden md:flex md:flex-col gap-8 md:px-12 lg:px-20">
           <div className="grid md:grid-cols-2 gap-8">
-            {videos.map((video) => (
-              <div key={video.id} className="group">
-                <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-secondary">
-                  <video
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    preload="metadata"
-                    className="absolute inset-0 h-full w-full object-cover"
-                    src={video.src}
-                    onError={(event) => handleVideoError(event, localFallbackVideos[0].id === video.id ? localFallbackVideos[0].src : localFallbackVideos[1].src)}
-                  />
-                </div>
+            {videos.map((video, idx) => (
+              <div key={video.id}>
+                <VideoCard
+                  src={video.src}
+                  fallbackSrc={localFallbackVideos[idx]?.src ?? localFallbackVideos[0].src}
+                  className="aspect-[4/3]"
+                />
                 <div className="py-6">
-                  <h3 className="text-lg font-medium leading-snug text-foreground">
-                    {video.name}
-                  </h3>
+                  <h3 className="text-lg font-medium leading-snug text-foreground">{video.name}</h3>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="group">
-            <div className="relative aspect-[21/9] overflow-hidden rounded-2xl bg-secondary">
-              <video
-                autoPlay
-                loop
-                muted
-                playsInline
-                preload="metadata"
-                className="absolute inset-0 h-full w-full object-cover"
-                src={featuredVideo.src}
-                onError={(event) => handleVideoError(event, localFeaturedFallbackVideo)}
-              />
-            </div>
-          </div>
+          <VideoCard
+            src={featuredVideo.src}
+            fallbackSrc={localFeaturedFallbackVideo}
+            className="aspect-[21/9]"
+          />
         </div>
       </div>
     </section>
