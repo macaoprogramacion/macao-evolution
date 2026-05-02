@@ -80,6 +80,7 @@ type SamanaReservation = {
   gygBookingRef: string
   gygBookingReference: string
   language: string
+  createdAt: string | null
 }
 
 type AvailabilityDayRow = {
@@ -355,6 +356,7 @@ function mapRow(r: any): SamanaReservation {
     gygBookingRef: r.gyg_booking_ref || "",
     gygBookingReference: r.gyg_booking_reference || "",
     language: r.language || "en",
+    createdAt: r.created_at || null,
   }
 }
 
@@ -1423,6 +1425,11 @@ ${t.getReady} 🐋⚓
                         <Clock className="w-3.5 h-3.5" />
                         {reservation.pickupTime}
                       </div>
+                      {reservation.createdAt && (
+                        <div className="text-xs text-gray-500 mt-1 sm:text-right">
+                          Agregada: {new Date(reservation.createdAt).toLocaleTimeString("es-DO", { hour: "numeric", minute: "2-digit" })}
+                        </div>
+                      )}
                     </div>
                   </div>
 

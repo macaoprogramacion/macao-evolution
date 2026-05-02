@@ -75,6 +75,7 @@ type SaonaReservation = {
   drinkPackage: string
   gygBookingRef: string
   gygBookingReference: string
+  createdAt: string | null
 }
 
 function getPickupDeadline(dateValue: string, pickupValue: string) {
@@ -116,6 +117,7 @@ function mapRow(r: any): SaonaReservation {
     drinkPackage: r.drink_package || "standard",
     gygBookingRef: r.gyg_booking_ref || "",
     gygBookingReference: r.gyg_booking_reference || "",
+    createdAt: r.created_at || null,
   }
 }
 
@@ -329,6 +331,24 @@ export default function OperationSaonaPage() {
   const markAsNoShow = async (id: string) => {
     await updateReservationStatus(id, "no_show")
     setNoShowConfirmId(null)
+  }
+
+  const generateChoferMessage = (res: SaonaReservation) => {
+    const totalPax = res.guests + res.children
+    const dateObj = new Date(res.date + "T12:00:00")
+    const dateStr = `${dateObj.getDate()} de ${dateObj.toLocaleDateString("es-ES", { month: "long" })} de ${dateObj.getFullYear()}`
+    const boatLabel = res.boatType === "catamaran" ? "Catamarán" : "Lancha"
+
+    return `🚨 NUEVA RESERVA - SAONA ISLAND
+👤 Nombre: ${res.customerName}
+📞 Teléfono: ${res.phone}
+🏝️ Tour: Saona Island
+⛵ Embarcación: ${boatLabel}
+👥 PAX: ${res.guests} + ${res.children} | ${totalPax} PAX
+📌 Hotel: ${res.hotel}
+📍 Punto recogida: ${res.location || res.hotel}
+🕖 Hora recogida: ${res.pickupTime}
+📅 Fecha: ${dateStr}${res.lunchIncluded ? "\n🍽️ Almuerzo: Incluido" : ""}`
   }
 
   const generateClientMessage = (res: SaonaReservation) => {
@@ -758,6 +778,11 @@ export default function OperationSaonaPage() {
                         <Clock className="w-3.5 h-3.5" />
                         {reservation.pickupTime}
                       </div>
+                      {reservation.createdAt && (
+                        <div className="text-xs text-gray-500 mt-1 sm:text-right">
+                          Agregada: {new Date(reservation.createdAt).toLocaleTimeString("es-DO", { hour: "numeric", minute: "2-digit" })}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -792,6 +817,18 @@ export default function OperationSaonaPage() {
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-gray-100">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={copiedMsg === `chofer-${reservation.id}` ? "border-green-500 bg-green-50 text-green-700" : "border-amber-300 text-amber-700 hover:bg-amber-50"}
+                      onClick={() => copyToClipboard(generateChoferMessage(reservation), `chofer-${reservation.id}`)}
+                    >
+                      {copiedMsg === `chofer-${reservation.id}` ? (
+                        <><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Copiado</>
+                      ) : (
+                        <><Copy className="w-3.5 h-3.5 mr-1" />Msg Chofer</>
+                      )}
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"

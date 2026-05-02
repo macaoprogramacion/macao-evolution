@@ -91,6 +91,7 @@ type Reservation = {
   choferStatus: "none" | "recibida" | "confirmada"
   amount: number | null
   notes: string
+  createdAt: string | null
 }
 
 type Chofer = {
@@ -142,6 +143,7 @@ function mapRow(r: any): Reservation {
     choferStatus: r.chofer_status || "none",
     amount: r.amount != null ? Number(r.amount) : null,
     notes: r.notes || "",
+    createdAt: r.created_at || null,
   }
 }
 
@@ -829,6 +831,11 @@ export default function OperationPage() {
                         <Clock className="w-3.5 h-3.5" />
                         {reservation.pickupTime || reservation.timeslot}
                       </div>
+                      {reservation.createdAt && (
+                        <div className="text-xs text-gray-500 mt-1 sm:text-right">
+                          Agregada: {new Date(reservation.createdAt).toLocaleTimeString("es-DO", { hour: "numeric", minute: "2-digit" })}
+                        </div>
+                      )}
                     </div>
                   </div>
 
