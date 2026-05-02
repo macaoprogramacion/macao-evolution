@@ -162,6 +162,7 @@ export default function OperationPage() {
   const [loadingChoferes, setLoadingChoferes] = useState(false)
   const [sending, setSending] = useState(false)
   const [copiedMsg, setCopiedMsg] = useState("")
+  const [noShowConfirmId, setNoShowConfirmId] = useState<string | null>(null)
 
   // Modal agregar reserva
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -396,6 +397,7 @@ export default function OperationPage() {
 
   const markAsNoShow = async (id: string) => {
     await updateReservationStatus(id, "no_show")
+    setNoShowConfirmId(null)
   }
 
   const generateClientMessage = (res: Reservation) => {
@@ -603,7 +605,7 @@ export default function OperationPage() {
             variant="outline"
             disabled={!canNoShow}
             className="border-gray-400 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-            onClick={() => markAsNoShow(reservation.id)}
+            onClick={() => setNoShowConfirmId(reservation.id)}
             title={canNoShow ? "Marcar como NO SHOW" : "Solo disponible despues de la hora de recogida"}
           >
             <UserX className="w-3 h-3 mr-1" />
@@ -786,7 +788,7 @@ export default function OperationPage() {
           <CardContent>
             <div className="space-y-3">
               {filteredReservations.map((reservation) => (
-                <div key={reservation.id} className="border rounded-lg p-4 space-y-3 hover:border-red-200 transition-colors">
+                <div key={reservation.id} className={`border rounded-lg p-4 space-y-3 transition-colors ${reservation.status === "no_show" ? "bg-red-50 border-red-300" : "hover:border-red-200"}`}>
                   <div className="flex items-center gap-2 flex-wrap">
                     {getStatusButton(reservation)}
                     <Badge
@@ -936,6 +938,28 @@ export default function OperationPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal: Confirmar NO SHOW */}
+      <Dialog open={!!noShowConfirmId} onOpenChange={(open) => { if (!open) setNoShowConfirmId(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-red-700">⚠️ Confirmar NO SHOW</DialogTitle>
+            <DialogDescription>
+              Estás a punto de marcar esta reserva como <strong>NO SHOW</strong>. Esta acción <strong>no se puede revertir</strong>. ¿Deseas continuar?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setNoShowConfirmId(null)}>Cancelar</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => noShowConfirmId && markAsNoShow(noShowConfirmId)}
+            >
+              <UserX className="w-4 h-4 mr-2" />
+              Confirmar NO SHOW
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal: Enviar reserva a chofer */}
       <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
