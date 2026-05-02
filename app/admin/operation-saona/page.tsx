@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import {
   Select,
@@ -54,6 +55,7 @@ import {
 } from "@/components/ui/dialog"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { supabase } from "@/lib/supabase"
+import { parseExternalReservationText } from "@/lib/external-reservation-parser"
 import { Label } from "@/components/ui/label"
 
 type SaonaReservation = {
@@ -119,6 +121,8 @@ export default function OperationSaonaPage() {
   // Modal agregar reserva
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [externalReservationText, setExternalReservationText] = useState("")
+  const [externalParseSummary, setExternalParseSummary] = useState<string | null>(null)
   const [newRes, setNewRes] = useState({
     customer_name: "",
     phone: "",
@@ -139,25 +143,29 @@ export default function OperationSaonaPage() {
     drink_package: "standard",
   })
 
-  const resetNewRes = () => setNewRes({
-    customer_name: "",
-    phone: "",
-    email: "",
-    hotel: "",
-    location: "",
-    guests: 1,
-    children: 0,
-    pickup_time: "",
-    boat_type: "catamaran",
-    channel: "phone",
-    channel_url: "",
-    channel_color: "#6b7280",
-    date: new Date().toISOString().slice(0, 10),
-    amount: 0,
-    notes: "",
-    lunch_included: true,
-    drink_package: "standard",
-  })
+  const resetNewRes = () => {
+    setNewRes({
+      customer_name: "",
+      phone: "",
+      email: "",
+      hotel: "",
+      location: "",
+      guests: 1,
+      children: 0,
+      pickup_time: "",
+      boat_type: "catamaran",
+      channel: "phone",
+      channel_url: "",
+      channel_color: "#6b7280",
+      date: new Date().toISOString().slice(0, 10),
+      amount: 0,
+      notes: "",
+      lunch_included: true,
+      drink_package: "standard",
+    })
+    setExternalReservationText("")
+    setExternalParseSummary(null)
+  }
 
   const channelColors: Record<string, string> = {
     website: "#dc2626",
@@ -166,6 +174,42 @@ export default function OperationSaonaPage() {
     walk_in: "#8b5cf6",
     seller: "#d97706",
     ota: "#ef4444",
+  }
+
+  const applyExternalReservation = () => {
+    if (!externalReservationText.trim()) {
+      setExternalParseSummary("Pega el texto de la reserva primero.")
+      return
+    }
+
+    const parsed = parseExternalReservationText(externalReservationText)
+    const pickupValue = parsed.pickupWindow || parsed.pickupTime || ""
+    const notesFromPaste = [
+      parsed.bookingReference ? `Booking ref: ${parsed.bookingReference}` : "",
+      parsed.ticketCodes.length > 0 ? `Tickets: ${parsed.ticketCodes.join(" | ")}` : "",
+    ].filter(Boolean).join("\n")
+
+    setNewRes((prev) => ({
+      ...prev,
+      customer_name: parsed.customerName || prev.customer_name,
+      hotel: parsed.hotel || prev.hotel,
+      location: parsed.location || prev.location,
+      date: parsed.reservationDate || prev.date,
+      pickup_time: pickupValue || prev.pickup_time,
+      guests: parsed.guests || prev.guests,
+      children: parsed.children ?? prev.children,
+      amount: parsed.amount ?? prev.amount,
+      channel: "ota",
+      channel_url: parsed.bookingReference || prev.channel_url,
+      notes: [prev.notes, notesFromPaste].filter(Boolean).join(prev.notes && notesFromPaste ? "\n" : ""),
+      boat_type: parsed.boatType || prev.boat_type,
+      lunch_included: parsed.includesLunch ?? prev.lunch_included,
+      drink_package: parsed.includesOpenBar ? "premium" : prev.drink_package,
+    }))
+
+    setExternalParseSummary(
+      `Autocompletado: ${parsed.source.toUpperCase()}${parsed.bookingReference ? ` | Ref: ${parsed.bookingReference}` : ""}${parsed.customerName ? ` | Cliente: ${parsed.customerName}` : ""}`
+    )
   }
 
   const syncGygBookings = async () => {
@@ -755,6 +799,22 @@ export default function OperationSaonaPage() {
           </DialogHeader>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2 sm:col-span-2 rounded-md border border-dashed border-cyan-300 bg-cyan-50/60 p-3">
+              <Label>Pegar reserva externa (GetYourGuide / Viator)</Label>
+              <Textarea
+                value={externalReservationText}
+                onChange={(e) => setExternalReservationText(e.target.value)}
+                placeholder="Pega aqui el texto completo de la reserva..."
+                className="min-h-[120px]"
+              />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <Button type="button" variant="outline" className="border-cyan-300 text-cyan-700 hover:bg-cyan-50" onClick={applyExternalReservation}>
+                  Autocompletar campos
+                </Button>
+                {externalParseSummary && <p className="text-xs text-cyan-700">{externalParseSummary}</p>}
+              </div>
+            </div>
+
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Nombre del cliente *</Label>
               <Input

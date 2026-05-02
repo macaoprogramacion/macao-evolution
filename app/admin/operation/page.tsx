@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import {
   Select,
@@ -54,7 +55,22 @@ import {
 } from "@/components/ui/dialog"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { supabase } from "@/lib/supabase"
+import { parseExternalReservationText } from "@/lib/external-reservation-parser"
 import { Label } from "@/components/ui/label"
+
+function inferTimeslotFromPickup(pickupValue: string) {
+  const firstTimeMatch = pickupValue.match(/(\d{1,2}):\d{2}\s*([AP]M)/i)
+  if (!firstTimeMatch) return "8 AM"
+
+  let hour = Number(firstTimeMatch[1])
+  const ampm = firstTimeMatch[2].toUpperCase()
+  if (ampm === "PM" && hour !== 12) hour += 12
+  if (ampm === "AM" && hour === 12) hour = 0
+
+  if (hour <= 9) return "8 AM"
+  if (hour <= 12) return "11 AM"
+  return "3 PM"
+}
 
 type Reservation = {
   id: string
@@ -137,6 +153,8 @@ export default function OperationPage() {
   // Modal agregar reserva
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [externalReservationText, setExternalReservationText] = useState("")
+  const [externalParseSummary, setExternalParseSummary] = useState<string | null>(null)
   const [newRes, setNewRes] = useState({
     customer_name: "",
     phone: "",
@@ -158,26 +176,30 @@ export default function OperationPage() {
     notes: "",
   })
 
-  const resetNewRes = () => setNewRes({
-    customer_name: "",
-    phone: "",
-    email: "",
-    hotel: "",
-    location: "",
-    timeslot: "8 AM",
-    guests: 1,
-    children: 0,
-    pickup_time: "",
-    pickup_point: "lobby",
-    transport_type: "included",
-    experience: "",
-    channel: "phone",
-    channel_url: "",
-    channel_color: "#6b7280",
-    date: new Date().toISOString().slice(0, 10),
-    amount: 0,
-    notes: "",
-  })
+  const resetNewRes = () => {
+    setNewRes({
+      customer_name: "",
+      phone: "",
+      email: "",
+      hotel: "",
+      location: "",
+      timeslot: "8 AM",
+      guests: 1,
+      children: 0,
+      pickup_time: "",
+      pickup_point: "lobby",
+      transport_type: "included",
+      experience: "",
+      channel: "phone",
+      channel_url: "",
+      channel_color: "#6b7280",
+      date: new Date().toISOString().slice(0, 10),
+      amount: 0,
+      notes: "",
+    })
+    setExternalReservationText("")
+    setExternalParseSummary(null)
+  }
 
   const channelColors: Record<string, string> = {
     website: "#dc2626",
@@ -186,6 +208,42 @@ export default function OperationPage() {
     walk_in: "#8b5cf6",
     seller: "#d97706",
     ota: "#ef4444",
+  }
+
+  const applyExternalReservation = () => {
+    if (!externalReservationText.trim()) {
+      setExternalParseSummary("Pega el texto de la reserva primero.")
+      return
+    }
+
+    const parsed = parseExternalReservationText(externalReservationText)
+    const pickupValue = parsed.pickupWindow || parsed.pickupTime || ""
+    const notesFromPaste = [
+      parsed.bookingReference ? `Booking ref: ${parsed.bookingReference}` : "",
+      parsed.ticketCodes.length > 0 ? `Tickets: ${parsed.ticketCodes.join(" | ")}` : "",
+    ].filter(Boolean).join("\n")
+
+    setNewRes((prev) => ({
+      ...prev,
+      customer_name: parsed.customerName || prev.customer_name,
+      hotel: parsed.hotel || prev.hotel,
+      location: parsed.location || prev.location,
+      date: parsed.reservationDate || prev.date,
+      pickup_time: pickupValue || prev.pickup_time,
+      timeslot: pickupValue ? inferTimeslotFromPickup(pickupValue) : prev.timeslot,
+      pickup_point: /barrera/i.test(`${parsed.location || ""} ${parsed.hotel || ""}`) ? "barrera" : prev.pickup_point,
+      guests: parsed.guests || prev.guests,
+      children: parsed.children ?? prev.children,
+      amount: parsed.amount ?? prev.amount,
+      channel: "ota",
+      channel_url: parsed.bookingReference || prev.channel_url,
+      experience: parsed.optionTitle || parsed.productTitle || prev.experience,
+      notes: [prev.notes, notesFromPaste].filter(Boolean).join(prev.notes && notesFromPaste ? "\n" : ""),
+    }))
+
+    setExternalParseSummary(
+      `Autocompletado: ${parsed.source.toUpperCase()}${parsed.bookingReference ? ` | Ref: ${parsed.bookingReference}` : ""}${parsed.customerName ? ` | Cliente: ${parsed.customerName}` : ""}`
+    )
   }
 
   // Guardar nueva reserva
@@ -913,6 +971,22 @@ export default function OperationPage() {
           </DialogHeader>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2 sm:col-span-2 rounded-md border border-dashed border-blue-300 bg-blue-50/50 p-3">
+              <Label>Pegar reserva externa (GetYourGuide / Viator)</Label>
+              <Textarea
+                value={externalReservationText}
+                onChange={(e) => setExternalReservationText(e.target.value)}
+                placeholder="Pega aqui el texto completo de la reserva..."
+                className="min-h-[120px]"
+              />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <Button type="button" variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50" onClick={applyExternalReservation}>
+                  Autocompletar campos
+                </Button>
+                {externalParseSummary && <p className="text-xs text-blue-700">{externalParseSummary}</p>}
+              </div>
+            </div>
+
             {/* Nombre */}
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Nombre del cliente *</Label>
