@@ -252,19 +252,27 @@ export default function OperationPage() {
     if (!newRes.customer_name || !newRes.date) return
     setSaving(true)
     try {
-      const { error } = await supabase.from("reservations").insert({
+      console.log("Attempting to save reservation:", newRes)
+      const insertPayload = {
         ...newRes,
         channel_color: channelColors[newRes.channel] || "#6b7280",
-      })
+      }
+      console.log("Insert payload:", insertPayload)
+      
+      const { error } = await supabase.from("reservations").insert(insertPayload)
+      
       if (error) {
         console.error("Error creating reservation:", error)
+        alert("Error al crear reserva: " + (error.message || JSON.stringify(error)))
       } else {
+        console.log("Reservation created successfully, fetching updated list...")
         await fetchReservations()
         setAddDialogOpen(false)
         resetNewRes()
       }
     } catch (e) {
       console.error("Error creating reservation:", e)
+      alert("Error inesperado: " + (e instanceof Error ? e.message : String(e)))
     } finally {
       setSaving(false)
     }
