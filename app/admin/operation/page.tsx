@@ -24,6 +24,7 @@ import {
   Plus,
   Ticket,
   DollarSign,
+  UserX,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -37,14 +38,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import {
   Dialog,
   DialogContent,
@@ -90,7 +83,7 @@ type Reservation = {
   channelUrl: string
   channelColor: string
   date: string
-  status: "pending" | "confirmed" | "in_progress" | "completed" | "cancelled"
+  status: "pending" | "confirmed" | "in_progress" | "completed" | "cancelled" | "no_show"
   assignedChoferId: string | null
   assignedChoferName: string | null
   choferStatus: "none" | "recibida" | "confirmada"
@@ -102,6 +95,23 @@ type Chofer = {
   id: string
   name: string
   phone: string
+}
+
+function getPickupDeadline(dateValue: string, pickupValue: string, timeslotFallback?: string) {
+  const source = `${pickupValue || ""} ${timeslotFallback || ""}`
+  const timeMatch = source.match(/(\d{1,2})(?::(\d{2}))?\s*([AP]M)/i)
+  if (!timeMatch) return null
+
+  let hours = Number(timeMatch[1])
+  const minutes = Number(timeMatch[2] || "0")
+  const ampm = timeMatch[3].toUpperCase()
+
+  if (ampm === "PM" && hours !== 12) hours += 12
+  if (ampm === "AM" && hours === 12) hours = 0
+
+  const pickupDate = new Date(`${dateValue}T00:00:00`)
+  pickupDate.setHours(hours, minutes, 0, 0)
+  return pickupDate
 }
 
 /** Mapear fila de Supabase a formato del componente */
@@ -356,24 +366,33 @@ export default function OperationPage() {
   }
 
   // Cambiar estado de reserva
-  const toggleStatus = async (id: string) => {
+  const updateReservationStatus = async (id: string, status: Reservation["status"]) => {
     try {
       const { error } = await supabase.rpc("update_reservation_status", {
         p_reservation_id: id,
-        p_status: "confirmed",
+        p_status: status,
       })
       if (error) {
         console.error("Error updating status:", error)
+        alert("Error al actualizar estado: " + error.message)
       } else {
         setReservations((prev) =>
           prev.map((r) =>
-            r.id === id ? { ...r, status: "confirmed" as const } : r
+            r.id === id ? { ...r, status } : r
           )
         )
       }
     } catch (e) {
       console.error("Error updating status:", e)
     }
+  }
+
+  const toggleStatus = async (id: string) => {
+    await updateReservationStatus(id, "confirmed")
+  }
+
+  const markAsNoShow = async (id: string) => {
+    await updateReservationStatus(id, "no_show")
   }
 
   // Generar y descargar ticket para el cliente
@@ -508,24 +527,62 @@ export default function OperationPage() {
   }
 
   const getStatusButton = (reservation: Reservation) => {
-    if (reservation.status === "confirmed") {
+    const pickupDeadline = getPickupDeadline(reservation.date, reservation.pickupTime, reservation.timeslot)
+    const canNoShow =
+      (reservation.status === "pending" || reservation.status === "confirmed") &&
+      pickupDeadline != null &&
+      new Date().getTime() > pickupDeadline.getTime()
+
+    if (reservation.status === "no_show") {
       return (
-        <Badge className="bg-green-100 text-green-700 hover:bg-green-100 cursor-default">
-          <CheckCircle2 className="w-3 h-3 mr-1" />
-          Confirmada
+        <Badge className="bg-gray-200 text-gray-700 hover:bg-gray-200 cursor-default">
+          <UserX className="w-3 h-3 mr-1" />
+          NO SHOW
         </Badge>
       )
     }
+
+    if (reservation.status === "cancelled") {
+      return (
+        <Badge className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">
+          <XCircle className="w-3 h-3 mr-1" />
+          Cancelada
+        </Badge>
+      )
+    }
+
     return (
-      <Button
-        size="sm"
-        variant="outline"
-        className="border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-green-100 hover:text-green-700 hover:border-green-300"
-        onClick={() => toggleStatus(reservation.id)}
-      >
-        <AlertCircle className="w-3 h-3 mr-1" />
-        Pendiente
-      </Button>
+      <div className="flex items-center gap-2 flex-wrap">
+        {reservation.status === "confirmed" ? (
+          <Badge className="bg-green-100 text-green-700 hover:bg-green-100 cursor-default">
+            <CheckCircle2 className="w-3 h-3 mr-1" />
+            Confirmada
+          </Badge>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-green-100 hover:text-green-700 hover:border-green-300"
+            onClick={() => toggleStatus(reservation.id)}
+          >
+            <AlertCircle className="w-3 h-3 mr-1" />
+            Pendiente
+          </Button>
+        )}
+        {(reservation.status === "pending" || reservation.status === "confirmed") && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!canNoShow}
+            className="border-gray-400 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+            onClick={() => markAsNoShow(reservation.id)}
+            title={canNoShow ? "Marcar como NO SHOW" : "Solo disponible despues de la hora de recogida"}
+          >
+            <UserX className="w-3 h-3 mr-1" />
+            NO SHOW
+          </Button>
+        )}
+      </div>
     )
   }
 
@@ -672,6 +729,7 @@ export default function OperationPage() {
                   <SelectItem value="all">Todos los estados</SelectItem>
                   <SelectItem value="confirmed">Confirmadas</SelectItem>
                   <SelectItem value="pending">Pendientes</SelectItem>
+                  <SelectItem value="no_show">No Show</SelectItem>
                   <SelectItem value="cancelled">Canceladas</SelectItem>
                 </SelectContent>
               </Select>
@@ -679,7 +737,7 @@ export default function OperationPage() {
           </CardContent>
         </Card>
 
-        {/* Reservations Table */}
+        {/* Reservations */}
         <Card className="border-gray-200">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -698,175 +756,133 @@ export default function OperationPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Contacto</TableHead>
-                    <TableHead>Hotel / Ubicación</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Horario</TableHead>
-                    <TableHead>Recogida</TableHead>
-                    <TableHead>Personas</TableHead>
-                    <TableHead>Transporte</TableHead>
-                    <TableHead>Experiencia</TableHead>
-                    <TableHead>Monto</TableHead>
-                    <TableHead>Canal</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredReservations.map((reservation) => (
-                    <TableRow key={reservation.id}>
-                      <TableCell className="font-mono text-sm">{reservation.id}</TableCell>
-                      <TableCell>
-                        <div className="font-medium text-gray-900">{reservation.customerName}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <Phone className="w-3 h-3" />
-                            {reservation.phone}
-                          </div>
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <Mail className="w-3 h-3" />
-                            {reservation.email}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
-                            <Hotel className="w-3 h-3" />
-                            {reservation.hotel}
-                          </div>
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <MapPin className="w-3 h-3" />
-                            {reservation.location}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm text-gray-900">
-                          <Calendar className="w-3 h-3" />
-                          {new Date(reservation.date).toLocaleDateString("es-ES", {
-                            day: "2-digit",
-                            month: "short",
-                          })}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="font-mono">
-                          {reservation.timeslot}
+            <div className="space-y-3">
+              {filteredReservations.map((reservation) => (
+                <div key={reservation.id} className="border rounded-lg p-4 space-y-3 hover:border-red-200 transition-colors">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {getStatusButton(reservation)}
+                    <Badge
+                      className="flex items-center gap-1"
+                      style={{
+                        backgroundColor: `${reservation.channelColor}20`,
+                        color: reservation.channelColor,
+                      }}
+                    >
+                      <Globe className="w-3 h-3" />
+                      {reservation.channel}
+                    </Badge>
+                    {reservation.channelUrl && (
+                      <Badge className="bg-orange-100 text-orange-700 text-xs">
+                        <ExternalLink className="w-3 h-3 mr-1" />
+                        {reservation.channelUrl}
+                      </Badge>
+                    )}
+                    {reservation.amount != null && reservation.amount > 0 && (
+                      <span className="ml-auto text-sm font-bold text-green-700">${reservation.amount.toFixed(2)} USD</span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100 text-base">{reservation.customerName}</div>
+                      <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400 mt-0.5 flex-wrap">
+                        <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{reservation.phone}</span>
+                        <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{reservation.email}</span>
+                      </div>
+                    </div>
+                    <div className="sm:text-right">
+                      <div className="flex items-center gap-1 text-sm font-medium text-gray-900 dark:text-gray-100 sm:justify-end">
+                        <Calendar className="w-3.5 h-3.5" />
+                        {new Date(reservation.date + "T12:00:00").toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })}
+                      </div>
+                      <div className="flex items-center gap-1 text-base text-red-700 font-bold sm:justify-end mt-0.5">
+                        <Clock className="w-3.5 h-3.5" />
+                        {reservation.pickupTime || reservation.timeslot}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 dark:bg-gray-900 rounded-md px-3 py-2 text-sm">
+                    <div className="flex items-center gap-1.5 font-medium text-gray-900 dark:text-gray-100">
+                      <Hotel className="w-3.5 h-3.5 text-gray-500" />
+                      {reservation.hotel}
+                    </div>
+                    {reservation.location && (
+                      <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400 mt-0.5">
+                        <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                        {reservation.location}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap text-sm">
+                    <Badge className="bg-red-100 text-red-700 hover:bg-red-100">
+                      <Users className="w-3 h-3 mr-1" />
+                      {reservation.guests} + {reservation.children} niños | {reservation.guests + reservation.children} PAX
+                    </Badge>
+                    <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">
+                      <Clock className="w-3 h-3 mr-1" />
+                      {reservation.timeslot || "Sin horario"}
+                    </Badge>
+                    <Badge className={reservation.transportType === "included" ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-gray-100 text-gray-700 hover:bg-gray-100"}>
+                      <Car className="w-3 h-3 mr-1" />
+                      {reservation.transportType}
+                    </Badge>
+                    {reservation.experience && (
+                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                        {reservation.experience}
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-gray-100">
+                    {reservation.assignedChoferId ? (
+                      <>
+                        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                          <Send className="w-3 h-3 mr-1" />
+                          Enviada
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm text-gray-900">
-                          <Clock className="w-3 h-3" />
-                          {reservation.pickupTime}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
-                          <Users className="w-3 h-3" />
-                          {reservation.guests}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          className={
-                            reservation.transportType === "Privado"
-                              ? "bg-gray-200 text-gray-900 dark:text-gray-100 hover:bg-gray-200"
-                              : "bg-gray-100 text-gray-700 dark:text-gray-300 hover:bg-gray-100"
-                          }
-                        >
-                          <Car className="w-3 h-3 mr-1" />
-                          {reservation.transportType}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm font-medium text-gray-900">{reservation.experience}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm font-medium text-gray-900">
-                          {reservation.amount != null ? `$${reservation.amount.toFixed(2)}` : "—"}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <Badge
-                            className="flex items-center gap-1 w-fit"
-                            style={{
-                              backgroundColor: `${reservation.channelColor}20`,
-                              color: reservation.channelColor,
-                            }}
-                          >
-                            <Globe className="w-3 h-3" />
-                            {reservation.channel}
+                        {reservation.choferStatus === "confirmada" ? (
+                          <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
+                            <CheckCircle2 className="w-3 h-3 mr-1" />
+                            Recogida OK
                           </Badge>
-                          <div className="flex items-center gap-1 text-xs text-gray-500">
-                            <ExternalLink className="w-2 h-2" />
-                            {reservation.channelUrl}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">{getStatusButton(reservation)}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col items-start gap-1.5">
-                          {reservation.assignedChoferId ? (
-                            <>
-                              <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
-                                <Send className="w-3 h-3 mr-1" />
-                                Enviada
-                              </Badge>
-                              {reservation.choferStatus === "confirmada" ? (
-                                <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-                                  <CheckCircle2 className="w-3 h-3 mr-1" />
-                                  Recogida OK
-                                </Badge>
-                              ) : reservation.choferStatus === "recibida" ? (
-                                <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">
-                                  <AlertCircle className="w-3 h-3 mr-1" />
-                                  Recibida
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-gray-400 border-gray-200">
-                                  <Clock className="w-3 h-3 mr-1" />
-                                  Sin respuesta
-                                </Badge>
-                              )}
-                            </>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="border-blue-300 text-blue-700 hover:bg-blue-100"
-                              onClick={() => openSendDialog(reservation)}
-                            >
-                              <Send className="w-3 h-3 mr-1" />
-                              Enviar a Chofer
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 w-full"
-                            onClick={() => downloadTicket(reservation)}
-                          >
-                            <Ticket className="w-3 h-3 mr-1" />
-                            Ticket
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                        ) : reservation.choferStatus === "recibida" ? (
+                          <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">
+                            <AlertCircle className="w-3 h-3 mr-1" />
+                            Recibida
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-gray-400 border-gray-200">
+                            <Clock className="w-3 h-3 mr-1" />
+                            Sin respuesta
+                          </Badge>
+                        )}
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                        onClick={() => openSendDialog(reservation)}
+                      >
+                        <Send className="w-3 h-3 mr-1" />
+                        Enviar a Chofer
+                      </Button>
+                    )}
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                      onClick={() => downloadTicket(reservation)}
+                    >
+                      <Ticket className="w-3 h-3 mr-1" />
+                      Ticket
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {filteredReservations.length === 0 && (

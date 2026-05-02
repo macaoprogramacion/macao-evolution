@@ -27,6 +27,8 @@ import {
   Unlock,
   RotateCcw,
   Save,
+  UserX,
+  XCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -70,7 +72,7 @@ type SamanaReservation = {
   channelUrl: string
   channelColor: string
   date: string
-  status: "pending" | "confirmed" | "in_progress" | "completed" | "cancelled"
+  status: "pending" | "confirmed" | "in_progress" | "completed" | "cancelled" | "no_show"
   amount: number | null
   notes: string
   lunchIncluded: boolean
@@ -311,6 +313,22 @@ function parseExternalReservationText(rawText: string): { updates: Partial<NewRe
   }
 
   return { updates, detected }
+}
+
+function getPickupDeadline(dateValue: string, pickupValue: string) {
+  const timeMatch = pickupValue.match(/(\d{1,2})(?::(\d{2}))?\s*([AP]M)/i)
+  if (!timeMatch) return null
+
+  let hours = Number(timeMatch[1])
+  const minutes = Number(timeMatch[2] || "0")
+  const ampm = timeMatch[3].toUpperCase()
+
+  if (ampm === "PM" && hours !== 12) hours += 12
+  if (ampm === "AM" && hours === 12) hours = 0
+
+  const pickupDate = new Date(`${dateValue}T00:00:00`)
+  pickupDate.setHours(hours, minutes, 0, 0)
+  return pickupDate
 }
 
 function mapRow(r: any): SamanaReservation {
@@ -747,25 +765,33 @@ export default function OperationSamanaPage() {
     })
   }
 
-  const toggleStatus = async (id: string) => {
+  const updateReservationStatus = async (id: string, status: SamanaReservation["status"]) => {
     try {
       const { error } = await supabase
         .from("samana_reservations")
-        .update({ status: "confirmed", updated_at: new Date().toISOString() })
+        .update({ status, updated_at: new Date().toISOString() })
         .eq("id", id)
       if (error) {
         console.error("Error updating status:", error)
-        alert("Error al confirmar: " + error.message)
+        alert("Error al actualizar estado: " + error.message)
       } else {
         setReservations((prev) =>
           prev.map((r) =>
-            r.id === id ? { ...r, status: "confirmed" as const } : r
+            r.id === id ? { ...r, status } : r
           )
         )
       }
     } catch (e) {
       console.error("Error updating status:", e)
     }
+  }
+
+  const toggleStatus = async (id: string) => {
+    await updateReservationStatus(id, "confirmed")
+  }
+
+  const markAsNoShow = async (id: string) => {
+    await updateReservationStatus(id, "no_show")
   }
 
   const languageOptions = [
@@ -1091,24 +1117,62 @@ ${t.getReady} 🐋⚓
   }
 
   const getStatusButton = (reservation: SamanaReservation) => {
-    if (reservation.status === "confirmed") {
+    const pickupDeadline = getPickupDeadline(reservation.date, reservation.pickupTime)
+    const canNoShow =
+      (reservation.status === "pending" || reservation.status === "confirmed") &&
+      pickupDeadline != null &&
+      new Date().getTime() > pickupDeadline.getTime()
+
+    if (reservation.status === "no_show") {
       return (
-        <Badge className="bg-green-100 text-green-700 hover:bg-green-100 cursor-default">
-          <CheckCircle2 className="w-3 h-3 mr-1" />
-          Confirmada
+        <Badge className="bg-gray-200 text-gray-700 hover:bg-gray-200 cursor-default">
+          <UserX className="w-3 h-3 mr-1" />
+          NO SHOW
         </Badge>
       )
     }
+
+    if (reservation.status === "cancelled") {
+      return (
+        <Badge className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">
+          <XCircle className="w-3 h-3 mr-1" />
+          Cancelada
+        </Badge>
+      )
+    }
+
     return (
-      <Button
-        size="sm"
-        variant="outline"
-        className="border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-green-100 hover:text-green-700 hover:border-green-300"
-        onClick={() => toggleStatus(reservation.id)}
-      >
-        <AlertCircle className="w-3 h-3 mr-1" />
-        Pendiente
-      </Button>
+      <div className="flex items-center gap-2 flex-wrap">
+        {reservation.status === "confirmed" ? (
+          <Badge className="bg-green-100 text-green-700 hover:bg-green-100 cursor-default">
+            <CheckCircle2 className="w-3 h-3 mr-1" />
+            Confirmada
+          </Badge>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-green-100 hover:text-green-700 hover:border-green-300"
+            onClick={() => toggleStatus(reservation.id)}
+          >
+            <AlertCircle className="w-3 h-3 mr-1" />
+            Pendiente
+          </Button>
+        )}
+        {(reservation.status === "pending" || reservation.status === "confirmed") && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!canNoShow}
+            className="border-gray-400 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+            onClick={() => markAsNoShow(reservation.id)}
+            title={canNoShow ? "Marcar como NO SHOW" : "Solo disponible despues de la hora de recogida"}
+          >
+            <UserX className="w-3 h-3 mr-1" />
+            NO SHOW
+          </Button>
+        )}
+      </div>
     )
   }
 
@@ -1289,6 +1353,7 @@ ${t.getReady} 🐋⚓
                   <SelectItem value="all">Todos los estados</SelectItem>
                   <SelectItem value="confirmed">Confirmadas</SelectItem>
                   <SelectItem value="pending">Pendientes</SelectItem>
+                  <SelectItem value="no_show">No Show</SelectItem>
                   <SelectItem value="cancelled">Canceladas</SelectItem>
                 </SelectContent>
               </Select>

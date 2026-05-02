@@ -45,7 +45,7 @@ CREATE TYPE workflow_status AS ENUM ('active', 'paused', 'draft');
 CREATE TYPE cart_item_type AS ENUM ('service', 'product');
 
 -- Estado de reservación operativa
-CREATE TYPE reservation_status AS ENUM ('confirmed', 'pending', 'in_progress', 'completed', 'cancelled');
+CREATE TYPE reservation_status AS ENUM ('confirmed', 'pending', 'in_progress', 'completed', 'cancelled', 'no_show');
 
 -- Estado de confirmación del chofer
 CREATE TYPE chofer_status AS ENUM ('none', 'recibida', 'confirmada');

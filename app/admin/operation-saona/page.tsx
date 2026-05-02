@@ -24,6 +24,7 @@ import {
   Ship,
   Anchor,
   RefreshCw,
+  UserX,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -37,14 +38,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import {
   Dialog,
   DialogContent,
@@ -73,13 +66,29 @@ type SaonaReservation = {
   channelUrl: string
   channelColor: string
   date: string
-  status: "pending" | "confirmed" | "in_progress" | "completed" | "cancelled"
+  status: "pending" | "confirmed" | "in_progress" | "completed" | "cancelled" | "no_show"
   amount: number | null
   notes: string
   lunchIncluded: boolean
   drinkPackage: string
   gygBookingRef: string
   gygBookingReference: string
+}
+
+function getPickupDeadline(dateValue: string, pickupValue: string) {
+  const timeMatch = pickupValue.match(/(\d{1,2})(?::(\d{2}))?\s*([AP]M)/i)
+  if (!timeMatch) return null
+
+  let hours = Number(timeMatch[1])
+  const minutes = Number(timeMatch[2] || "0")
+  const ampm = timeMatch[3].toUpperCase()
+
+  if (ampm === "PM" && hours !== 12) hours += 12
+  if (ampm === "AM" && hours === 12) hours = 0
+
+  const pickupDate = new Date(`${dateValue}T00:00:00`)
+  pickupDate.setHours(hours, minutes, 0, 0)
+  return pickupDate
 }
 
 function mapRow(r: any): SaonaReservation {
@@ -288,25 +297,33 @@ export default function OperationSaonaPage() {
     return () => clearInterval(interval)
   }, [])
 
-  const toggleStatus = async (id: string) => {
+  const updateReservationStatus = async (id: string, status: SaonaReservation["status"]) => {
     try {
       const { error } = await supabase
         .from("saona_reservations")
-        .update({ status: "confirmed", updated_at: new Date().toISOString() })
+        .update({ status, updated_at: new Date().toISOString() })
         .eq("id", id)
       if (error) {
         console.error("Error updating status:", error)
-        alert("Error al confirmar: " + error.message)
+        alert("Error al actualizar estado: " + error.message)
       } else {
         setReservations((prev) =>
           prev.map((r) =>
-            r.id === id ? { ...r, status: "confirmed" as const } : r
+            r.id === id ? { ...r, status } : r
           )
         )
       }
     } catch (e) {
       console.error("Error updating status:", e)
     }
+  }
+
+  const toggleStatus = async (id: string) => {
+    await updateReservationStatus(id, "confirmed")
+  }
+
+  const markAsNoShow = async (id: string) => {
+    await updateReservationStatus(id, "no_show")
   }
 
   const downloadTicket = (res: SaonaReservation) => {
@@ -436,24 +453,62 @@ export default function OperationSaonaPage() {
   }
 
   const getStatusButton = (reservation: SaonaReservation) => {
-    if (reservation.status === "confirmed") {
+    const pickupDeadline = getPickupDeadline(reservation.date, reservation.pickupTime)
+    const canNoShow =
+      (reservation.status === "pending" || reservation.status === "confirmed") &&
+      pickupDeadline != null &&
+      new Date().getTime() > pickupDeadline.getTime()
+
+    if (reservation.status === "no_show") {
       return (
-        <Badge className="bg-green-100 text-green-700 hover:bg-green-100 cursor-default">
-          <CheckCircle2 className="w-3 h-3 mr-1" />
-          Confirmada
+        <Badge className="bg-gray-200 text-gray-700 hover:bg-gray-200 cursor-default">
+          <UserX className="w-3 h-3 mr-1" />
+          NO SHOW
         </Badge>
       )
     }
+
+    if (reservation.status === "cancelled") {
+      return (
+        <Badge className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">
+          <XCircle className="w-3 h-3 mr-1" />
+          Cancelada
+        </Badge>
+      )
+    }
+
     return (
-      <Button
-        size="sm"
-        variant="outline"
-        className="border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-green-100 hover:text-green-700 hover:border-green-300"
-        onClick={() => toggleStatus(reservation.id)}
-      >
-        <AlertCircle className="w-3 h-3 mr-1" />
-        Pendiente
-      </Button>
+      <div className="flex items-center gap-2 flex-wrap">
+        {reservation.status === "confirmed" ? (
+          <Badge className="bg-green-100 text-green-700 hover:bg-green-100 cursor-default">
+            <CheckCircle2 className="w-3 h-3 mr-1" />
+            Confirmada
+          </Badge>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-green-100 hover:text-green-700 hover:border-green-300"
+            onClick={() => toggleStatus(reservation.id)}
+          >
+            <AlertCircle className="w-3 h-3 mr-1" />
+            Pendiente
+          </Button>
+        )}
+        {(reservation.status === "pending" || reservation.status === "confirmed") && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!canNoShow}
+            className="border-gray-400 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+            onClick={() => markAsNoShow(reservation.id)}
+            title={canNoShow ? "Marcar como NO SHOW" : "Solo disponible despues de la hora de recogida"}
+          >
+            <UserX className="w-3 h-3 mr-1" />
+            NO SHOW
+          </Button>
+        )}
+      </div>
     )
   }
 
@@ -609,6 +664,7 @@ export default function OperationSaonaPage() {
                   <SelectItem value="all">Todos los estados</SelectItem>
                   <SelectItem value="confirmed">Confirmadas</SelectItem>
                   <SelectItem value="pending">Pendientes</SelectItem>
+                  <SelectItem value="no_show">No Show</SelectItem>
                   <SelectItem value="cancelled">Canceladas</SelectItem>
                 </SelectContent>
               </Select>
@@ -616,7 +672,7 @@ export default function OperationSaonaPage() {
           </CardContent>
         </Card>
 
-        {/* Table */}
+        {/* Reservations */}
         <Card className="border-gray-200">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -629,152 +685,94 @@ export default function OperationSaonaPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Contacto</TableHead>
-                    <TableHead>Hotel / Ubicación</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Recogida</TableHead>
-                    <TableHead>Personas</TableHead>
-                    <TableHead>Embarcación</TableHead>
-                    <TableHead>Almuerzo</TableHead>
-                    <TableHead>Bebidas</TableHead>
-                    <TableHead>Monto</TableHead>
-                    <TableHead>Canal</TableHead>
-                    <TableHead>Ref. GYG</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredReservations.map((reservation) => (
-                    <TableRow key={reservation.id}>
-                      <TableCell className="font-mono text-sm">{reservation.id}</TableCell>
-                      <TableCell>
-                        <div className="font-medium text-gray-900">{reservation.customerName}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <Phone className="w-3 h-3" />
-                            {reservation.phone}
-                          </div>
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <Mail className="w-3 h-3" />
-                            {reservation.email}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
-                            <Hotel className="w-3 h-3" />
-                            {reservation.hotel}
-                          </div>
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <MapPin className="w-3 h-3" />
-                            {reservation.location}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm text-gray-900">
-                          <Calendar className="w-3 h-3" />
-                          {new Date(reservation.date).toLocaleDateString("es-ES", {
-                            day: "2-digit",
-                            month: "short",
-                          })}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm text-gray-900">
-                          <Clock className="w-3 h-3" />
-                          {reservation.pickupTime}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
-                          <Users className="w-3 h-3" />
-                          {reservation.guests}
-                          {reservation.children > 0 && (
-                            <span className="text-gray-400 text-xs ml-1">+{reservation.children}n</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={
-                          reservation.boatType === "catamaran"
-                            ? "bg-cyan-100 text-cyan-700 hover:bg-cyan-100"
-                            : "bg-blue-100 text-blue-700 hover:bg-blue-100"
-                        }>
-                          <Ship className="w-3 h-3 mr-1" />
-                          {reservation.boatType === "catamaran" ? "Catamarán" : "Lancha"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={
-                          reservation.lunchIncluded
-                            ? "bg-green-100 text-green-700 hover:bg-green-100"
-                            : "bg-gray-100 text-gray-500 dark:text-gray-400 hover:bg-gray-100"
-                        }>
-                          {reservation.lunchIncluded ? "Sí" : "No"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm text-gray-700">
-                          {reservation.drinkPackage === "premium" ? "Premium" : reservation.drinkPackage === "standard" ? "Estándar" : "No"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm font-medium text-gray-900">
-                          {reservation.amount != null ? `$${reservation.amount.toFixed(2)}` : "—"}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          className="flex items-center gap-1 w-fit"
-                          style={{
-                            backgroundColor: `${reservation.channelColor}20`,
-                            color: reservation.channelColor,
-                          }}
-                        >
-                          <Globe className="w-3 h-3" />
-                          {reservation.channel}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {reservation.gygBookingRef ? (
-                          <span className="font-mono text-xs text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
-                            {reservation.gygBookingRef}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300 text-xs">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">{getStatusButton(reservation)}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col items-start gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-cyan-300 text-cyan-700 hover:bg-cyan-50 w-full"
-                            onClick={() => downloadTicket(reservation)}
-                          >
-                            <Ticket className="w-3 h-3 mr-1" />
-                            Ticket
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className="space-y-3">
+              {filteredReservations.map((reservation) => (
+                <div key={reservation.id} className="border rounded-lg p-4 space-y-3 hover:border-cyan-200 transition-colors">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {getStatusButton(reservation)}
+                    <Badge
+                      className="flex items-center gap-1"
+                      style={{
+                        backgroundColor: `${reservation.channelColor}20`,
+                        color: reservation.channelColor,
+                      }}
+                    >
+                      <Globe className="w-3 h-3" />
+                      {reservation.channel}
+                    </Badge>
+                    {(reservation.gygBookingRef || reservation.gygBookingReference) && (
+                      <Badge className="bg-orange-100 text-orange-700 text-xs">
+                        {reservation.gygBookingReference || reservation.gygBookingRef}
+                      </Badge>
+                    )}
+                    {reservation.amount != null && reservation.amount > 0 && (
+                      <span className="ml-auto text-sm font-bold text-cyan-700">${reservation.amount.toFixed(2)} USD</span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <div className="font-semibold text-gray-900 dark:text-gray-100 text-base">{reservation.customerName}</div>
+                      <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400 mt-0.5 flex-wrap">
+                        <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{reservation.phone}</span>
+                        <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{reservation.email}</span>
+                      </div>
+                    </div>
+                    <div className="sm:text-right">
+                      <div className="flex items-center gap-1 text-sm font-medium text-gray-900 dark:text-gray-100 sm:justify-end">
+                        <Calendar className="w-3.5 h-3.5" />
+                        {new Date(reservation.date + "T12:00:00").toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })}
+                      </div>
+                      <div className="flex items-center gap-1 text-base text-cyan-700 font-bold sm:justify-end mt-0.5">
+                        <Clock className="w-3.5 h-3.5" />
+                        {reservation.pickupTime}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 dark:bg-gray-900 rounded-md px-3 py-2 text-sm">
+                    <div className="flex items-center gap-1.5 font-medium text-gray-900 dark:text-gray-100">
+                      <Hotel className="w-3.5 h-3.5 text-gray-500" />
+                      {reservation.hotel}
+                    </div>
+                    {reservation.location && (
+                      <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400 mt-0.5">
+                        <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                        {reservation.location}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap text-sm">
+                    <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-100">
+                      <Users className="w-3 h-3 mr-1" />
+                      {reservation.guests} + {reservation.children} niños | {reservation.guests + reservation.children} PAX
+                    </Badge>
+                    <Badge className={reservation.boatType === "catamaran" ? "bg-cyan-100 text-cyan-700 hover:bg-cyan-100" : "bg-blue-100 text-blue-700 hover:bg-blue-100"}>
+                      <Ship className="w-3 h-3 mr-1" />
+                      {reservation.boatType === "catamaran" ? "Catamarán" : "Lancha"}
+                    </Badge>
+                    <Badge className={reservation.lunchIncluded ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-gray-100 text-gray-500 dark:text-gray-400 hover:bg-gray-100"}>
+                      🍽️ {reservation.lunchIncluded ? "Almuerzo ✓" : "Sin almuerzo"}
+                    </Badge>
+                    <Badge className={reservation.drinkPackage === "premium" ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : "bg-gray-100 text-gray-700 hover:bg-gray-100"}>
+                      🍹 {reservation.drinkPackage === "premium" ? "Premium" : reservation.drinkPackage === "standard" ? "Estándar" : "No"}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-gray-100">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-cyan-300 text-cyan-700 hover:bg-cyan-50"
+                      onClick={() => downloadTicket(reservation)}
+                    >
+                      <Ticket className="w-3 h-3 mr-1" />
+                      Ticket
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {filteredReservations.length === 0 && (
