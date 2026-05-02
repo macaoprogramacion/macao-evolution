@@ -2,6 +2,7 @@ export type ParsedExternalReservation = {
   source: "gyg" | "viator" | "unknown"
   bookingReference?: string
   customerName?: string
+  phone?: string
   reservationDate?: string
   pickupTime?: string
   pickupWindow?: string
@@ -76,6 +77,12 @@ export function parseExternalReservationText(rawText: string): ParsedExternalRes
     if (name) result.customerName = name
   }
 
+  // Phone line often appears as a standalone value (e.g. +351912643517)
+  const phoneLine = lines.find((line) => /^\+?\d[\d\s\-()]{7,}\d$/.test(line))
+  if (phoneLine) {
+    result.phone = phoneLine.replace(/\s+/g, "")
+  }
+
   const dateTimeMatch = text.match(/(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?,\s+\d{4})\s+(\d{1,2}:\d{2}\s*[AP]M)/i)
   if (dateTimeMatch) {
     const datePart = dateTimeMatch[1].replace(/(\d)(st|nd|rd|th)/gi, "$1")
@@ -89,6 +96,24 @@ export function parseExternalReservationText(rawText: string): ParsedExternalRes
   const pickupWindow = text.match(/picked up between\s+(\d{1,2}:\d{2}\s*[AP]M)\s+and\s+(\d{1,2}:\d{2}\s*[AP]M)/i)
   if (pickupWindow) {
     result.pickupWindow = `${pickupWindow[1].toUpperCase()} - ${pickupWindow[2].toUpperCase()}`
+  }
+
+  // Explicit pickup line in GYG details (e.g. Pickup at 7:50 AM)
+  const pickupAt = text.match(/pickup\s+at\s+(\d{1,2}:\d{2}\s*[AP]M)/i)
+  if (pickupAt) {
+    result.pickupTime = pickupAt[1].toUpperCase()
+  }
+
+  // Message templates can include time as 7h50 / 07h50
+  if (!result.pickupTime) {
+    const pickupHFormat = text.match(/(?:pickup|embarque|recogida)[^\n]{0,50}?(\d{1,2})h(\d{2})/i)
+    if (pickupHFormat) {
+      const h = Number(pickupHFormat[1])
+      const m = pickupHFormat[2]
+      const period = h >= 12 ? "PM" : "AM"
+      const h12 = h % 12 === 0 ? 12 : h % 12
+      result.pickupTime = `${h12}:${m} ${period}`
+    }
   }
 
   const peopleLine = text.match(/(\d+)\s+people\s*-\s*\$([\d.,]+)/i)

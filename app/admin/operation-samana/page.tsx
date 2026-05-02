@@ -205,6 +205,13 @@ function parseExternalReservationText(rawText: string): { updates: Partial<NewRe
     }
   }
 
+  // Phone line often appears standalone (e.g. +351912643517)
+  const phoneLine = lines.find((line) => /^\+?\d[\d\s\-()]{7,}\d$/.test(line))
+  if (phoneLine) {
+    updates.phone = phoneLine.replace(/\s+/g, "")
+    detected.push(`Telefono: ${updates.phone}`)
+  }
+
   // Date + pickup time from schedule line (e.g. Thursday, June 4th, 2026 7:30 AM)
   const dateTimeMatch = text.match(/(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?,\s+\d{4})\s+(\d{1,2}:\d{2}\s*[AP]M)/i)
   if (dateTimeMatch) {
@@ -222,6 +229,24 @@ function parseExternalReservationText(rawText: string): { updates: Partial<NewRe
   if (pickupWindow) {
     updates.pickup_time = `${pickupWindow[1].toUpperCase()} - ${pickupWindow[2].toUpperCase()}`
     detected.push(`Recogida: ${updates.pickup_time}`)
+  }
+
+  const pickupAt = text.match(/pickup\s+at\s+(\d{1,2}:\d{2}\s*[AP]M)/i)
+  if (pickupAt) {
+    updates.pickup_time = pickupAt[1].toUpperCase()
+    detected.push(`Recogida: ${updates.pickup_time}`)
+  }
+
+  if (!updates.pickup_time) {
+    const pickupHFormat = text.match(/(?:pickup|embarque|recogida)[^\n]{0,50}?(\d{1,2})h(\d{2})/i)
+    if (pickupHFormat) {
+      const h = Number(pickupHFormat[1])
+      const m = pickupHFormat[2]
+      const period = h >= 12 ? "PM" : "AM"
+      const h12 = h % 12 === 0 ? 12 : h % 12
+      updates.pickup_time = `${h12}:${m} ${period}`
+      detected.push(`Recogida: ${updates.pickup_time}`)
+    }
   }
 
   // Travelers and amount

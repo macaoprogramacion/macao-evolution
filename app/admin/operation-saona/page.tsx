@@ -192,6 +192,7 @@ export default function OperationSaonaPage() {
     setNewRes((prev) => ({
       ...prev,
       customer_name: parsed.customerName || prev.customer_name,
+      phone: parsed.phone || prev.phone,
       hotel: parsed.hotel || prev.hotel,
       location: parsed.location || prev.location,
       date: parsed.reservationDate || prev.date,
