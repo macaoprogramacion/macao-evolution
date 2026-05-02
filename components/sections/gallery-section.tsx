@@ -19,16 +19,6 @@ export function GallerySection() {
     { src: "/images/gallery-section/gallery (3).webp", alt: "GalerÃ­a Macao 3" },
     { src: "/images/gallery-section/gallery (4).webp", alt: "GalerÃ­a Macao 4" },
     { src: "/images/gallery-section/gallery (5).webp", alt: "GalerÃ­a Macao 5" },
-    { src: "/images/gallery-section/gallery (6).webp", alt: "GalerÃ­a Macao 6" },
-    { src: "/images/gallery-section/gallery (7).webp", alt: "GalerÃ­a Macao 7" },
-    { src: "/images/gallery-section/gallery (8).webp", alt: "GalerÃ­a Macao 8" },
-    { src: "/images/gallery-section/gallery (9).webp", alt: "GalerÃ­a Macao 9" },
-    { src: "/images/gallery-section/gallery (10).webp", alt: "GalerÃ­a Macao 10" },
-    { src: "/images/gallery-section/gallery (11).webp", alt: "GalerÃ­a Macao 11" },
-    { src: "/images/gallery-section/gallery (12).webp", alt: "GalerÃ­a Macao 12" },
-    { src: "/images/gallery-section/gallery (13).webp", alt: "GalerÃ­a Macao 13" },
-    { src: "/images/gallery-section/gallery (14).webp", alt: "GalerÃ­a Macao 14" },
-    { src: "/images/gallery-section/gallery (15).webp", alt: "GalerÃ­a Macao 15" },
   ];
 
   // Calculate section height (desktop only)
