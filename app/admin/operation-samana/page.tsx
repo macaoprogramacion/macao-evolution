@@ -31,6 +31,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import {
   Select,
@@ -89,9 +90,203 @@ type AvailabilityDayRow = {
   available: number
 }
 
+type NewReservationForm = {
+  customer_name: string
+  phone: string
+  email: string
+  hotel: string
+  location: string
+  guests: number
+  children: number
+  pickup_time: string
+  tour_type: string
+  channel: string
+  channel_url: string
+  channel_color: string
+  date: string
+  amount: number
+  notes: string
+  lunch_included: boolean
+  whale_watching: boolean
+  language: string
+}
+
 const SAMANA_PRODUCT_ID = "1068932"
 const SAMANA_DEFAULT_CAPACITY = 40
 const AVAILABILITY_WINDOW_DAYS = 21
+
+const createEmptyNewReservation = (): NewReservationForm => ({
+  customer_name: "",
+  phone: "",
+  email: "",
+  hotel: "",
+  location: "",
+  guests: 1,
+  children: 0,
+  pickup_time: "",
+  tour_type: "full_day",
+  channel: "phone",
+  channel_url: "",
+  channel_color: "#6b7280",
+  date: new Date().toISOString().slice(0, 10),
+  amount: 0,
+  notes: "",
+  lunch_included: true,
+  whale_watching: false,
+  language: "en",
+})
+
+const languageByName: Record<string, string> = {
+  english: "en",
+  spanish: "es",
+  espanol: "es",
+  français: "fr",
+  french: "fr",
+  deutsch: "de",
+  german: "de",
+  italiano: "it",
+  italian: "it",
+  portugues: "pt",
+  portuguese: "pt",
+  nederlands: "nl",
+  dutch: "nl",
+  русский: "ru",
+  russian: "ru",
+  polski: "pl",
+  polish: "pl",
+}
+
+function parseMoney(value: string) {
+  const normalized = value.replace(/,/g, "")
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+function parseExternalReservationText(rawText: string): { updates: Partial<NewReservationForm>; detected: string[] } {
+  const text = rawText.replace(/\r/g, "")
+  const lines = text.split("\n").map((line) => line.trim()).filter(Boolean)
+  const lowerText = text.toLowerCase()
+  const updates: Partial<NewReservationForm> = {}
+  const detected: string[] = []
+
+  // Channel detection
+  if (/(getyourguide|\bgyg[A-Z0-9]+)/i.test(text)) {
+    updates.channel = "GetYourGuide"
+    detected.push("Canal: GetYourGuide")
+  } else if (/\bviator\b/i.test(text)) {
+    updates.channel = "Viator"
+    detected.push("Canal: Viator")
+  } else {
+    updates.channel = "ota"
+    detected.push("Canal: OTA")
+  }
+
+  // Booking reference
+  const gygRefMatch = text.match(/\bGYG[A-Z0-9]{6,}\b/i)
+  if (gygRefMatch?.[0]) {
+    updates.channel_url = gygRefMatch[0]
+    detected.push(`Referencia: ${gygRefMatch[0]}`)
+  }
+
+  // Lead traveler block
+  const leadIdx = lines.findIndex((line) => /lead traveler/i.test(line))
+  if (leadIdx >= 0 && lines[leadIdx + 1]) {
+    const name = lines[leadIdx + 1].replace(/\([^)]*\)/g, "").trim()
+    if (name) {
+      updates.customer_name = name
+      detected.push(`Cliente: ${name}`)
+    }
+  }
+
+  // Date + pickup time from schedule line (e.g. Thursday, June 4th, 2026 7:30 AM)
+  const dateTimeMatch = text.match(/(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?,\s+\d{4})\s+(\d{1,2}:\d{2}\s*[AP]M)/i)
+  if (dateTimeMatch) {
+    const datePart = dateTimeMatch[1].replace(/(\d)(st|nd|rd|th)/gi, "$1")
+    const parsedDate = new Date(`${datePart} 12:00:00`)
+    if (!isNaN(parsedDate.getTime())) {
+      updates.date = toDateInputValue(parsedDate)
+      detected.push(`Fecha: ${updates.date}`)
+    }
+    updates.pickup_time = dateTimeMatch[2].toUpperCase()
+  }
+
+  // Pickup expected window
+  const pickupWindow = text.match(/picked up between\s+(\d{1,2}:\d{2}\s*[AP]M)\s+and\s+(\d{1,2}:\d{2}\s*[AP]M)/i)
+  if (pickupWindow) {
+    updates.pickup_time = `${pickupWindow[1].toUpperCase()} - ${pickupWindow[2].toUpperCase()}`
+    detected.push(`Recogida: ${updates.pickup_time}`)
+  }
+
+  // Travelers and amount
+  const peopleLine = text.match(/(\d+)\s+people\s*-\s*\$([\d.,]+)/i)
+  if (peopleLine) {
+    updates.guests = Number(peopleLine[1]) || 1
+    updates.amount = parseMoney(peopleLine[2])
+    detected.push(`PAX total: ${updates.guests}`)
+  }
+
+  const adultsLine = text.match(/(\d+)\s+Adults?/i)
+  if (adultsLine) {
+    updates.guests = Number(adultsLine[1]) || updates.guests || 1
+  }
+  const childrenLine = text.match(/(\d+)\s+Children/i)
+  if (childrenLine) {
+    updates.children = Number(childrenLine[1]) || 0
+  }
+
+  // Language
+  const langMatch = text.match(/Live guide:\s*([A-Za-zÀ-ÿ]+)/i)
+  if (langMatch) {
+    const detectedLangName = langMatch[1].toLowerCase()
+    updates.language = languageByName[detectedLangName] || "en"
+    detected.push(`Idioma: ${langMatch[1]}`)
+  }
+
+  // Location block
+  const locationIdx = lines.findIndex((line) => /^location$/i.test(line))
+  if (locationIdx >= 0 && lines[locationIdx + 1]) {
+    const locationLine = lines[locationIdx + 1]
+    updates.location = locationLine
+    updates.hotel = locationLine.split(",")[0]?.trim() || locationLine
+    detected.push("Ubicacion y hotel detectados")
+  }
+
+  // Tour type + options
+  if (/cayo levantado/i.test(lowerText)) {
+    updates.tour_type = "cayo_levantado"
+  } else if (/whale/i.test(lowerText) || /ballena/i.test(lowerText)) {
+    updates.tour_type = "whale_only"
+    updates.whale_watching = true
+  } else if (/half day|medio dia/i.test(lowerText)) {
+    updates.tour_type = "half_day"
+  } else {
+    updates.tour_type = "full_day"
+  }
+
+  updates.lunch_included = /(food|open bar|lunch|almuerzo)/i.test(lowerText)
+
+  // Collect ticket codes into notes
+  const ticketCodes = Array.from(new Set((text.match(/[A-Z0-9]{20,}(?:-[A-Z0-9]{4,})?/g) || []).filter((code) => code.length >= 24)))
+  const notesParts = []
+  if (ticketCodes.length > 0) {
+    notesParts.push(`Tickets: ${ticketCodes.join(" | ")}`)
+  }
+  if (gygRefMatch?.[0]) {
+    notesParts.push(`Booking ref: ${gygRefMatch[0]}`)
+  }
+  if (notesParts.length > 0) {
+    updates.notes = notesParts.join("\n")
+  }
+
+  return { updates, detected }
+}
 
 function mapRow(r: any): SamanaReservation {
   return {
@@ -141,47 +336,15 @@ export default function OperationSamanaPage() {
   const [checkingSelectedDateBlocked, setCheckingSelectedDateBlocked] = useState(false)
   const [selectedDateBlocked, setSelectedDateBlocked] = useState(false)
   const [blockedReservationDates, setBlockedReservationDates] = useState<string[]>([])
-  const [newRes, setNewRes] = useState({
-    customer_name: "",
-    phone: "",
-    email: "",
-    hotel: "",
-    location: "",
-    guests: 1,
-    children: 0,
-    pickup_time: "",
-    tour_type: "full_day",
-    channel: "phone",
-    channel_url: "",
-    channel_color: "#6b7280",
-    date: new Date().toISOString().slice(0, 10),
-    amount: 0,
-    notes: "",
-    lunch_included: true,
-    whale_watching: false,
-    language: "en",
-  })
+  const [newRes, setNewRes] = useState<NewReservationForm>(createEmptyNewReservation())
+  const [externalReservationText, setExternalReservationText] = useState("")
+  const [externalParseSummary, setExternalParseSummary] = useState<string | null>(null)
 
-  const resetNewRes = () => setNewRes({
-    customer_name: "",
-    phone: "",
-    email: "",
-    hotel: "",
-    location: "",
-    guests: 1,
-    children: 0,
-    pickup_time: "",
-    tour_type: "full_day",
-    channel: "phone",
-    channel_url: "",
-    channel_color: "#6b7280",
-    date: new Date().toISOString().slice(0, 10),
-    amount: 0,
-    notes: "",
-    lunch_included: true,
-    whale_watching: false,
-    language: "en",
-  })
+  const resetNewRes = () => {
+    setNewRes(createEmptyNewReservation())
+    setExternalReservationText("")
+    setExternalParseSummary(null)
+  }
 
   const channelColors: Record<string, string> = {
     website: "#dc2626",
@@ -190,6 +353,34 @@ export default function OperationSamanaPage() {
     walk_in: "#8b5cf6",
     seller: "#d97706",
     ota: "#ef4444",
+    GetYourGuide: "#f97316",
+    Viator: "#0ea5e9",
+  }
+
+  const applyExternalReservation = () => {
+    if (!externalReservationText.trim()) {
+      setExternalParseSummary("Pega el texto de la reserva primero.")
+      return
+    }
+
+    const { updates, detected } = parseExternalReservationText(externalReservationText)
+    const detectedCount = Object.keys(updates).length
+
+    if (detectedCount === 0) {
+      setExternalParseSummary("No se pudo detectar informacion util. Revisa el formato pegado.")
+      return
+    }
+
+    setNewRes((prev) => {
+      const mergedNotes = [prev.notes, updates.notes].filter(Boolean).join(prev.notes && updates.notes ? "\n" : "")
+      return {
+        ...prev,
+        ...updates,
+        notes: mergedNotes,
+      }
+    })
+
+    setExternalParseSummary(`Autocompletado: ${detected.join(" | ")}`)
   }
 
   const syncGygBookings = async () => {
@@ -519,13 +710,6 @@ export default function OperationSamanaPage() {
       month: "long",
       year: "numeric",
     })
-  }
-
-  const toDateInputValue = (date: Date) => {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, "0")
-    const day = String(date.getDate()).padStart(2, "0")
-    return `${year}-${month}-${day}`
   }
 
   const toggleStatus = async (id: string) => {
@@ -1238,6 +1422,24 @@ ${t.getReady} 🐋⚓
           </DialogHeader>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2 sm:col-span-2 rounded-md border border-dashed border-blue-300 bg-blue-50/50 p-3">
+              <Label>Pegar reserva externa (GetYourGuide / Viator)</Label>
+              <Textarea
+                value={externalReservationText}
+                onChange={(e) => setExternalReservationText(e.target.value)}
+                placeholder="Pega aqui el texto completo de la reserva copiado desde GYG o Viator..."
+                className="min-h-[140px]"
+              />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <Button type="button" variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50" onClick={applyExternalReservation}>
+                  Autocompletar campos
+                </Button>
+                {externalParseSummary && (
+                  <p className="text-xs text-blue-700">{externalParseSummary}</p>
+                )}
+              </div>
+            </div>
+
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Nombre del cliente *</Label>
               <Input
