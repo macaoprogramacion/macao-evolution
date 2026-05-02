@@ -51,12 +51,14 @@ const fallbackVideos = [
     src: getStoragePublicUrl("videos/lateral-izquierdo.mp4"),
     name: "Macao Beach",
     description: "Vive la experiencia en los caminos de Macao",
+    poster: "/images/gallery-section/gallery (1).webp",
   },
   {
     id: "horseback-riding",
     src: getStoragePublicUrl("videos/lateral-derecho.mp4"),
     name: "Horseback Riding",
     description: "Descubre los mejores paisajes en buggy",
+    poster: "/images/productos/horseback-full-main.webp",
   },
 ];
 
@@ -65,6 +67,7 @@ type HomepageMediaRow = {
   title: string;
   description: string | null;
   storage_path: string;
+  thumbnail_path?: string | null;
 };
 
 function handleVideoError(event: SyntheticEvent<HTMLVideoElement>, fallbackSrc: string) {
@@ -79,10 +82,12 @@ function handleVideoError(event: SyntheticEvent<HTMLVideoElement>, fallbackSrc: 
 function VideoCard({
   src,
   fallbackSrc,
+  poster,
   className = "",
 }: {
   src: string;
   fallbackSrc: string;
+  poster?: string;
   className?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -113,6 +118,7 @@ function VideoCard({
         preload="metadata"
         className="absolute inset-0 h-full w-full object-cover"
         src={src}
+        poster={poster}
         onError={(e) => handleVideoError(e, fallbackSrc)}
         onEnded={() => setPlaying(false)}
       />
@@ -173,6 +179,7 @@ export function CollectionSection() {
           src: getStoragePublicUrl(row.storage_path),
           name: row.title || video.name,
           description: row.description || video.description,
+          poster: row.thumbnail_path ? getStoragePublicUrl(row.thumbnail_path) : video.poster,
         };
       });
 
@@ -205,6 +212,7 @@ export function CollectionSection() {
                 <VideoCard
                   src={video.src}
                   fallbackSrc={localFallbackVideos[idx]?.src ?? localFallbackVideos[0].src}
+                  poster={video.poster}
                   className="aspect-[4/3]"
                 />
                 <div className="py-6">
@@ -223,6 +231,7 @@ export function CollectionSection() {
                 <VideoCard
                   src={video.src}
                   fallbackSrc={localFallbackVideos[idx]?.src ?? localFallbackVideos[0].src}
+                  poster={video.poster}
                   className="aspect-[4/3]"
                 />
                 <div className="py-6">
