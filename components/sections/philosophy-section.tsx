@@ -98,22 +98,9 @@ export function PhilosophySection() {
       rafRef.current = requestAnimationFrame(updateTransforms);
     };
 
-    // Only run scroll animation on desktop
-    if (!isMobileRef.current) {
-      window.addEventListener("scroll", handleScroll, { passive: true });
-      updateTransforms();
-    } else {
-      // Mobile: show cards immediately (no animation)
-      if (colectivoRef.current) {
-        colectivoRef.current.style.transform = 'none';
-      }
-      if (privadoRef.current) {
-        privadoRef.current.style.transform = 'none';
-      }
-      if (titleRef.current) {
-        titleRef.current.style.display = 'none';
-      }
-    }
+    // Run scroll animation on all screen sizes
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    updateTransforms();
     
     return () => {
       window.removeEventListener("scroll", handleScroll);
@@ -127,8 +114,8 @@ export function PhilosophySection() {
   return (
     <section id="services" className="bg-background">
       {/* Scroll-Animated Product Grid — static on mobile, animated on desktop */}
-      <div ref={sectionRef} className="relative lg:h-[150vh]">
-        <div className="lg:sticky lg:top-0 lg:h-screen flex items-center justify-center py-10 lg:py-0">
+      <div ref={sectionRef} className="relative h-[250vh] lg:h-[150vh]">
+        <div className="sticky top-0 h-screen flex items-center justify-center">
           <div className="relative w-full">
             {/* Title - positioned behind the blocks */}
             <div 
@@ -136,7 +123,7 @@ export function PhilosophySection() {
               className="absolute inset-0 flex items-center justify-center pointer-events-none z-0"
               style={{ opacity: 1 }}
             >
-              <h2 className="text-[7vw] font-medium leading-[0.95] tracking-tighter text-foreground md:text-[6vw] lg:text-[5vw] text-center px-6 font-title whitespace-nowrap select-none pointer-events-none">
+              <h2 className="text-[8vw] font-medium leading-[0.95] tracking-tighter text-foreground lg:text-[5vw] text-center px-6 font-title whitespace-nowrap select-none pointer-events-none">
                 Choose One.
               </h2>
             </div>
