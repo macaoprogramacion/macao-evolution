@@ -92,16 +92,46 @@ function VideoCard({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
+  const [pendingPlay, setPendingPlay] = useState(false);
+
+  const requestPlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    const tryPlay = () => {
+      const playPromise = v.play();
+      if (playPromise && typeof playPromise.then === "function") {
+        playPromise
+          .then(() => {
+            setPendingPlay(false);
+          })
+          .catch(() => {
+            setPendingPlay(true);
+          });
+      }
+    };
+
+    if (v.readyState >= 2) {
+      tryPlay();
+      return;
+    }
+
+    setPendingPlay(true);
+    const onCanPlay = () => {
+      v.removeEventListener("canplay", onCanPlay);
+      tryPlay();
+    };
+    v.addEventListener("canplay", onCanPlay);
+  };
 
   const toggle = () => {
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) {
-      v.play();
-      setPlaying(true);
+      requestPlay();
     } else {
       v.pause();
-      setPlaying(false);
+      setPendingPlay(false);
     }
   };
 
@@ -115,11 +145,18 @@ function VideoCard({
         loop
         muted
         playsInline
-        preload="metadata"
+        preload="auto"
         className="absolute inset-0 h-full w-full object-cover"
         src={src}
         poster={poster}
         onError={(e) => handleVideoError(e, fallbackSrc)}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onCanPlay={() => {
+          if (pendingPlay) {
+            requestPlay();
+          }
+        }}
         onEnded={() => setPlaying(false)}
       />
       {/* Play / Pause overlay */}
