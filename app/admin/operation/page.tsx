@@ -403,7 +403,7 @@ export default function OperationPage() {
     const dateStr = new Date(res.date + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
     const pickupLocation = res.location || res.hotel
     const pickup = res.pickupTime || res.timeslot
-    return `Hola ${res.customerName} 👋\n¡Gracias por reservar con Macao Evolution!\n\nTu recogida está confirmada a las ${pickup}.\n📍 Te esperamos en ${pickupLocation}\n⏰ Por favor sé puntual 🌊⚓\n\n📋 Detalles de tu reserva\n• 🌊 Tour: Macao Beach Experience\n• 👥 Pasajeros: ${totalPax} PAX (${res.guests} adultos, ${res.children} niños)\n• 📅 Fecha: ${dateStr}${res.experience ? `\n• 🎟️ Experiencia: ${res.experience}` : ""}`
+    return `Hola ${res.customerName} 👋\n¡Gracias por reservar con Macao Evolution!\n\nTu recogida está confirmada a las ${pickup}.\n📍 Te esperamos en ${pickupLocation}\n⏰ Por favor sé puntual 🌊⚓\n\n📋 Detalles de tu reserva\n• 🌊 Tour: Macao Offroad Experience\n• 👥 Pasajeros: ${totalPax} PAX (${res.guests} adultos, ${res.children} niños)\n• 📅 Fecha: ${dateStr}${res.experience ? `\n• 🎟️ Experiencia: ${res.experience}` : ""}`
   }
 
   const copyToClipboard = async (text: string, key: string) => {
