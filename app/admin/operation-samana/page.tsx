@@ -434,10 +434,20 @@ export default function OperationSamanaPage() {
         return
       }
 
-      const { error } = await supabase.from("samana_reservations").insert({
+      const insertPayload = {
         ...newRes,
         channel_color: channelColors[newRes.channel] || "#6b7280",
-      })
+      }
+
+      let { error } = await supabase.from("samana_reservations").insert(insertPayload)
+
+      // Backward-compatible fallback: production DB may not have the `language` column yet.
+      if (error && /language.*column|Could not find the 'language' column/i.test(error.message || "")) {
+        const { language, ...fallbackPayload } = insertPayload
+        const retry = await supabase.from("samana_reservations").insert(fallbackPayload)
+        error = retry.error
+      }
+
       if (error) {
         console.error("Error creating reservation:", error)
         alert("Error al crear reserva: " + error.message)
