@@ -18,6 +18,8 @@ import {
   AlertCircle,
   XCircle,
   Send,
+  Copy,
+  MessageSquare,
   Loader2,
   Plus,
   Ticket,
@@ -126,6 +128,7 @@ export default function OperationSaonaPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<string | null>(null)
+  const [copiedMsg, setCopiedMsg] = useState("")
 
   // Modal agregar reserva
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -324,6 +327,32 @@ export default function OperationSaonaPage() {
 
   const markAsNoShow = async (id: string) => {
     await updateReservationStatus(id, "no_show")
+  }
+
+  const generateClientMessage = (res: SaonaReservation) => {
+    const totalPax = res.guests + res.children
+    const dateStr = new Date(res.date + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    const pickupLocation = res.location || res.hotel
+    const boatLabel = res.boatType === "catamaran" ? "Catamarán" : "Lancha"
+    const ref = res.gygBookingRef || res.gygBookingReference || ""
+    return `Hola ${res.customerName} 👋\n¡Gracias por reservar con Macao Evolution!\n\nTu recogida para el tour Saona Island está confirmada a las ${res.pickupTime}.\n📍 Te esperamos en ${pickupLocation}\n⏰ Por favor sé puntual 🏝️⚓\n\n📋 Detalles de tu reserva\n• 🏝️ Tour: Saona Island\n• ⛵ Embarcación: ${boatLabel}\n• 👥 Pasajeros: ${totalPax} PAX (${res.guests} adultos, ${res.children} niños)\n• 📅 Fecha: ${dateStr}${res.lunchIncluded ? "\n• 🍽️ Almuerzo incluido" : ""}${ref ? `\n• 🔖 Ref: ${ref}` : ""}`
+  }
+
+  const copyToClipboard = async (text: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedMsg(key)
+      setTimeout(() => setCopiedMsg(""), 2000)
+    } catch {
+      const ta = document.createElement("textarea")
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand("copy")
+      document.body.removeChild(ta)
+      setCopiedMsg(key)
+      setTimeout(() => setCopiedMsg(""), 2000)
+    }
   }
 
   const downloadTicket = (res: SaonaReservation) => {
@@ -769,6 +798,18 @@ export default function OperationSaonaPage() {
                     >
                       <Ticket className="w-3 h-3 mr-1" />
                       Ticket
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={copiedMsg === `client-${reservation.id}` ? "border-green-500 bg-green-50 text-green-700" : "border-blue-300 text-blue-700 hover:bg-blue-50"}
+                      onClick={() => copyToClipboard(generateClientMessage(reservation), `client-${reservation.id}`)}
+                    >
+                      {copiedMsg === `client-${reservation.id}` ? (
+                        <><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Copiado</>
+                      ) : (
+                        <><MessageSquare className="w-3.5 h-3.5 mr-1" />Msg Cliente</>
+                      )}
                     </Button>
                   </div>
                 </div>
