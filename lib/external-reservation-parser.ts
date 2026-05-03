@@ -133,7 +133,7 @@ export function parseExternalReservationText(rawText: string): ParsedExternalRes
   if (optionLine) {
     result.optionTitle = optionLine.replace(/^option\s*:\s*/i, "").trim()
   } else {
-    const optionFallback = lines.find((line) => /(saona|saman[aá]|macao|exclusive|tour)/i.test(line) && /\b\d{1,2}:\d{2}\b/.test(line))
+    const optionFallback = lines.find((line) => /(saona|saman[aá]|macao|exclusive|tour|party\s*boat|paryboat|family)/i.test(line) && /\b\d{1,2}:\d{2}\b/.test(line))
     if (optionFallback) {
       result.optionTitle = optionFallback
     }
@@ -200,7 +200,11 @@ export function parseExternalReservationText(rawText: string): ParsedExternalRes
   if (!result.pickupTime) {
     const optionTime = (result.optionTitle || "").match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/)
     if (optionTime) {
-      result.pickupTime = `${optionTime[1].padStart(2, "0")}:${optionTime[2]}`
+      const hh = Number(optionTime[1])
+      const mm = optionTime[2]
+      const ampm = hh >= 12 ? "PM" : "AM"
+      const h12 = hh % 12 === 0 ? 12 : hh % 12
+      result.pickupTime = `${h12}:${mm} ${ampm}`
     }
   }
 

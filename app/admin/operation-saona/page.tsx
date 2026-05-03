@@ -135,6 +135,7 @@ export default function OperationSaonaPage() {
   const [noShowConfirmId, setNoShowConfirmId] = useState<string | null>(null)
   const [saonaProvider, setSaonaProvider] = useState<SaonaProvider>("daniel")
   const [saonaPickupHint, setSaonaPickupHint] = useState<string | null>(null)
+  const [pickupScheduleMode, setPickupScheduleMode] = useState<"saona" | "party_boat">("saona")
 
   // Modal agregar reserva
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -183,6 +184,7 @@ export default function OperationSaonaPage() {
     })
     setExternalReservationText("")
     setExternalParseSummary(null)
+    setPickupScheduleMode("saona")
   }
 
   const channelColors: Record<string, string> = {
@@ -194,12 +196,26 @@ export default function OperationSaonaPage() {
     ota: "#ef4444",
   }
 
-  const withSaonaAutoPickup = (draft: typeof newRes, provider: SaonaProvider = saonaProvider) => {
+  const withSaonaAutoPickup = (
+    draft: typeof newRes,
+    provider: SaonaProvider = saonaProvider,
+    options?: { allowAuto?: boolean; keepManualPickup?: boolean },
+  ) => {
+    const allowAuto = options?.allowAuto ?? true
+    if (!allowAuto) {
+      return draft
+    }
+
     const source = `${draft.hotel} ${draft.location}`.trim()
     const suggestion = getSaonaPickupSuggestion(source, provider)
 
     if (!suggestion) {
       setSaonaPickupHint(null)
+      return draft
+    }
+
+    if (options?.keepManualPickup && draft.pickup_time.trim()) {
+      setSaonaPickupHint(`Proveedor: ${provider.toUpperCase()} | Hotel detectado: ${suggestion.hotel} (manteniendo hora del ticket)`)
       return draft
     }
 
@@ -222,6 +238,11 @@ export default function OperationSaonaPage() {
 
     const parsed = parseExternalReservationText(externalReservationText)
     const pickupValue = parsed.pickupWindow || parsed.pickupTime || ""
+    const isPartyBoat = /party\s*boat|paryboat|5587607P17/i.test(
+      `${parsed.productTitle || ""} ${parsed.optionTitle || ""} ${externalReservationText}`,
+    )
+    setPickupScheduleMode(isPartyBoat ? "party_boat" : "saona")
+
     const notesFromPaste = [
       parsed.bookingReference ? `Booking ref: ${parsed.bookingReference}` : "",
       parsed.ticketCodes.length > 0 ? `Tickets: ${parsed.ticketCodes.join(" | ")}` : "",
@@ -244,10 +265,10 @@ export default function OperationSaonaPage() {
       boat_type: parsed.boatType || prev.boat_type,
       lunch_included: parsed.includesLunch ?? prev.lunch_included,
       drink_package: parsed.includesOpenBar ? "premium" : prev.drink_package,
-    }, saonaProvider))
+    }, saonaProvider, { allowAuto: !isPartyBoat, keepManualPickup: Boolean(pickupValue) }))
 
     setExternalParseSummary(
-      `Autocompletado: ${parsed.source.toUpperCase()}${parsed.bookingReference ? ` | Ref: ${parsed.bookingReference}` : ""}${parsed.customerName ? ` | Cliente: ${parsed.customerName}` : ""}`
+      `Autocompletado: ${parsed.source.toUpperCase()}${isPartyBoat ? " | Party Boat" : ""}${parsed.bookingReference ? ` | Ref: ${parsed.bookingReference}` : ""}${parsed.customerName ? ` | Cliente: ${parsed.customerName}` : ""}`
     )
   }
 
@@ -972,7 +993,7 @@ export default function OperationSaonaPage() {
               <Label>Hotel</Label>
               <Input
                 value={newRes.hotel}
-                onChange={(e) => setNewRes((prev) => withSaonaAutoPickup({ ...prev, hotel: e.target.value }))}
+                onChange={(e) => setNewRes((prev) => withSaonaAutoPickup({ ...prev, hotel: e.target.value }, saonaProvider, { allowAuto: pickupScheduleMode !== "party_boat" })))}
                 placeholder="Hard Rock Hotel & Casino"
               />
             </div>
@@ -981,7 +1002,7 @@ export default function OperationSaonaPage() {
               <Label>Ubicación</Label>
               <Input
                 value={newRes.location}
-                onChange={(e) => setNewRes((prev) => withSaonaAutoPickup({ ...prev, location: e.target.value }))}
+                onChange={(e) => setNewRes((prev) => withSaonaAutoPickup({ ...prev, location: e.target.value }, saonaProvider, { allowAuto: pickupScheduleMode !== "party_boat" })))}
                 placeholder="Punta Cana"
               />
             </div>
@@ -1012,7 +1033,7 @@ export default function OperationSaonaPage() {
                 onValueChange={(v) => {
                   const provider = v as SaonaProvider
                   setSaonaProvider(provider)
-                  setNewRes((prev) => withSaonaAutoPickup(prev, provider))
+                  setNewRes((prev) => withSaonaAutoPickup(prev, provider, { allowAuto: pickupScheduleMode !== "party_boat" }))
                 }}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
