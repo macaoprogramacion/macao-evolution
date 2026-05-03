@@ -28,9 +28,61 @@ function toDateInputValue(date: Date) {
 }
 
 function parseMoney(value: string) {
-  const normalized = value.replace(/,/g, "")
+  const cleaned = value.replace(/\s/g, "")
+  const hasComma = cleaned.includes(",")
+  const hasDot = cleaned.includes(".")
+
+  let normalized = cleaned
+  if (hasComma && hasDot) {
+    // Keep the last separator as decimal and strip the other as thousands separator.
+    normalized = cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".")
+      ? cleaned.replace(/\./g, "").replace(/,/g, ".")
+      : cleaned.replace(/,/g, "")
+  } else if (hasComma) {
+    normalized = /,\d{1,2}$/.test(cleaned)
+      ? cleaned.replace(/\./g, "").replace(/,/g, ".")
+      : cleaned.replace(/,/g, "")
+  }
+
   const parsed = Number(normalized)
   return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function parseSpanishDate(day: string, monthRaw: string, year: string) {
+  const monthMap: Record<string, number> = {
+    ene: 0,
+    enero: 0,
+    feb: 1,
+    febrero: 1,
+    mar: 2,
+    marzo: 2,
+    abr: 3,
+    abril: 3,
+    may: 4,
+    mayo: 4,
+    jun: 5,
+    junio: 5,
+    jul: 6,
+    julio: 6,
+    ago: 7,
+    agosto: 7,
+    sep: 8,
+    sept: 8,
+    septiembre: 8,
+    oct: 9,
+    octubre: 9,
+    nov: 10,
+    noviembre: 10,
+    dic: 11,
+    diciembre: 11,
+  }
+
+  const key = monthRaw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  const month = monthMap[key]
+  if (month == null) return undefined
+
+  const parsedDate = new Date(Number(year), month, Number(day), 12, 0, 0, 0)
+  return Number.isNaN(parsedDate.getTime()) ? undefined : toDateInputValue(parsedDate)
 }
 
 export function parseExternalReservationText(rawText: string): ParsedExternalReservation {
@@ -41,7 +93,7 @@ export function parseExternalReservationText(rawText: string): ParsedExternalRes
   const result: ParsedExternalReservation = {
     source: /getyourguide|\bgyg[A-Z0-9]/i.test(text)
       ? "gyg"
-      : /\bviator\b/i.test(text)
+      : /\bviator\b|\bBR-\d{6,}\b|\bVIA-\d{6,}\b/i.test(text)
         ? "viator"
         : "unknown",
     ticketCodes: [],
@@ -61,20 +113,42 @@ export function parseExternalReservationText(rawText: string): ParsedExternalRes
     result.bookingReference = gygRefMatch[0]
   }
 
-  const topTitle = lines[0]
-  if (topTitle && !/hide details/i.test(topTitle)) {
+  if (!result.bookingReference) {
+    const viatorRef = text.match(/\bBR-\d{6,}\b/i)
+    if (viatorRef?.[0]) {
+      result.bookingReference = viatorRef[0]
+    }
+  }
+
+  const topTitle = lines.find(
+    (line) =>
+      line.length > 6
+      && !/(hide details|ocultar detalles|confirmaci[oó]n|confirmada|enviada|historial|imprimir|reembolsar|no-show|viajero principal|nombres de los viajeros|idioma de la excursi[oó]n|servicios incluidos|requisitos especiales|punto de recogida|origen de las reservas|c[oó]digo del producto|n[uú]mero de confirmaci[oó]n|autorizada por la api|importe que recibir[aá])/i.test(line),
+  )
+  if (topTitle) {
     result.productTitle = topTitle
   }
 
   const optionLine = lines.find((line) => /^option\s*:/i.test(line))
   if (optionLine) {
     result.optionTitle = optionLine.replace(/^option\s*:\s*/i, "").trim()
+  } else {
+    const optionFallback = lines.find((line) => /(saona|saman[aá]|macao|exclusive|tour)/i.test(line) && /\b\d{1,2}:\d{2}\b/.test(line))
+    if (optionFallback) {
+      result.optionTitle = optionFallback
+    }
   }
 
-  const leadIdx = lines.findIndex((line) => /lead traveler/i.test(line))
-  if (leadIdx >= 0 && lines[leadIdx + 1]) {
-    const name = lines[leadIdx + 1].replace(/\([^)]*\)/g, "").trim()
+  const leadLine = lines.find((line) => /^(lead traveler|viajero principal)\s*:/i.test(line))
+  if (leadLine) {
+    const name = leadLine.replace(/^(lead traveler|viajero principal)\s*:/i, "").replace(/\([^)]*\)/g, "").trim()
     if (name) result.customerName = name
+  } else {
+    const leadIdx = lines.findIndex((line) => /lead traveler/i.test(line))
+    if (leadIdx >= 0 && lines[leadIdx + 1]) {
+      const name = lines[leadIdx + 1].replace(/\([^)]*\)/g, "").trim()
+      if (name) result.customerName = name
+    }
   }
 
   // Phone line often appears as a standalone value (e.g. +351912643517)
@@ -91,6 +165,13 @@ export function parseExternalReservationText(rawText: string): ParsedExternalRes
       result.reservationDate = toDateInputValue(parsedDate)
     }
     result.pickupTime = dateTimeMatch[2].toUpperCase()
+  }
+
+  if (!result.reservationDate) {
+    const esDate = text.match(/(?:lun|mar|mi[eé]|jue|vie|s[áa]b|dom)\.?[,]?\s*(\d{1,2})\s+([a-zA-Záéíóúñ]+)\s+(\d{4})/i)
+    if (esDate) {
+      result.reservationDate = parseSpanishDate(esDate[1], esDate[2], esDate[3])
+    }
   }
 
   const pickupWindow = text.match(/picked up between\s+(\d{1,2}:\d{2}\s*[AP]M)\s+and\s+(\d{1,2}:\d{2}\s*[AP]M)/i)
@@ -116,6 +197,13 @@ export function parseExternalReservationText(rawText: string): ParsedExternalRes
     }
   }
 
+  if (!result.pickupTime) {
+    const optionTime = (result.optionTitle || "").match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/)
+    if (optionTime) {
+      result.pickupTime = `${optionTime[1].padStart(2, "0")}:${optionTime[2]}`
+    }
+  }
+
   const peopleLine = text.match(/(\d+)\s+people\s*-\s*\$([\d.,]+)/i)
   if (peopleLine) {
     result.guests = Number(peopleLine[1]) || undefined
@@ -126,14 +214,31 @@ export function parseExternalReservationText(rawText: string): ParsedExternalRes
   if (adultsLine) {
     result.guests = Number(adultsLine[1]) || result.guests
   }
+  const adultsLineEs = text.match(/(\d+)\s+adultos?/i)
+  if (adultsLineEs) {
+    result.guests = Number(adultsLineEs[1]) || result.guests
+  }
   const childrenLine = text.match(/(\d+)\s+Children/i)
   if (childrenLine) {
     result.children = Number(childrenLine[1]) || 0
+  }
+  const youthLineEs = text.match(/(\d+)\s+j[oó]venes?/i)
+  if (youthLineEs) {
+    result.children = Number(youthLineEs[1]) || result.children || 0
+  }
+  const childrenLineEs = text.match(/(\d+)\s+ni[nñ]os?/i)
+  if (childrenLineEs) {
+    result.children = Number(childrenLineEs[1]) || result.children || 0
   }
 
   const langMatch = text.match(/Live guide:\s*([A-Za-zÀ-ÿ]+)/i)
   if (langMatch) {
     result.language = langMatch[1]
+  } else {
+    const langMatchEs = text.match(/Idioma[^:\n]*:\s*([A-Za-zÀ-ÿ]+)/i)
+    if (langMatchEs) {
+      result.language = langMatchEs[1]
+    }
   }
 
   const locationIdx = lines.findIndex((line) => /^location$/i.test(line))
@@ -143,9 +248,26 @@ export function parseExternalReservationText(rawText: string): ParsedExternalRes
     result.hotel = locationLine.split(",")[0]?.trim() || locationLine
   }
 
-  result.ticketCodes = Array.from(
-    new Set((text.match(/[A-Z0-9]{20,}(?:-[A-Z0-9]{4,})?/g) || []).filter((code) => code.length >= 24)),
-  )
+  if (!result.location) {
+    const pickupLocation = text.match(/Punto de recogida:\s*([^\n]+)/i)
+    if (pickupLocation?.[1]) {
+      const locationLine = pickupLocation[1].trim()
+      result.location = locationLine
+      result.hotel = locationLine.split(",")[0]?.trim() || locationLine
+    }
+  }
+
+  if (result.amount == null) {
+    const amountMatch = text.match(/Importe que recibir[aá]:\s*([\d.,]+)\s*USD/i)
+    if (amountMatch?.[1]) {
+      result.amount = parseMoney(amountMatch[1])
+    }
+  }
+
+  const longCodes = (text.match(/[A-Z0-9]{20,}(?:-[A-Z0-9]{4,})?/g) || []).filter((code) => code.length >= 24)
+  const shortCodes = text.match(/\b(?:BR-\d{6,}|VIA-\d{6,}|GYG[A-Z0-9]{6,})\b/gi) || []
+
+  result.ticketCodes = Array.from(new Set([...longCodes, ...shortCodes]))
 
   return result
 }

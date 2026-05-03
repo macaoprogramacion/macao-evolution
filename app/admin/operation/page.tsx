@@ -624,7 +624,7 @@ export default function OperationPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl md:text-3xl font-title text-gray-900">Operation</h1>
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900">Operacion Buggy</h1>
             <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">Gestión de reservas de todas las plataformas</p>
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
@@ -825,6 +825,7 @@ export default function OperationPage() {
                     <div className="sm:text-right">
                       <div className="flex items-center gap-1 text-sm font-medium text-gray-900 dark:text-gray-100 sm:justify-end">
                         <Calendar className="w-3.5 h-3.5" />
+                        <span>Travel Date:</span>
                         {new Date(reservation.date + "T12:00:00").toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })}
                       </div>
                       <div className="flex items-center gap-1 text-base text-red-700 font-bold sm:justify-end mt-0.5">
@@ -833,7 +834,7 @@ export default function OperationPage() {
                       </div>
                       {reservation.createdAt && (
                         <div className="text-xs text-gray-500 mt-1 sm:text-right">
-                          Agregada: {new Date(reservation.createdAt).toLocaleTimeString("es-DO", { hour: "numeric", minute: "2-digit" })}
+                          Agregada: {new Date(reservation.createdAt).toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" })}, {new Date(reservation.createdAt).toLocaleTimeString("es-DO", { hour: "numeric", minute: "2-digit" })}
                         </div>
                       )}
                     </div>

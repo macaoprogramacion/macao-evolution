@@ -772,6 +772,7 @@ export default function OperationSaonaPage() {
                     <div className="sm:text-right">
                       <div className="flex items-center gap-1 text-sm font-medium text-gray-900 dark:text-gray-100 sm:justify-end">
                         <Calendar className="w-3.5 h-3.5" />
+                        <span>Travel Date:</span>
                         {new Date(reservation.date + "T12:00:00").toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })}
                       </div>
                       <div className="flex items-center gap-1 text-base text-cyan-700 font-bold sm:justify-end mt-0.5">
@@ -780,7 +781,7 @@ export default function OperationSaonaPage() {
                       </div>
                       {reservation.createdAt && (
                         <div className="text-xs text-gray-500 mt-1 sm:text-right">
-                          Agregada: {new Date(reservation.createdAt).toLocaleTimeString("es-DO", { hour: "numeric", minute: "2-digit" })}
+                          Agregada: {new Date(reservation.createdAt).toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" })}, {new Date(reservation.createdAt).toLocaleTimeString("es-DO", { hour: "numeric", minute: "2-digit" })}
                         </div>
                       )}
                     </div>

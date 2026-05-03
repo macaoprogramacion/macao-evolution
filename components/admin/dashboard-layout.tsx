@@ -22,7 +22,7 @@ import { clearDashboardSession, getDashboardSession } from "@/lib/dashboard-sess
 
 const navigation = [
   { name: "Overview", href: "/admin", icon: Home },
-  { name: "Operation", href: "/admin/operation", icon: ClipboardList },
+  { name: "Operacion Buggy", href: "/admin/operation", icon: ClipboardList },
   { name: "Operación Saona", href: "/admin/operation-saona", icon: Ship },
   { name: "Operación Samaná", href: "/admin/operation-samana", icon: Mountain },
   { name: "Mis Recogidas", href: "/admin/chofer", icon: Navigation },
