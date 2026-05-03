@@ -3,12 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { useCart } from "@/context/cart-context";
-import { getCustomerProfile, upsertCustomerProfile } from "@/lib/customer-accounts";
-import { saveCustomerReservation, type StoredCustomerReservation } from "@/lib/customer-reservations";
-import { getCustomerSession } from "@/lib/customer-session";
-import { loadGiftDraft, clearGiftDraft, type GiftDraft } from "@/lib/customer-checkout-draft";
 import { products } from "@/lib/products";
 import {
   X,
@@ -47,16 +42,6 @@ const PickupMap = dynamic(() => import("@/components/pickup-map"), {
 
 type PaymentOption = "full" | "partial";
 type PaymentMethod = "card" | "paypal";
-
-const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "";
-const PAYPAL_OPTIONS = {
-  clientId: PAYPAL_CLIENT_ID,
-  currency: "USD",
-  intent: "capture",
-  enableFunding: "card",
-  disableFunding: "paylater,venmo",
-  locale: "es_DO",
-};
 
 interface CustomerInfo {
   name: string;
@@ -255,9 +240,6 @@ export function CheckoutModal({
     phone: "",
     email: "",
   });
-  const [isGiftFlow, setIsGiftFlow] = useState(false);
-  const [sessionEmail, setSessionEmail] = useState("");
-  const [sessionUserId, setSessionUserId] = useState("");
   const [paymentOption, setPaymentOption] = useState<PaymentOption>("full");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [card, setCard] = useState<CardInfo>({
@@ -279,13 +261,8 @@ export function CheckoutModal({
   const [pickupDate, setPickupDate] = useState("");
   const [blockedSlots, setBlockedSlots] = useState<number[]>([]);
   const pickupDropdownRef = useRef<HTMLDivElement>(null);
-  const saveProfileTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasPrivateTransport = items.some((item) => item.id === "private-transport");
-  const hasServiceSelected = items.some(
-    (item) => item.id === "service-colectivo" || item.id === "service-privado"
-  );
-  const hasProductSelected = items.some((item) => item.type === "product");
 
   const activeTimes = pickupHotel ? getHotelTimes(pickupHotel) : DEFAULT_TIMES;
   const activePickupPoint = pickupHotel ? getHotelPickupPoint(pickupHotel) : null;
@@ -318,156 +295,9 @@ export function CheckoutModal({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  useEffect(() => {
-    setErrors((prev) => {
-      if (!prev.cartSelection) return prev;
-      if (!hasServiceSelected || !hasProductSelected) return prev;
-
-      const { cartSelection, ...rest } = prev;
-      return rest;
-    });
-  }, [hasProductSelected, hasServiceSelected]);
-
   const depositAmount = totalPrice * 0.2;
   const remainingAmount = totalPrice * 0.8;
   const amountToPay = paymentOption === "full" ? totalPrice : depositAmount;
-
-  function isValidLuhn(number: string) {
-    const digits = number.replace(/\D/g, "");
-    if (digits.length < 13 || digits.length > 19) return false;
-    let sum = 0;
-    let shouldDouble = false;
-    for (let i = digits.length - 1; i >= 0; i--) {
-      let d = Number(digits[i]);
-      if (shouldDouble) {
-        d *= 2;
-        if (d > 9) d -= 9;
-      }
-      sum += d;
-      shouldDouble = !shouldDouble;
-    }
-    return sum % 10 === 0;
-  }
-
-  function isValidExpiryDate(value: string) {
-    if (!/^\d{2}\/\d{2}$/.test(value)) return false;
-    const [mmRaw, yyRaw] = value.split("/");
-    const mm = Number(mmRaw);
-    const yy = Number(yyRaw);
-    if (mm < 1 || mm > 12) return false;
-    const now = new Date();
-    const expiry = new Date(2000 + yy, mm, 0, 23, 59, 59, 999);
-    return expiry >= now;
-  }
-
-  function sanitizeCardholderName(value: string) {
-    return value
-      .replace(/[0-9]/g, "")
-      .replace(/[^A-Za-zÀ-ÿ'\-\s]/g, "")
-      .replace(/\s{2,}/g, " ")
-      .trimStart();
-  }
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    setStep(1);
-    setErrors({});
-
-    (async () => {
-      const sessionUser = await getCustomerSession();
-      setSessionEmail(sessionUser?.email?.trim().toLowerCase() || "");
-      setSessionUserId(sessionUser?.id || "");
-
-      const draft = sessionUser?.email ? await loadGiftDraft(sessionUser.email) : null;
-      if (!draft || (!draft.receiverName && !draft.receiverPhone && !draft.receiverEmail)) {
-        const profile = sessionUser?.id ? await getCustomerProfile(String(sessionUser.id)) : null;
-
-        setCustomer({
-          name: profile?.full_name || sessionUser?.name || "",
-          phone: profile?.phone || "",
-          email: sessionUser?.email || "",
-        });
-        setPaymentOption("full");
-        setPaymentMethod("card");
-        setCard({ number: "", name: "", expiry: "", cvc: "" });
-        setPickupMode("hotel");
-        setPickupHotel("");
-        setPickupCustom("");
-        setPickupSearch("");
-        setPickupDate("");
-        setPickupTimeSlot(null);
-        setIsGiftFlow(false);
-
-        if (profile) {
-          setPaymentOption((profile.last_payment_option as PaymentOption | null) || "full");
-          setPaymentMethod((profile.last_payment_method as PaymentMethod | null) || "card");
-          setCard((prev) => ({
-            ...prev,
-            name: profile.card_holder_name || prev.name,
-            number: profile.card_number || prev.number,
-            expiry: profile.card_expiry || prev.expiry,
-            cvc: profile.card_cvc || prev.cvc,
-          }));
-          setPickupMode((profile.pickup_mode as "hotel" | "custom" | null) || "hotel");
-          setPickupHotel(profile.pickup_hotel || "");
-          setPickupCustom(profile.pickup_custom || "");
-        }
-
-        const hasCustomerInfo = Boolean(
-          (profile?.full_name || sessionUser?.name || "").trim()
-          && (profile?.phone || "").trim()
-          && (sessionUser?.email || "").trim(),
-        );
-
-        setStep(hasCustomerInfo ? (hasPrivateTransport ? 3 : 2) : 1);
-        return;
-      }
-
-      setCustomer({
-        name: "",
-        phone: "",
-        email: "",
-      });
-      setStep(1);
-      setIsGiftFlow(true);
-      if (sessionUser?.email) {
-        await clearGiftDraft(sessionUser.email);
-      }
-    })();
-  }, [isOpen, hasPrivateTransport]);
-
-  useEffect(() => {
-    if (!sessionUserId) return;
-
-    if (saveProfileTimeoutRef.current) {
-      clearTimeout(saveProfileTimeoutRef.current);
-    }
-
-    saveProfileTimeoutRef.current = setTimeout(() => {
-      upsertCustomerProfile({
-        accountId: String(sessionUserId),
-        fullName: customer.name,
-        phone: customer.phone,
-        paymentOption,
-        paymentMethod,
-        cardNumber: card.number,
-        cardExpiry: card.expiry,
-        cardCvc: card.cvc,
-        cardLast4: card.number.replace(/\D/g, "").slice(-4) || undefined,
-        cardHolderName: card.name,
-        pickupMode,
-        pickupHotel: pickupHotel || undefined,
-        pickupCustom: pickupCustom || undefined,
-      });
-    }, 400);
-
-    return () => {
-      if (saveProfileTimeoutRef.current) {
-        clearTimeout(saveProfileTimeoutRef.current);
-      }
-    };
-  }, [sessionUserId, customer, paymentOption, paymentMethod, card, pickupMode, pickupHotel, pickupCustom]);
 
   // --- Validation ---
   function validateStep1() {
@@ -489,16 +319,14 @@ export function CheckoutModal({
     const newErrors: Record<string, string> = {};
     if (!card.number.trim())
       newErrors.cardNumber = "El número de tarjeta es obligatorio";
-    else if (!isValidLuhn(card.number))
+    else if (card.number.replace(/\s/g, "").length < 16)
       newErrors.cardNumber = "Número de tarjeta inválido";
     if (!card.name.trim())
       newErrors.cardName = "El nombre del titular es obligatorio";
-    else if (!/^[A-Za-zÀ-ÿ'\-\s]{2,}$/.test(card.name.trim()))
-      newErrors.cardName = "El nombre del titular no puede tener números";
     if (!card.expiry.trim())
       newErrors.cardExpiry = "La fecha de expiración es obligatoria";
-    else if (!isValidExpiryDate(card.expiry))
-      newErrors.cardExpiry = "Fecha inválida o expirada";
+    else if (!/^\d{2}\/\d{2}$/.test(card.expiry))
+      newErrors.cardExpiry = "Formato inválido (MM/AA)";
     if (!card.cvc.trim()) newErrors.cardCvc = "El CVC es obligatorio";
     else if (!/^\d{3,4}$/.test(card.cvc))
       newErrors.cardCvc = "CVC inválido";
@@ -508,23 +336,7 @@ export function CheckoutModal({
 
   // --- Handlers ---
   function goToStep2() {
-    const hasValidCustomer = validateStep1();
-
-    let cartSelectionError = "";
-    if (!hasServiceSelected && !hasProductSelected) {
-      cartSelectionError = "Debes seleccionar un servicio y al menos un buggy antes de pagar.";
-    } else if (!hasServiceSelected) {
-      cartSelectionError = "Debes seleccionar un servicio antes de pagar.";
-    } else if (!hasProductSelected) {
-      cartSelectionError = "Debes seleccionar al menos un buggy antes de pagar.";
-    }
-
-    if (cartSelectionError) {
-      setErrors((prev) => ({ ...prev, cartSelection: cartSelectionError }));
-      return;
-    }
-
-    if (hasValidCustomer) {
+    if (validateStep1()) {
       if (hasPrivateTransport) {
         setStep(3);
       } else {
@@ -533,90 +345,58 @@ export function CheckoutModal({
     }
   }
 
-  async function completeReservation(method: PaymentMethod) {
-    const selectedPickupTime = pickupTimeSlot !== null ? activeTimes[pickupTimeSlot] : null;
-
-    const reservationRecord: StoredCustomerReservation = {
-      id: `RSV-${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      customer,
-      items: items.map((i) => ({
-        id: i.id,
-        name: i.name,
-        quantity: i.quantity,
-        price: i.price,
-        image: i.image,
-      })),
-      totals: {
-        totalPrice,
-        totalPaid: amountToPay,
-        remainingAmount: paymentOption === "partial" ? remainingAmount : 0,
-        paymentOption,
-        paymentMethod: method,
-      },
-      pickup: !hasPrivateTransport
-        ? {
-            mode: pickupMode,
-            hotel: pickupHotel || undefined,
-            custom: pickupCustom || undefined,
-            date: pickupDate || undefined,
-            time: selectedPickupTime ? `${selectedPickupTime.time} (${selectedPickupTime.label})` : undefined,
-            point: activePickupPoint || undefined,
-          }
-        : undefined,
-    };
-
-    const reservationOwnerEmail = (sessionEmail || customer.email || "").trim().toLowerCase();
-    if (reservationOwnerEmail) {
-      await saveCustomerReservation(reservationOwnerEmail, reservationRecord);
-    }
-    setIsProcessing(false);
-    setStep(4);
-
-    try {
-      await fetch("/api/send-confirmation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customer,
-          items: items.map((i) => ({ name: i.name, price: i.price, quantity: i.quantity })),
-          totalPaid: amountToPay,
-          totalPrice,
-          paymentMethod: method,
-          paymentOption,
-          remainingAmount: paymentOption === "partial" ? remainingAmount : undefined,
-          pickup: !hasPrivateTransport
-            ? {
-                hotel: pickupHotel || undefined,
-                custom: pickupCustom || undefined,
-                date: pickupDate ? formatDateDisplay(pickupDate) : undefined,
-                time: selectedPickupTime ? `${selectedPickupTime.time} (${selectedPickupTime.label})` : undefined,
-                point: activePickupPoint || undefined,
-              }
-            : undefined,
-        }),
-      });
-    } catch {
-      // Email sending failed silently — reservation is still confirmed
-    }
-  }
-
   function handlePay() {
     if (!validateStep2()) return;
     setIsProcessing(true);
-    setTimeout(() => {
-      completeReservation("card");
-    }, 1200);
+    // Simulate payment processing
+    setTimeout(async () => {
+      setIsProcessing(false);
+      setStep(4);
+
+      // Send confirmation email
+      try {
+        await fetch("/api/send-confirmation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customer,
+            items: items.map((i) => ({ name: i.name, price: i.price, quantity: i.quantity })),
+            totalPaid: amountToPay,
+            totalPrice,
+            paymentMethod,
+            paymentOption,
+            remainingAmount: paymentOption === "partial" ? remainingAmount : undefined,
+            pickup: !hasPrivateTransport
+              ? {
+                  hotel: pickupHotel || undefined,
+                  custom: pickupCustom || undefined,
+                  date: pickupDate ? formatDateDisplay(pickupDate) : undefined,
+                  time: pickupTimeSlot !== null ? `${activeTimes[pickupTimeSlot].time} (${activeTimes[pickupTimeSlot].label})` : undefined,
+                  point: activePickupPoint || undefined,
+                }
+              : undefined,
+          }),
+        });
+      } catch {
+        // Email sending failed silently — reservation is still confirmed
+      }
+    }, 2000);
   }
 
   function handleFinish() {
     clearCart();
     setStep(1);
+    setCustomer({ name: "", phone: "", email: "" });
+    setCard({ number: "", name: "", expiry: "", cvc: "" });
+    setPaymentOption("full");
+    setPaymentMethod("card");
+    setPickupMode("hotel");
+    setPickupHotel("");
+    setPickupCustom("");
     setPickupSearch("");
     setPickupTimeSlot(null);
     setPickupDate("");
     setErrors({});
-    setIsGiftFlow(false);
     onClose();
   }
 
@@ -740,9 +520,7 @@ export function CheckoutModal({
                 Tus datos
               </h2>
               <p className="text-sm text-muted-foreground mb-6">
-                {isGiftFlow
-                  ? "Completa tus datos para continuar con el regalo"
-                  : "Completa tu información para continuar"}
+                Completa tu información para continuar
               </p>
 
               <div className="space-y-4">
@@ -828,12 +606,6 @@ export function CheckoutModal({
                 </div>
               </div>
 
-              {errors.cartSelection && (
-                <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
-                  {errors.cartSelection}
-                </div>
-              )}
-
               {/* Continue button */}
               <button
                 type="button"
@@ -865,7 +637,7 @@ export function CheckoutModal({
                 <MapPin size={24} className="text-foreground" />
               </div>
               <h2 className="text-xl font-title text-foreground mb-1 text-center">
-                Lugar de recogida
+                ¿Donde te recogemos?
               </h2>
               <p className="text-sm text-muted-foreground mb-6 text-center">
                 Indica el lugar, fecha y horario para tu aventura
@@ -1307,7 +1079,7 @@ export function CheckoutModal({
                         type="text"
                         value={card.name}
                         onChange={(e) =>
-                          setCard({ ...card, name: sanitizeCardholderName(e.target.value) })
+                          setCard({ ...card, name: e.target.value })
                         }
                         placeholder="JUAN PÉREZ"
                         className={`w-full rounded-xl border bg-background py-3 pl-10 pr-4 text-sm uppercase text-foreground placeholder:text-muted-foreground/50 placeholder:normal-case outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
@@ -1402,81 +1174,19 @@ export function CheckoutModal({
                     className="mx-auto mb-2 text-foreground"
                   />
                   <p className="text-sm font-medium text-foreground">
-                    Paga con PayPal
+                    Serás redirigido a PayPal
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Puedes pagar con cuenta PayPal o con tarjeta sin crear cuenta.
+                    Completa el pago de forma segura con tu cuenta de PayPal
                   </p>
-                  <div className="mt-4">
-                    {!PAYPAL_CLIENT_ID ? (
-                      <p className="text-xs text-amber-600 dark:text-amber-400">
-                        Falta configurar PayPal. Define `NEXT_PUBLIC_PAYPAL_CLIENT_ID`.
-                      </p>
-                    ) : (
-                      <PayPalScriptProvider options={PAYPAL_OPTIONS}>
-                        <PayPalButtons
-                          fundingSource="paypal"
-                          style={{ layout: "vertical", shape: "pill", label: "pay" }}
-                          createOrder={(_data, actions) => {
-                            return actions.order.create({
-                              purchase_units: [
-                                {
-                                  amount: {
-                                    value: amountToPay.toFixed(2),
-                                    currency_code: "USD",
-                                  },
-                                },
-                              ],
-                            });
-                          }}
-                          onApprove={async (_data, actions) => {
-                            setIsProcessing(true);
-                            try {
-                              await actions.order.capture();
-                              await completeReservation("paypal");
-                            } finally {
-                              setIsProcessing(false);
-                            }
-                          }}
-                          onError={(err) => {
-                            console.error("PayPal error:", err);
-                            alert("No se pudo completar el pago con PayPal. Intenta de nuevo.");
-                          }}
-                        />
-                        <div className="mt-2">
-                          <PayPalButtons
-                            fundingSource="card"
-                            style={{ layout: "vertical", shape: "pill", label: "pay" }}
-                            createOrder={(_data, actions) => {
-                              return actions.order.create({
-                                purchase_units: [
-                                  {
-                                    amount: {
-                                      value: amountToPay.toFixed(2),
-                                      currency_code: "USD",
-                                    },
-                                  },
-                                ],
-                              });
-                            }}
-                            onApprove={async (_data, actions) => {
-                              setIsProcessing(true);
-                              try {
-                                await actions.order.capture();
-                                await completeReservation("paypal");
-                              } finally {
-                                setIsProcessing(false);
-                              }
-                            }}
-                            onError={(err) => {
-                              console.error("PayPal card error:", err);
-                              alert("No se pudo completar el pago con tarjeta. Intenta de nuevo.");
-                            }}
-                          />
-                        </div>
-                      </PayPalScriptProvider>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handlePay}
+                    disabled={isProcessing}
+                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+                  >
+                    {isProcessing ? "Procesando..." : `Pagar con PayPal — $${amountToPay.toFixed(2)}`}
+                  </button>
                 </div>
               )}
 
@@ -1526,26 +1236,26 @@ export function CheckoutModal({
               />
 
               {/* Pay button */}
-              {paymentMethod === "card" && (
-                <button
-                  type="button"
-                  onClick={handlePay}
-                  disabled={isProcessing}
-                  className="flex w-full items-center justify-center gap-2 rounded-full bg-foreground py-3.5 text-sm font-semibold text-background transition-opacity hover:opacity-80 disabled:opacity-50"
-                >
-                  {isProcessing ? (
-                    <>
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
-                      Procesando...
-                    </>
-                  ) : (
-                    <>
-                      <Lock size={14} />
-                      {`Pagar $${amountToPay.toFixed(2)}`}
-                    </>
-                  )}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handlePay}
+                disabled={isProcessing}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-foreground py-3.5 text-sm font-semibold text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
+                    Procesando...
+                  </>
+                ) : (
+                  <>
+                    <Lock size={14} />
+                    {paymentMethod === "paypal"
+                      ? `Pagar con PayPal — $${amountToPay.toFixed(2)}`
+                      : `Pagar $${amountToPay.toFixed(2)}`}
+                  </>
+                )}
+              </button>
 
               <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
                 <Shield size={12} />
@@ -1657,6 +1367,14 @@ export function CheckoutModal({
 
 /* ─── Upsell / Recommendations after confirmation ─── */
 
+function hashSeed(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
 function ConfirmationUpsell({
   hasPrivateTransport,
   cartItems,
@@ -1740,13 +1458,29 @@ function ConfirmationUpsell({
   }
 
   // Has private transport → show random product recommendations
-  const cartIds = new Set(cartItems.map((i) => i.id));
-  const available = products.filter((p) => !cartIds.has(p.id));
-  if (available.length === 0) return null;
+  const cartSignature = useMemo(
+    () => cartItems.map((i) => i.id).sort().join("|"),
+    [cartItems]
+  );
 
-  // Pick up to 2 random recommendations
-  const shuffled = [...available].sort(() => Math.random() - 0.5);
-  const recommendations = shuffled.slice(0, 2);
+  const recommendations = useMemo(() => {
+    const cartIds = new Set(cartItems.map((i) => i.id));
+    const available = products.filter((p) => !cartIds.has(p.id));
+    if (available.length <= 2) return available;
+
+    // Deterministic ranking prevents UI from changing on every keystroke.
+    const seed = hashSeed(cartSignature || "default");
+    return [...available]
+      .map((p, index) => ({
+        product: p,
+        score: hashSeed(`${seed}-${p.id}-${index}`),
+      }))
+      .sort((a, b) => a.score - b.score)
+      .slice(0, 2)
+      .map((entry) => entry.product);
+  }, [cartItems, cartSignature]);
+
+  if (recommendations.length === 0) return null;
 
   return (
     <div className="mb-6 text-left">
