@@ -381,7 +381,13 @@ export function CheckoutModal({
 
       const draft = sessionUser?.email ? await loadGiftDraft(sessionUser.email) : null;
       if (!draft || (!draft.receiverName && !draft.receiverPhone && !draft.receiverEmail)) {
-        setCustomer({ name: sessionUser?.name || "", phone: "", email: sessionUser?.email || "" });
+        const profile = sessionUser?.id ? await getCustomerProfile(String(sessionUser.id)) : null;
+
+        setCustomer({
+          name: profile?.full_name || sessionUser?.name || "",
+          phone: profile?.phone || "",
+          email: sessionUser?.email || "",
+        });
         setPaymentOption("full");
         setPaymentMethod("card");
         setCard({ number: "", name: "", expiry: "", cvc: "" });
@@ -393,16 +399,7 @@ export function CheckoutModal({
         setPickupTimeSlot(null);
         setIsGiftFlow(false);
 
-        if (sessionUser?.id) {
-          const profile = await getCustomerProfile(String(sessionUser.id));
-          if (!profile) return;
-
-          setCustomer((prev) => ({
-            ...prev,
-            name: profile.full_name || prev.name,
-            phone: profile.phone || prev.phone,
-            email: sessionUser?.email || prev.email,
-          }));
+        if (profile) {
           setPaymentOption((profile.last_payment_option as PaymentOption | null) || "full");
           setPaymentMethod((profile.last_payment_method as PaymentMethod | null) || "card");
           setCard((prev) => ({
@@ -416,6 +413,14 @@ export function CheckoutModal({
           setPickupHotel(profile.pickup_hotel || "");
           setPickupCustom(profile.pickup_custom || "");
         }
+
+        const hasCustomerInfo = Boolean(
+          (profile?.full_name || sessionUser?.name || "").trim()
+          && (profile?.phone || "").trim()
+          && (sessionUser?.email || "").trim(),
+        );
+
+        setStep(hasCustomerInfo ? (hasPrivateTransport ? 3 : 2) : 1);
         return;
       }
 
@@ -424,12 +429,13 @@ export function CheckoutModal({
         phone: "",
         email: "",
       });
+      setStep(1);
       setIsGiftFlow(true);
       if (sessionUser?.email) {
         await clearGiftDraft(sessionUser.email);
       }
     })();
-  }, [isOpen]);
+  }, [isOpen, hasPrivateTransport]);
 
   useEffect(() => {
     if (!sessionUserId) return;

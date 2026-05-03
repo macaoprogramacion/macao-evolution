@@ -51,6 +51,7 @@ import {
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { supabase } from "@/lib/supabase"
 import { parseExternalReservationText } from "@/lib/external-reservation-parser"
+import { getSaonaPickupSuggestion, type SaonaProvider } from "@/lib/hotel-pickup-schedules"
 import { Label } from "@/components/ui/label"
 
 type SaonaReservation = {
@@ -132,6 +133,8 @@ export default function OperationSaonaPage() {
   const [syncResult, setSyncResult] = useState<string | null>(null)
   const [copiedMsg, setCopiedMsg] = useState("")
   const [noShowConfirmId, setNoShowConfirmId] = useState<string | null>(null)
+  const [saonaProvider, setSaonaProvider] = useState<SaonaProvider>("daniel")
+  const [saonaPickupHint, setSaonaPickupHint] = useState<string | null>(null)
 
   // Modal agregar reserva
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -191,6 +194,26 @@ export default function OperationSaonaPage() {
     ota: "#ef4444",
   }
 
+  const withSaonaAutoPickup = (draft: typeof newRes, provider: SaonaProvider = saonaProvider) => {
+    const source = `${draft.hotel} ${draft.location}`.trim()
+    const suggestion = getSaonaPickupSuggestion(source, provider)
+
+    if (!suggestion) {
+      setSaonaPickupHint(null)
+      return draft
+    }
+
+    setSaonaPickupHint(
+      `Proveedor: ${provider.toUpperCase()} | Hora sugerida: ${suggestion.pickupTime} (${suggestion.hotel})`,
+    )
+
+    return {
+      ...draft,
+      pickup_time: suggestion.pickupTime || draft.pickup_time,
+      location: draft.location || suggestion.pickupLabel,
+    }
+  }
+
   const applyExternalReservation = () => {
     if (!externalReservationText.trim()) {
       setExternalParseSummary("Pega el texto de la reserva primero.")
@@ -204,7 +227,7 @@ export default function OperationSaonaPage() {
       parsed.ticketCodes.length > 0 ? `Tickets: ${parsed.ticketCodes.join(" | ")}` : "",
     ].filter(Boolean).join("\n")
 
-    setNewRes((prev) => ({
+    setNewRes((prev) => withSaonaAutoPickup({
       ...prev,
       customer_name: parsed.customerName || prev.customer_name,
       phone: parsed.phone || prev.phone,
@@ -221,7 +244,7 @@ export default function OperationSaonaPage() {
       boat_type: parsed.boatType || prev.boat_type,
       lunch_included: parsed.includesLunch ?? prev.lunch_included,
       drink_package: parsed.includesOpenBar ? "premium" : prev.drink_package,
-    }))
+    }, saonaProvider))
 
     setExternalParseSummary(
       `Autocompletado: ${parsed.source.toUpperCase()}${parsed.bookingReference ? ` | Ref: ${parsed.bookingReference}` : ""}${parsed.customerName ? ` | Cliente: ${parsed.customerName}` : ""}`
@@ -949,7 +972,7 @@ export default function OperationSaonaPage() {
               <Label>Hotel</Label>
               <Input
                 value={newRes.hotel}
-                onChange={(e) => setNewRes({ ...newRes, hotel: e.target.value })}
+                onChange={(e) => setNewRes((prev) => withSaonaAutoPickup({ ...prev, hotel: e.target.value }))}
                 placeholder="Hard Rock Hotel & Casino"
               />
             </div>
@@ -958,7 +981,7 @@ export default function OperationSaonaPage() {
               <Label>Ubicación</Label>
               <Input
                 value={newRes.location}
-                onChange={(e) => setNewRes({ ...newRes, location: e.target.value })}
+                onChange={(e) => setNewRes((prev) => withSaonaAutoPickup({ ...prev, location: e.target.value }))}
                 placeholder="Punta Cana"
               />
             </div>
@@ -979,6 +1002,25 @@ export default function OperationSaonaPage() {
                 onChange={(e) => setNewRes({ ...newRes, pickup_time: e.target.value })}
                 placeholder="6:00 AM"
               />
+              {saonaPickupHint && <p className="text-xs text-cyan-700">{saonaPickupHint}</p>}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Proveedor de recogida</Label>
+              <Select
+                value={saonaProvider}
+                onValueChange={(v) => {
+                  const provider = v as SaonaProvider
+                  setSaonaProvider(provider)
+                  setNewRes((prev) => withSaonaAutoPickup(prev, provider))
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daniel">Daniel</SelectItem>
+                  <SelectItem value="julio">Julio</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">

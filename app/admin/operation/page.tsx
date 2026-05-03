@@ -51,6 +51,7 @@ import {
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { supabase } from "@/lib/supabase"
 import { parseExternalReservationText } from "@/lib/external-reservation-parser"
+import { getBuggyPickupSuggestion, type TurnSlot } from "@/lib/hotel-pickup-schedules"
 import { Label } from "@/components/ui/label"
 
 function inferTimeslotFromPickup(pickupValue: string) {
@@ -165,6 +166,7 @@ export default function OperationPage() {
   const [sending, setSending] = useState(false)
   const [copiedMsg, setCopiedMsg] = useState("")
   const [noShowConfirmId, setNoShowConfirmId] = useState<string | null>(null)
+  const [pickupAutoHint, setPickupAutoHint] = useState<string | null>(null)
 
   // Modal agregar reserva
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -226,6 +228,27 @@ export default function OperationPage() {
     ota: "#ef4444",
   }
 
+  const withBuggyAutoPickup = (draft: typeof newRes) => {
+    const slot = (draft.timeslot === "11 AM" || draft.timeslot === "3 PM" ? draft.timeslot : "8 AM") as TurnSlot
+    const source = `${draft.hotel} ${draft.location}`.trim()
+    const suggestion = getBuggyPickupSuggestion(source, slot)
+
+    if (!suggestion) {
+      setPickupAutoHint(null)
+      return draft
+    }
+
+    setPickupAutoHint(
+      `Horario sugerido: ${suggestion.pickupTime} | Punto: ${suggestion.pickupPoint.toUpperCase()} (${suggestion.hotel})`,
+    )
+
+    return {
+      ...draft,
+      pickup_time: suggestion.pickupTime || draft.pickup_time,
+      pickup_point: suggestion.pickupPoint,
+    }
+  }
+
   const applyExternalReservation = () => {
     if (!externalReservationText.trim()) {
       setExternalParseSummary("Pega el texto de la reserva primero.")
@@ -239,7 +262,7 @@ export default function OperationPage() {
       parsed.ticketCodes.length > 0 ? `Tickets: ${parsed.ticketCodes.join(" | ")}` : "",
     ].filter(Boolean).join("\n")
 
-    setNewRes((prev) => ({
+    setNewRes((prev) => withBuggyAutoPickup({
       ...prev,
       customer_name: parsed.customerName || prev.customer_name,
       phone: parsed.phone || prev.phone,
@@ -1120,7 +1143,7 @@ export default function OperationPage() {
               <Label>Hotel</Label>
               <Input
                 value={newRes.hotel}
-                onChange={(e) => setNewRes({ ...newRes, hotel: e.target.value })}
+                onChange={(e) => setNewRes((prev) => withBuggyAutoPickup({ ...prev, hotel: e.target.value }))}
                 placeholder="Hard Rock Hotel & Casino"
               />
             </div>
@@ -1130,7 +1153,7 @@ export default function OperationPage() {
               <Label>Ubicación</Label>
               <Input
                 value={newRes.location}
-                onChange={(e) => setNewRes({ ...newRes, location: e.target.value })}
+                onChange={(e) => setNewRes((prev) => withBuggyAutoPickup({ ...prev, location: e.target.value }))}
                 placeholder="Punta Cana"
               />
             </div>
@@ -1148,7 +1171,7 @@ export default function OperationPage() {
             {/* Horario */}
             <div className="space-y-1.5">
               <Label>Horario</Label>
-              <Select value={newRes.timeslot} onValueChange={(v) => setNewRes({ ...newRes, timeslot: v })}>
+              <Select value={newRes.timeslot} onValueChange={(v) => setNewRes((prev) => withBuggyAutoPickup({ ...prev, timeslot: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="8 AM">8:00 AM</SelectItem>
@@ -1166,6 +1189,7 @@ export default function OperationPage() {
                 onChange={(e) => setNewRes({ ...newRes, pickup_time: e.target.value })}
                 placeholder="7:30 AM"
               />
+              {pickupAutoHint && <p className="text-xs text-blue-700">{pickupAutoHint}</p>}
             </div>
 
             {/* Punto de recogida */}
