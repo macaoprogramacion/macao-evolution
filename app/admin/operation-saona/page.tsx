@@ -993,7 +993,7 @@ export default function OperationSaonaPage() {
               <Label>Hotel</Label>
               <Input
                 value={newRes.hotel}
-                onChange={(e) => setNewRes((prev) => withSaonaAutoPickup({ ...prev, hotel: e.target.value }, saonaProvider, { allowAuto: pickupScheduleMode !== "party_boat" })))}
+                onChange={(e) => setNewRes((prev) => withSaonaAutoPickup({ ...prev, hotel: e.target.value }, saonaProvider, { allowAuto: pickupScheduleMode !== "party_boat" }))}
                 placeholder="Hard Rock Hotel & Casino"
               />
             </div>
@@ -1002,7 +1002,7 @@ export default function OperationSaonaPage() {
               <Label>Ubicación</Label>
               <Input
                 value={newRes.location}
-                onChange={(e) => setNewRes((prev) => withSaonaAutoPickup({ ...prev, location: e.target.value }, saonaProvider, { allowAuto: pickupScheduleMode !== "party_boat" })))}
+                onChange={(e) => setNewRes((prev) => withSaonaAutoPickup({ ...prev, location: e.target.value }, saonaProvider, { allowAuto: pickupScheduleMode !== "party_boat" }))}
                 placeholder="Punta Cana"
               />
             </div>
