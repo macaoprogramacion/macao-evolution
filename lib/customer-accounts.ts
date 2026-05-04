@@ -263,3 +263,32 @@ export async function upsertCustomerProfile(input: {
     console.error("Error updating customer profile:", error);
   }
 }
+
+// ── Password reset ────────────────────────────────────────────────────────────
+
+export async function requestPasswordReset(email: string, role: CustomerRole) {
+  const account = await findCustomerByEmail(email, role);
+  if (!account) {
+    // Return success to avoid user enumeration
+    return { accountId: null, error: null };
+  }
+  const { code, error } = await issueCustomerEmailVerificationCode(account.id);
+  if (error || !code) {
+    return { accountId: null, error: "No se pudo generar el código. Intenta de nuevo." };
+  }
+  return { accountId: account.id, name: account.name, code, error: null };
+}
+
+export async function resetCustomerPassword(accountId: string, code: string, newPassword: string) {
+  const result = await verifyCustomerEmailCode(accountId, code);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  const passwordHash = await sha256Hex(newPassword);
+  const { error } = await supabase
+    .from("customer_accounts")
+    .update({ password_hash: passwordHash, updated_at: new Date().toISOString() })
+    .eq("id", accountId);
+
+  if (error) return { ok: false, error: "No se pudo actualizar la contraseña. Intenta de nuevo." };
+  return { ok: true, error: null };
+}

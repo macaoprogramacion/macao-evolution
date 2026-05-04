@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { X, Mail, Lock, User, Phone, Eye, EyeOff, ChevronRight, Briefcase, Users, Building2, Shield } from "lucide-react";
+import { X, Mail, Lock, User, Phone, Eye, EyeOff, ChevronRight, Briefcase, Users, Building2, Shield, ArrowLeft } from "lucide-react";
 import { authenticateByEmail } from "@/lib/supabase-users";
-import { issueCustomerEmailVerificationCode, loginCustomer, registerCustomer, verifyCustomerEmailCode } from "@/lib/customer-accounts";
+import { issueCustomerEmailVerificationCode, loginCustomer, registerCustomer, requestPasswordReset, resetCustomerPassword, verifyCustomerEmailCode } from "@/lib/customer-accounts";
 import { setCustomerSession, type CustomerSession } from "@/lib/customer-session";
 import { setDashboardSession } from "@/lib/dashboard-session";
 import { setSellerPortalSession } from "@/lib/sellers-session";
@@ -13,6 +13,7 @@ type UserRole = "cliente" | "representante" | "colaborador";
 
 type AuthTab = "login" | "register";
 type RegisterStep = "form" | "verify";
+type ForgotStep = "email" | "code" | null;
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -31,6 +32,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const router = useRouter();
   const [tab, setTab] = useState<AuthTab>("login");
   const [registerStep, setRegisterStep] = useState<RegisterStep>("form");
+  const [forgotStep, setForgotStep] = useState<ForgotStep>(null);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotCode, setForgotCode] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState("");
+  const [forgotAccountId, setForgotAccountId] = useState<string | null>(null);
+  const [forgotName, setForgotName] = useState("");
+  const [forgotMessage, setForgotMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -80,6 +89,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setVerificationCode("");
       setVerificationMessage("");
       setPendingVerification(null);
+      setForgotStep(null);
+      setForgotEmail("");
+      setForgotCode("");
+      setForgotNewPassword("");
+      setForgotConfirmPassword("");
+      setForgotAccountId(null);
+      setForgotName("");
+      setForgotMessage("");
     }
   }, [isOpen]);
 
@@ -377,6 +394,85 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setIsLoading(false);
   }
 
+  async function handleForgotRequest() {
+    const email = normalizeEmail(forgotEmail);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErrors({ forgotEmail: "Ingresa un correo válido." });
+      return;
+    }
+    setErrors({});
+    setIsLoading(true);
+
+    const role = loginRole === "representante" ? "representante" : "cliente";
+    const { accountId, name, code, error } = await requestPasswordReset(email, role);
+
+    if (error) {
+      setErrors({ forgotEmail: error });
+      setIsLoading(false);
+      return;
+    }
+
+    // Even if account not found we proceed (avoid enumeration)
+    if (accountId && code) {
+      setForgotAccountId(accountId);
+      setForgotName(name ?? "");
+      try {
+        const res = await fetch("/api/send-password-reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name ?? email, email, code }),
+        });
+        const payload = await res.json().catch(() => null);
+        if (payload?.reason === "resend_not_configured") {
+          setForgotMessage("RESEND no está configurado. Usa el entorno de producción para recibir el correo.");
+        } else {
+          setForgotMessage(`Te enviamos un código de 6 dígitos a ${email}.`);
+        }
+      } catch {
+        setForgotMessage("No se pudo enviar el correo. Intenta de nuevo.");
+      }
+    } else {
+      setForgotMessage(`Si existe una cuenta con ${email}, recibirás un código.`);
+    }
+
+    setForgotStep("code");
+    setIsLoading(false);
+  }
+
+  async function handleForgotReset() {
+    const newErrors: Record<string, string> = {};
+    if (!/^\d{6}$/.test(forgotCode.trim())) newErrors.forgotCode = "Ingresa un código de 6 dígitos.";
+    if (forgotNewPassword.length < 6) newErrors.forgotNewPassword = "Mínimo 6 caracteres.";
+    if (forgotNewPassword !== forgotConfirmPassword) newErrors.forgotConfirmPassword = "Las contraseñas no coinciden.";
+    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+
+    if (!forgotAccountId) {
+      setErrors({ forgotCode: "Sesión inválida. Vuelve a intentarlo." });
+      return;
+    }
+
+    setErrors({});
+    setIsLoading(true);
+    const { ok, error } = await resetCustomerPassword(forgotAccountId, forgotCode.trim(), forgotNewPassword);
+    setIsLoading(false);
+
+    if (!ok) {
+      setErrors({ forgotCode: error || "No se pudo restablecer la contraseña." });
+      return;
+    }
+
+    // Back to login with success message
+    setForgotStep(null);
+    setForgotEmail("");
+    setForgotCode("");
+    setForgotNewPassword("");
+    setForgotConfirmPassword("");
+    setForgotAccountId(null);
+    setForgotName("");
+    setForgotMessage("");
+    setErrors({ loginPassword: "✓ Contraseña actualizada. Inicia sesión con tu nueva contraseña." });
+  }
+
   if (!isOpen) return null;
 
   return (
@@ -403,7 +499,117 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             <X size={20} />
           </button>
 
-          {/* Tabs */}
+          {/* ── Forgot password: email step ── */}
+          {forgotStep === "email" && (
+            <div className="p-6">
+              <button
+                type="button"
+                onClick={() => { setForgotStep(null); setErrors({}); }}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
+              >
+                <ArrowLeft size={14} /> Volver
+              </button>
+              <h2 className="text-xl font-bold mb-1">Restablecer contraseña</h2>
+              <p className="text-sm text-muted-foreground mb-6">Ingresa tu correo y te enviaremos un código de 6 dígitos.</p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Correo electrónico</label>
+                  <div className="relative">
+                    <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="email"
+                      autoComplete="email"
+                      placeholder="tu@correo.com"
+                      value={forgotEmail}
+                      onChange={(e) => { setForgotEmail(e.target.value); setErrors({}); }}
+                      className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  {errors.forgotEmail && <p className="mt-1 text-xs text-red-500">{errors.forgotEmail}</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleForgotRequest}
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center gap-2 rounded-full bg-foreground py-3 text-sm font-semibold text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+                >
+                  {isLoading ? <><div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" /> Enviando...</> : <>Enviar código <ChevronRight size={16} /></>}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Forgot password: code + new password step ── */}
+          {forgotStep === "code" && (
+            <div className="p-6">
+              <button
+                type="button"
+                onClick={() => { setForgotStep("email"); setErrors({}); }}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
+              >
+                <ArrowLeft size={14} /> Volver
+              </button>
+              <h2 className="text-xl font-bold mb-1">Nueva contraseña</h2>
+              {forgotMessage && <p className="text-sm text-muted-foreground mb-5">{forgotMessage}</p>}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Código de 6 dígitos</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={forgotCode}
+                    onChange={(e) => { setForgotCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setErrors({}); }}
+                    className="w-full px-4 py-2.5 text-sm rounded-xl border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring tracking-widest text-center font-mono text-lg"
+                  />
+                  {errors.forgotCode && <p className="mt-1 text-xs text-red-500">{errors.forgotCode}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Nueva contraseña</label>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Mínimo 6 caracteres"
+                      value={forgotNewPassword}
+                      onChange={(e) => { setForgotNewPassword(e.target.value); setErrors({}); }}
+                      className="w-full pl-9 pr-10 py-2.5 text-sm rounded-xl border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                  {errors.forgotNewPassword && <p className="mt-1 text-xs text-red-500">{errors.forgotNewPassword}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Confirmar contraseña</label>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Repite la contraseña"
+                      value={forgotConfirmPassword}
+                      onChange={(e) => { setForgotConfirmPassword(e.target.value); setErrors({}); }}
+                      className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  {errors.forgotConfirmPassword && <p className="mt-1 text-xs text-red-500">{errors.forgotConfirmPassword}</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleForgotReset}
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center gap-2 rounded-full bg-foreground py-3 text-sm font-semibold text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+                >
+                  {isLoading ? <><div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" /> Guardando...</> : <>Cambiar contraseña <ChevronRight size={16} /></>}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Normal tabs (hidden when forgot flow is active) ── */}
+          {!forgotStep && (<>
           <div className="flex border-b border-border">
             <button
               type="button"
@@ -594,7 +800,11 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               {/* Forgot password */}
               {loginRole !== "colaborador" && (
                 <div className="mt-3 text-right">
-                  <button type="button" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => { setErrors({}); setForgotEmail(loginEmail); setForgotStep("email"); }}
+                  >
                     ¿Olvidaste tu contraseña?
                   </button>
                 </div>
@@ -907,6 +1117,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               </p>
             </div>
           )}
+          </>)}
         </div>
       </div>
     </>
