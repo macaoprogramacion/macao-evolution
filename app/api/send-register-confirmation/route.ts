@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     // If email provider is not configured yet, do not fail user registration.
     if (!process.env.RESEND_API_KEY) {
-      return NextResponse.json({ success: false, reason: "resend_not_configured" }, { status: 200 });
+      return NextResponse.json({ success: false, reason: "resend_not_configured", code }, { status: 200 });
     }
 
     const html = `
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error("Register confirmation email error:", error);
-      return NextResponse.json({ success: false, error: "email_failed" }, { status: 200 });
+      return NextResponse.json({ success: false, error: "email_failed", code }, { status: 200 });
     }
 
     return NextResponse.json({ success: true, id: data?.id });

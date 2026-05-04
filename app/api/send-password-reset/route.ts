@@ -7,6 +7,7 @@ interface PasswordResetPayload {
   name: string;
   email: string;
   code: string;
+  returnCodeOnFailure?: boolean;
 }
 
 export async function POST(request: NextRequest) {
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!process.env.RESEND_API_KEY) {
-      return NextResponse.json({ success: false, reason: "resend_not_configured" }, { status: 200 });
+      return NextResponse.json({ success: false, reason: "resend_not_configured", code }, { status: 200 });
     }
 
     const domain = process.env.RESEND_DOMAIN || "macaoadventurepark.com";
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error("[send-password-reset] Resend error:", error);
-      return NextResponse.json({ success: false, error: "Email send failed" }, { status: 500 });
+      return NextResponse.json({ success: false, error: "email_failed", code }, { status: 200 });
     }
 
     return NextResponse.json({ success: true });

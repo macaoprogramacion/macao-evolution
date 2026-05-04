@@ -287,8 +287,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         }),
       });
       const payload = await response.json().catch(() => null);
-      if (payload?.reason === "resend_not_configured") {
-        setVerificationMessage("RESEND no está configurado aún. Usa el entorno configurado para enviar el código por correo.");
+      if (payload?.code) {
+        setVerificationMessage(`El correo no se pudo enviar. Tu código es: ${payload.code}`);
+      } else if (payload?.reason === "resend_not_configured") {
+        setVerificationMessage("El correo no se pudo enviar. Contacta al soporte para obtener tu código.");
       } else {
         setVerificationMessage(`Te enviamos un código de 6 dígitos a ${newUser.email}.`);
       }
@@ -382,8 +384,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         }),
       });
       const payload = await response.json().catch(() => null);
-      if (payload?.reason === "resend_not_configured") {
-        setVerificationMessage("RESEND no está configurado aún. Usa el entorno configurado para enviar el código por correo.");
+      if (payload?.code) {
+        setVerificationMessage(`El correo no se pudo enviar. Tu código es: ${payload.code}`);
+      } else if (payload?.reason === "resend_not_configured") {
+        setVerificationMessage("El correo no se pudo enviar. Contacta al soporte para obtener tu código.");
       } else {
         setVerificationMessage(`Te enviamos un nuevo código a ${pendingVerification.email}.`);
       }
@@ -423,8 +427,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           body: JSON.stringify({ name: name ?? email, email, code }),
         });
         const payload = await res.json().catch(() => null);
-        if (payload?.reason === "resend_not_configured") {
-          setForgotMessage("RESEND no está configurado. Usa el entorno de producción para recibir el correo.");
+        if (payload?.code) {
+          setForgotMessage(`El correo no se pudo enviar. Tu código es: ${payload.code}`);
+        } else if (payload?.reason === "resend_not_configured") {
+          setForgotMessage("El correo no se pudo enviar. Contacta al soporte para obtener tu código.");
         } else {
           setForgotMessage(`Te enviamos un código de 6 dígitos a ${email}.`);
         }
