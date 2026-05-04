@@ -25,6 +25,8 @@ import {
   hasReviewedProduct,
   loadCustomerReservations,
   updateCustomerReservation,
+  cancelCustomerReservation,
+  canCancelReservation,
   type PickupStatus,
   type StoredCustomerReservation,
 } from "@/lib/customer-reservations";
@@ -136,6 +138,8 @@ export default function ReservasPage() {
   const [ratingDrafts, setRatingDrafts] = useState<Record<string, number>>({});
   const [submittingReviewKey, setSubmittingReviewKey] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<InPageNotification[]>([]);
+  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
   const sentEmailsThisSession = useRef(new Set<string>());
 
   const reloadReservations = useCallback(() => {
@@ -338,7 +342,26 @@ export default function ReservasPage() {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
+  const handleCancelReservation = async () => {
+    if (!cancelConfirmId || !currentUserEmail) return;
+    setIsCancelling(true);
+    await cancelCustomerReservation(currentUserEmail, cancelConfirmId);
+    setCancelConfirmId(null);
+    setIsCancelling(false);
+    setNotifications((prev) => [
+      {
+        id: `cancel:${cancelConfirmId}:${Date.now()}`,
+        title: "Reserva cancelada",
+        message: "Tu reserva ha sido cancelada. Contáctanos si necesitas ayuda con el reembolso.",
+        variant: "info",
+      },
+      ...prev,
+    ]);
+    reloadReservations();
+  };
+
   return (
+    <>
     <main className="min-h-screen bg-background px-4 pb-16 pt-28 md:px-8">
       <div className="mx-auto w-full max-w-5xl">
         <div className="mb-8">
@@ -439,6 +462,18 @@ export default function ReservasPage() {
                             className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm font-medium text-red-600 transition-colors hover:bg-red-500/10"
                           >
                             El chofer no se presento
+                          </button>
+                        </div>
+                      )}
+
+                      {canCancelReservation(reservation, now) && (
+                        <div className="mb-4">
+                          <button
+                            type="button"
+                            onClick={() => setCancelConfirmId(reservation.id)}
+                            className="w-full rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm font-medium text-red-600 transition-colors hover:bg-red-500/10"
+                          >
+                            Cancelar reserva
                           </button>
                         </div>
                       )}
@@ -585,5 +620,41 @@ export default function ReservasPage() {
         )}
       </div>
     </main>
+
+    {/* Diálogo de confirmación de cancelación */}
+    {cancelConfirmId && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-xl">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10">
+              <X className="h-5 w-5 text-red-600" />
+            </div>
+            <h2 className="text-base font-semibold text-foreground">¿Cancelar reserva?</h2>
+          </div>
+          <p className="mb-6 text-sm text-muted-foreground">
+            Esta acción no se puede deshacer. Si pagaste, contáctanos para gestionar el reembolso.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setCancelConfirmId(null)}
+              disabled={isCancelling}
+              className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
+            >
+              Volver
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelReservation}
+              disabled={isCancelling}
+              className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {isCancelling ? "Cancelando…" : "Sí, cancelar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

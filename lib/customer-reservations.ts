@@ -21,6 +21,7 @@ export interface ReservationLineItem {
 export interface StoredCustomerReservation {
   id: string;
   createdAt: string;
+  cancelledAt?: string;
   customer: CustomerInfo;
   items: ReservationLineItem[];
   totals: {
@@ -111,6 +112,22 @@ export async function updateCustomerReservation(
   }
 }
 
+export async function cancelCustomerReservation(ownerEmail: string, reservationId: string) {
+  await updateCustomerReservation(ownerEmail, reservationId, (r) => ({
+    ...r,
+    cancelledAt: new Date().toISOString(),
+  }));
+}
+
+/** Returns true if the reservation can still be cancelled (>24 h before pickup). */
+export function canCancelReservation(reservation: StoredCustomerReservation, now = new Date()) {
+  if (reservation.cancelledAt) return false;
+  const pickupAt = getReservationPickupDateTime(reservation);
+  if (!pickupAt) return true; // no pickup date yet → still cancellable
+  const deadline = new Date(pickupAt.getTime() - 24 * 60 * 60 * 1000);
+  return now < deadline;
+}
+
 function parsePickupTime(timeLabel?: string) {
   if (!timeLabel) return null;
 
@@ -161,6 +178,18 @@ export function getReservationTimelineStatus(reservation: StoredCustomerReservat
   const reviewableItems = getReviewableItems(reservation);
   const reviewedCount = reviewableItems.filter((item) => hasReviewedProduct(reservation, item.id)).length;
   const allProductsReviewed = reviewableItems.length > 0 && reviewedCount === reviewableItems.length;
+
+  if (reservation.cancelledAt) {
+    return {
+      code: "cancelled",
+      label: "Reserva cancelada",
+      description: "Esta reserva fue cancelada. Contáctanos si necesitas ayuda con el reembolso.",
+      showPickupActions: false,
+      showReviewPrompt: false,
+      pickupAt,
+      reviewReadyAt,
+    };
+  }
 
   if (!pickupAt) {
     return {
