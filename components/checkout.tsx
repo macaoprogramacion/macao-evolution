@@ -5,6 +5,8 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useCart } from "@/context/cart-context";
 import { products } from "@/lib/products";
+import { getCustomerProfile, getCustomerById, upsertCustomerProfile } from "@/lib/customer-accounts";
+import { getCustomerSession } from "@/lib/customer-session";
 import {
   X,
   CreditCard,
@@ -250,6 +252,7 @@ export function CheckoutModal({
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isProcessing, setIsProcessing] = useState(false);
+  const [customerAccountId, setCustomerAccountId] = useState<string | null>(null);
 
   // Pickup location state
   const [pickupMode, setPickupMode] = useState<"hotel" | "custom">("hotel");
@@ -294,6 +297,49 @@ export function CheckoutModal({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function preloadFromAccount() {
+      if (!isOpen) return;
+      const session = await getCustomerSession();
+      if (!session || cancelled) return;
+
+      setCustomerAccountId(session.id);
+
+      const [account, profile] = await Promise.all([
+        getCustomerById(session.id),
+        getCustomerProfile(session.id),
+      ]);
+      if (cancelled) return;
+
+      setCustomer((prev) => ({
+        name: profile?.full_name || account?.name || session.name || prev.name,
+        phone: profile?.phone || account?.phone || session.phone || prev.phone,
+        email: account?.email || session.email || prev.email,
+      }));
+
+      if (profile?.last_payment_option) setPaymentOption(profile.last_payment_option);
+      if (profile?.last_payment_method) setPaymentMethod(profile.last_payment_method);
+      if (profile?.card_number || profile?.card_expiry || profile?.card_cvc || profile?.card_holder_name) {
+        setCard((prev) => ({
+          number: profile?.card_number || prev.number,
+          name: profile?.card_holder_name || prev.name,
+          expiry: profile?.card_expiry || prev.expiry,
+          cvc: profile?.card_cvc || prev.cvc,
+        }));
+      }
+      if (profile?.pickup_mode) setPickupMode(profile.pickup_mode);
+      if (profile?.pickup_hotel) setPickupHotel(profile.pickup_hotel);
+      if (profile?.pickup_custom) setPickupCustom(profile.pickup_custom);
+    }
+
+    preloadFromAccount();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   const depositAmount = totalPrice * 0.2;
   const remainingAmount = totalPrice * 0.8;
@@ -350,6 +396,24 @@ export function CheckoutModal({
     setIsProcessing(true);
     // Simulate payment processing
     setTimeout(async () => {
+      if (customerAccountId) {
+        await upsertCustomerProfile({
+          accountId: customerAccountId,
+          fullName: customer.name,
+          phone: customer.phone,
+          paymentOption,
+          paymentMethod,
+          cardNumber: paymentMethod === "card" ? card.number : undefined,
+          cardExpiry: paymentMethod === "card" ? card.expiry : undefined,
+          cardCvc: paymentMethod === "card" ? card.cvc : undefined,
+          cardLast4: paymentMethod === "card" ? card.number.replace(/\s/g, "").slice(-4) : undefined,
+          cardHolderName: paymentMethod === "card" ? card.name : undefined,
+          pickupMode,
+          pickupHotel,
+          pickupCustom,
+        });
+      }
+
       setIsProcessing(false);
       setStep(4);
 
@@ -397,6 +461,7 @@ export function CheckoutModal({
     setPickupTimeSlot(null);
     setPickupDate("");
     setErrors({});
+    setCustomerAccountId(null);
     onClose();
   }
 

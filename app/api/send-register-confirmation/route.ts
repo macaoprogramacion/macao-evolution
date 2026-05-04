@@ -7,12 +7,13 @@ interface RegisterConfirmationPayload {
   name: string;
   email: string;
   role: "cliente" | "representante";
+  code?: string;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: RegisterConfirmationPayload = await request.json();
-    const { name, email, role } = body;
+    const { name, email, role, code } = body;
 
     if (!name || !email) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -43,9 +44,17 @@ export async function POST(request: NextRequest) {
               Tipo de cuenta: <strong>${role}</strong><br/>
               Correo registrado: <strong>${email}</strong>
             </p>
-            <p style="margin:0;font-size:14px;line-height:1.6;color:#3f3f46;">
-              Ya puedes iniciar sesión y gestionar tus reservas.
-            </p>
+            ${code
+              ? `<div style="margin:16px 0;padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fafafa;text-align:center;">
+                  <p style="margin:0 0 8px;font-size:12px;line-height:1.5;color:#71717a;text-transform:uppercase;letter-spacing:1.2px;">Código de verificación</p>
+                  <p style="margin:0;font-size:30px;line-height:1.1;color:#0a0a0a;font-weight:800;letter-spacing:6px;">${code}</p>
+                </div>
+                <p style="margin:0;font-size:14px;line-height:1.6;color:#3f3f46;">
+                  Ingresa este código en la app para confirmar tu correo y activar tu cuenta.
+                </p>`
+              : `<p style="margin:0;font-size:14px;line-height:1.6;color:#3f3f46;">
+                  Ya puedes iniciar sesión y gestionar tus reservas.
+                </p>`}
           </div>
 
           <div style="padding:20px 24px;background:#f8f9fa;text-align:center;border-top:1px solid #eee;">
@@ -59,7 +68,9 @@ export async function POST(request: NextRequest) {
     const { data, error } = await getResend().emails.send({
       from: `Macao Adventure Park <reservas@${process.env.RESEND_DOMAIN || "resend.dev"}>`,
       to: email,
-      subject: "Tu cuenta fue creada - Macao Adventure Park",
+      subject: code
+        ? "Código de verificación - Macao Adventure Park"
+        : "Tu cuenta fue creada - Macao Adventure Park",
       html,
     });
 

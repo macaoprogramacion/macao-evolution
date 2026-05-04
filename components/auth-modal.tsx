@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Mail, Lock, User, Phone, Eye, EyeOff, ChevronRight, Briefcase, Users, Building2, Shield } from "lucide-react";
 import { authenticateByEmail } from "@/lib/supabase-users";
-import { loginCustomer, registerCustomer } from "@/lib/customer-accounts";
+import { issueCustomerEmailVerificationCode, loginCustomer, registerCustomer, verifyCustomerEmailCode } from "@/lib/customer-accounts";
 import { setCustomerSession, type CustomerSession } from "@/lib/customer-session";
 import { setDashboardSession } from "@/lib/dashboard-session";
 import { setSellerPortalSession } from "@/lib/sellers-session";
@@ -12,6 +12,7 @@ import { setSellerPortalSession } from "@/lib/sellers-session";
 type UserRole = "cliente" | "representante" | "colaborador";
 
 type AuthTab = "login" | "register";
+type RegisterStep = "form" | "verify";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ async function setSessionUser(data: CustomerSession) {
 export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const router = useRouter();
   const [tab, setTab] = useState<AuthTab>("login");
+  const [registerStep, setRegisterStep] = useState<RegisterStep>("form");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -47,6 +49,15 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [regPassword, setRegPassword] = useState("");
   const [regConfirmPassword, setRegConfirmPassword] = useState("");
   const [regRole, setRegRole] = useState<UserRole>("cliente");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verificationMessage, setVerificationMessage] = useState("");
+  const [pendingVerification, setPendingVerification] = useState<{
+    id: string;
+    name: string;
+    phone: string;
+    email: string;
+    role: "cliente" | "representante";
+  } | null>(null);
 
   // Close on Escape
   useEffect(() => {
@@ -65,6 +76,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setIsLoading(false);
       setAdminEmail("");
       setAdminPin("");
+      setRegisterStep("form");
+      setVerificationCode("");
+      setVerificationMessage("");
+      setPendingVerification(null);
     }
   }, [isOpen]);
 
@@ -228,53 +243,94 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       return;
     }
 
-    await setSessionUser({
+    const { code, error: codeError } = await issueCustomerEmailVerificationCode(newUser.id);
+    if (codeError || !code) {
+      setErrors({ regEmail: codeError || "No se pudo generar el código de verificación" });
+      setIsLoading(false);
+      return;
+    }
+
+    setPendingVerification({
       id: newUser.id,
       name: newUser.name,
       phone: newUser.phone,
       email: newUser.email,
       role: newUser.role,
-      loggedInAt: new Date().toISOString(),
     });
 
-    // Optional confirmation email (non-blocking)
     try {
-      await fetch("/api/send-register-confirmation", {
+      const response = await fetch("/api/send-register-confirmation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newUser.name,
           email: newUser.email,
           role: newUser.role,
+          code,
         }),
       });
+      const payload = await response.json().catch(() => null);
+      if (payload?.reason === "resend_not_configured") {
+        setVerificationMessage("RESEND no está configurado aún. Usa el entorno configurado para enviar el código por correo.");
+      } else {
+        setVerificationMessage(`Te enviamos un código de 6 dígitos a ${newUser.email}.`);
+      }
     } catch {
-      // Ignore email send failures; account creation should not fail.
+      setVerificationMessage("No se pudo enviar el correo ahora. Puedes solicitar un nuevo código.");
     }
 
-    // If representative, mirror profile to sellers local cache and redirect
-    if (regRole === "representante") {
-      const repId = `REP-${String(newUser.id).replace(/-/g, "").slice(0, 8).toUpperCase()}`;
-      const initials = newUser.name
+    setRegisterStep("verify");
+    setVerificationCode("");
+    setIsLoading(false);
+  }
+
+  async function handleVerifyEmailCode() {
+    if (!pendingVerification) return;
+
+    const code = verificationCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      setErrors({ verificationCode: "Ingresa un código de 6 dígitos." });
+      return;
+    }
+
+    setIsLoading(true);
+    setErrors({});
+
+    const result = await verifyCustomerEmailCode(pendingVerification.id, code);
+    if (!result.ok) {
+      setErrors({ verificationCode: result.error || "No se pudo verificar el correo." });
+      setIsLoading(false);
+      return;
+    }
+
+    await setSessionUser({
+      id: pendingVerification.id,
+      name: pendingVerification.name,
+      phone: pendingVerification.phone,
+      email: pendingVerification.email,
+      role: pendingVerification.role,
+      loggedInAt: new Date().toISOString(),
+    });
+
+    if (pendingVerification.role === "representante") {
+      const repId = `REP-${String(pendingVerification.id).replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+      const initials = pendingVerification.name
         .split(" ")
         .map((w: string) => w[0])
         .join("")
         .toUpperCase()
         .slice(0, 2);
 
-      const repPayload = {
+      await setSellerPortalSession({
         id: repId,
-        name: newUser.name,
-        phone: newUser.phone,
-        email: newUser.email,
+        name: pendingVerification.name,
+        phone: pendingVerification.phone,
+        email: pendingVerification.email,
         company: "Independiente",
         type: "local_seller",
         commissionPercent: 15,
         initials,
-      };
-
-      await setSellerPortalSession(repPayload);
-
+      });
       setIsLoading(false);
       onClose();
       router.push("/sellers/dashboard");
@@ -283,6 +339,42 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     setIsLoading(false);
     onClose();
+  }
+
+  async function handleResendCode() {
+    if (!pendingVerification) return;
+    setIsLoading(true);
+    setErrors({});
+
+    const { code, error } = await issueCustomerEmailVerificationCode(pendingVerification.id);
+    if (error || !code) {
+      setErrors({ verificationCode: error || "No se pudo reenviar el código." });
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/send-register-confirmation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: pendingVerification.name,
+          email: pendingVerification.email,
+          role: pendingVerification.role,
+          code,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (payload?.reason === "resend_not_configured") {
+        setVerificationMessage("RESEND no está configurado aún. Usa el entorno configurado para enviar el código por correo.");
+      } else {
+        setVerificationMessage(`Te enviamos un nuevo código a ${pendingVerification.email}.`);
+      }
+    } catch {
+      setErrors({ verificationCode: "No se pudo reenviar el código. Intenta de nuevo." });
+    }
+
+    setIsLoading(false);
   }
 
   if (!isOpen) return null;
@@ -546,183 +638,261 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           {tab === "register" && (
             <div className="px-8 py-6">
               <h2 className="text-xl font-title text-foreground mb-1">
-                Crear cuenta
+                {registerStep === "form" ? "Crear cuenta" : "Verifica tu correo"}
               </h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Regístrate para reservar tu experiencia
+                {registerStep === "form"
+                  ? "Regístrate para reservar tu experiencia"
+                  : `Ingresa el código de 6 dígitos enviado a ${pendingVerification?.email || "tu correo"}`}
               </p>
 
-              <div className="space-y-3">
-                {/* Role selector */}
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-foreground">
-                    Tipo de cuenta
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
+              {registerStep === "form" ? (
+                <div className="space-y-3">
+                  {/* Role selector */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-foreground">
+                      Tipo de cuenta
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRegRole("cliente")}
+                        className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition-all ${
+                          regRole === "cliente"
+                            ? "border-foreground bg-foreground text-background shadow-sm"
+                            : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                        }`}
+                      >
+                        <User size={16} />
+                        Cliente
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRegRole("representante")}
+                        className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition-all ${
+                          regRole === "representante"
+                            ? "border-foreground bg-foreground text-background shadow-sm"
+                            : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                        }`}
+                      >
+                        <Briefcase size={16} />
+                        Representante
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Name */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-foreground">
+                      {regRole === "representante" ? "Nombre del representante" : "Nombre completo"}
+                    </label>
+                    <div className="relative">
+                      <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        type="text"
+                        value={regName}
+                        onChange={(e) => setRegName(e.target.value)}
+                        placeholder="Juan Pérez"
+                        className={`w-full rounded-xl border bg-background py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
+                          errors.regName ? "border-red-500" : "border-border"
+                        }`}
+                      />
+                    </div>
+                    {errors.regName && (
+                      <p className="mt-1 text-xs text-red-500">{errors.regName}</p>
+                    )}
+                  </div>
+
+                  {/* Phone */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-foreground">
+                      Número de teléfono
+                    </label>
+                    <div className="relative">
+                      <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        type="tel"
+                        value={regPhone}
+                        onChange={(e) => setRegPhone(e.target.value)}
+                        placeholder="+1 (809) 555-0123"
+                        className={`w-full rounded-xl border bg-background py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
+                          errors.regPhone ? "border-red-500" : "border-border"
+                        }`}
+                      />
+                    </div>
+                    {errors.regPhone && (
+                      <p className="mt-1 text-xs text-red-500">{errors.regPhone}</p>
+                    )}
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-foreground">
+                      Correo electrónico
+                    </label>
+                    <div className="relative">
+                      <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        type="email"
+                        value={regEmail}
+                        onChange={(e) => setRegEmail(e.target.value)}
+                        placeholder="juan@ejemplo.com"
+                        className={`w-full rounded-xl border bg-background py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
+                          errors.regEmail ? "border-red-500" : "border-border"
+                        }`}
+                      />
+                    </div>
+                    {errors.regEmail && (
+                      <p className="mt-1 text-xs text-red-500">{errors.regEmail}</p>
+                    )}
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-foreground">
+                      Contraseña
+                    </label>
+                    <div className="relative">
+                      <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={regPassword}
+                        onChange={(e) => setRegPassword(e.target.value)}
+                        placeholder="Mínimo 6 caracteres"
+                        className={`w-full rounded-xl border bg-background py-2.5 pl-10 pr-11 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
+                          errors.regPassword ? "border-red-500" : "border-border"
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    {errors.regPassword && (
+                      <p className="mt-1 text-xs text-red-500">{errors.regPassword}</p>
+                    )}
+                  </div>
+
+                  {/* Confirm password */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-foreground">
+                      Confirmar contraseña
+                    </label>
+                    <div className="relative">
+                      <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={regConfirmPassword}
+                        onChange={(e) => setRegConfirmPassword(e.target.value)}
+                        placeholder="Repite tu contraseña"
+                        className={`w-full rounded-xl border bg-background py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
+                          errors.regConfirmPassword ? "border-red-500" : "border-border"
+                        }`}
+                      />
+                    </div>
+                    {errors.regConfirmPassword && (
+                      <p className="mt-1 text-xs text-red-500">{errors.regConfirmPassword}</p>
+                    )}
+                  </div>
+
+                  {/* Register button */}
+                  <button
+                    type="button"
+                    onClick={handleRegister}
+                    disabled={isLoading}
+                    className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-foreground py-3 text-sm font-semibold text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
+                        Creando cuenta...
+                      </>
+                    ) : (
+                      <>
+                        Crear cuenta
+                        <ChevronRight size={16} />
+                      </>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-foreground">
+                      Código de verificación
+                    </label>
+                    <div className="relative">
+                      <Shield size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={verificationCode}
+                        onChange={(e) => {
+                          const cleaned = e.target.value.replace(/\D/g, "").slice(0, 6);
+                          setVerificationCode(cleaned);
+                          setErrors({});
+                        }}
+                        placeholder="123456"
+                        className={`w-full rounded-xl border bg-background py-2.5 pl-10 pr-4 text-sm tracking-[0.35em] text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
+                          errors.verificationCode ? "border-red-500" : "border-border"
+                        }`}
+                      />
+                    </div>
+                    {errors.verificationCode && (
+                      <p className="mt-1 text-xs text-red-500">{errors.verificationCode}</p>
+                    )}
+                    {verificationMessage && (
+                      <p className="mt-1 text-xs text-muted-foreground">{verificationMessage}</p>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleVerifyEmailCode}
+                    disabled={isLoading}
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-full bg-foreground py-3 text-sm font-semibold text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
+                        Verificando...
+                      </>
+                    ) : (
+                      <>
+                        Confirmar código
+                        <ChevronRight size={16} />
+                      </>
+                    )}
+                  </button>
+
+                  <div className="flex items-center justify-between pt-1 text-xs">
                     <button
                       type="button"
-                      onClick={() => setRegRole("cliente")}
-                      className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition-all ${
-                        regRole === "cliente"
-                          ? "border-foreground bg-foreground text-background shadow-sm"
-                          : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-                      }`}
+                      onClick={handleResendCode}
+                      disabled={isLoading}
+                      className="font-semibold text-foreground hover:underline disabled:opacity-50"
                     >
-                      <User size={16} />
-                      Cliente
+                      Reenviar código
                     </button>
                     <button
                       type="button"
-                      onClick={() => setRegRole("representante")}
-                      className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition-all ${
-                        regRole === "representante"
-                          ? "border-foreground bg-foreground text-background shadow-sm"
-                          : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-                      }`}
+                      onClick={() => {
+                        setRegisterStep("form");
+                        setVerificationCode("");
+                        setVerificationMessage("");
+                        setPendingVerification(null);
+                        setErrors({});
+                      }}
+                      className="text-muted-foreground hover:text-foreground"
                     >
-                      <Briefcase size={16} />
-                      Representante
+                      Cambiar datos
                     </button>
                   </div>
                 </div>
-
-                {/* Name */}
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-foreground">
-                    {regRole === "representante" ? "Nombre del representante" : "Nombre completo"}
-                  </label>
-                  <div className="relative">
-                    <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="text"
-                      value={regName}
-                      onChange={(e) => setRegName(e.target.value)}
-                      placeholder="Juan Pérez"
-                      className={`w-full rounded-xl border bg-background py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
-                        errors.regName ? "border-red-500" : "border-border"
-                      }`}
-                    />
-                  </div>
-                  {errors.regName && (
-                    <p className="mt-1 text-xs text-red-500">{errors.regName}</p>
-                  )}
-                </div>
-
-                {/* Phone */}
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-foreground">
-                    Número de teléfono
-                  </label>
-                  <div className="relative">
-                    <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="tel"
-                      value={regPhone}
-                      onChange={(e) => setRegPhone(e.target.value)}
-                      placeholder="+1 (809) 555-0123"
-                      className={`w-full rounded-xl border bg-background py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
-                        errors.regPhone ? "border-red-500" : "border-border"
-                      }`}
-                    />
-                  </div>
-                  {errors.regPhone && (
-                    <p className="mt-1 text-xs text-red-500">{errors.regPhone}</p>
-                  )}
-                </div>
-
-                {/* Email */}
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-foreground">
-                    Correo electrónico
-                  </label>
-                  <div className="relative">
-                    <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="email"
-                      value={regEmail}
-                      onChange={(e) => setRegEmail(e.target.value)}
-                      placeholder="juan@ejemplo.com"
-                      className={`w-full rounded-xl border bg-background py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
-                        errors.regEmail ? "border-red-500" : "border-border"
-                      }`}
-                    />
-                  </div>
-                  {errors.regEmail && (
-                    <p className="mt-1 text-xs text-red-500">{errors.regEmail}</p>
-                  )}
-                </div>
-
-                {/* Password */}
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-foreground">
-                    Contraseña
-                  </label>
-                  <div className="relative">
-                    <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
-                      className={`w-full rounded-xl border bg-background py-2.5 pl-10 pr-11 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
-                        errors.regPassword ? "border-red-500" : "border-border"
-                      }`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                  {errors.regPassword && (
-                    <p className="mt-1 text-xs text-red-500">{errors.regPassword}</p>
-                  )}
-                </div>
-
-                {/* Confirm password */}
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-foreground">
-                    Confirmar contraseña
-                  </label>
-                  <div className="relative">
-                    <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={regConfirmPassword}
-                      onChange={(e) => setRegConfirmPassword(e.target.value)}
-                      placeholder="Repite tu contraseña"
-                      className={`w-full rounded-xl border bg-background py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
-                        errors.regConfirmPassword ? "border-red-500" : "border-border"
-                      }`}
-                    />
-                  </div>
-                  {errors.regConfirmPassword && (
-                    <p className="mt-1 text-xs text-red-500">{errors.regConfirmPassword}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Register button */}
-              <button
-                type="button"
-                onClick={handleRegister}
-                disabled={isLoading}
-                className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-foreground py-3 text-sm font-semibold text-background transition-opacity hover:opacity-80 disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
-                    Creando cuenta...
-                  </>
-                ) : (
-                  <>
-                    Crear cuenta
-                    <ChevronRight size={16} />
-                  </>
-                )}
-              </button>
+              )}
 
               {/* Switch to login */}
               <p className="mt-4 text-center text-sm text-muted-foreground">

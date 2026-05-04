@@ -16,6 +16,13 @@ export interface CustomerAccount {
   updated_at: string;
 }
 
+interface CustomerEmailVerification {
+  account_id: string;
+  code_hash: string;
+  expires_at: string;
+  verified_at: string | null;
+}
+
 export interface CustomerProfile {
   account_id: string;
   full_name: string | null;
@@ -58,6 +65,92 @@ export async function findCustomerByEmail(email: string, role?: CustomerRole) {
   const { data, error } = await query.single();
   if (error || !data) return null;
   return data as CustomerAccount;
+}
+
+export async function getCustomerById(accountId: string) {
+  const { data, error } = await supabase
+    .from("customer_accounts")
+    .select("id, name, phone, email, password_hash, role, active, created_at, updated_at")
+    .eq("id", accountId)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as CustomerAccount;
+}
+
+async function getVerificationByAccountId(accountId: string) {
+  const { data, error } = await supabase
+    .from("customer_email_verifications")
+    .select("account_id, code_hash, expires_at, verified_at")
+    .eq("account_id", accountId)
+    .maybeSingle();
+
+  if (error) return null;
+  return (data ?? null) as CustomerEmailVerification | null;
+}
+
+export async function issueCustomerEmailVerificationCode(accountId: string) {
+  const code = `${Math.floor(100000 + Math.random() * 900000)}`;
+  const codeHash = await sha256Hex(code);
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+  const { error } = await supabase
+    .from("customer_email_verifications")
+    .upsert(
+      {
+        account_id: accountId,
+        code_hash: codeHash,
+        expires_at: expiresAt,
+        verified_at: null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "account_id" },
+    );
+
+  if (error) {
+    return { code: null, error: "No se pudo generar el código de verificación" };
+  }
+
+  return { code, error: null };
+}
+
+export async function verifyCustomerEmailCode(accountId: string, code: string) {
+  const verification = await getVerificationByAccountId(accountId);
+
+  // Backward compatibility: old accounts without verification row are treated as verified.
+  if (!verification) return { ok: true, error: null };
+  if (verification.verified_at) return { ok: true, error: null };
+
+  const now = new Date();
+  if (new Date(verification.expires_at) < now) {
+    return { ok: false, error: "El código expiró. Solicita uno nuevo." };
+  }
+
+  const codeHash = await sha256Hex(code.trim());
+  if (codeHash !== verification.code_hash) {
+    return { ok: false, error: "El código ingresado no es válido." };
+  }
+
+  const { error } = await supabase
+    .from("customer_email_verifications")
+    .update({
+      verified_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("account_id", accountId);
+
+  if (error) {
+    return { ok: false, error: "No se pudo confirmar el correo. Intenta de nuevo." };
+  }
+
+  return { ok: true, error: null };
+}
+
+export async function isCustomerEmailVerified(accountId: string) {
+  const verification = await getVerificationByAccountId(accountId);
+  if (!verification) return true;
+  return !!verification.verified_at;
 }
 
 export async function registerCustomer(input: {
@@ -107,6 +200,14 @@ export async function loginCustomer(input: {
   const passwordHash = await sha256Hex(input.password);
   if (account.password_hash !== passwordHash) {
     return { account: null, error: "Contraseña incorrecta" };
+  }
+
+  const isVerified = await isCustomerEmailVerified(account.id);
+  if (!isVerified) {
+    return {
+      account: null,
+      error: "Debes verificar tu correo con el código que te enviamos para poder iniciar sesión.",
+    };
   }
 
   return { account, error: null };
