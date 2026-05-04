@@ -194,6 +194,28 @@ function ClientGallery() {
   }, [phone]);
   const hasInvoice = phoneInvoices.length > 0;
 
+  // Saved payment state (card data stored after a successful purchase)
+  const [savedPayment, setSavedPayment] = useState(null);
+  const [useSavedCard, setUseSavedCard] = useState(false);
+  const [savedCardCvc, setSavedCardCvc] = useState('');
+  const [savedCardCvcError, setSavedCardCvcError] = useState('');
+
+  // Load saved payment method for this phone
+  useEffect(() => {
+    async function loadSavedPayment() {
+      if (!phone) return;
+      const { data, error } = await supabase
+        .from('photo_saved_payments')
+        .select('cardholder_name, last4, exp')
+        .eq('phone', phone)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!error && data) setSavedPayment(data);
+    }
+    loadSavedPayment();
+  }, [phone]);
+
   // Build gallery photos from Supabase data, fall back to demo
   const galleryPhotos = useMemo(() => {
     const realPhotos = [];
@@ -294,6 +316,9 @@ function ClientGallery() {
     setPurchaseTarget({ type: 'plan', plan });
     setPaymentMethod('card');
     setPaymentErrors({});
+    setUseSavedCard(!!savedPayment);
+    setSavedCardCvc('');
+    setSavedCardCvcError('');
     setShowPaymentModal(true);
   };
 
@@ -302,6 +327,9 @@ function ClientGallery() {
       setPurchaseTarget({ type: 'video' });
       setPaymentMethod('card');
       setPaymentErrors({});
+      setUseSavedCard(!!savedPayment);
+      setSavedCardCvc('');
+      setSavedCardCvcError('');
       setShowPaymentModal(true);
     } else if (videoSelected) {
       alert('El video aún no está disponible.');
@@ -378,16 +406,44 @@ function ClientGallery() {
       alert('Pago aprobado. Video comprado y descargado.');
     }
 
+    // Save card for future payments (only when using a new card, not saved card)
+    if (method === 'card' && !useSavedCard && paymentForm.name && paymentForm.cardNumber) {
+      const last4 = paymentForm.cardNumber.replace(/\D/g, '').slice(-4);
+      const captured = { cardholder_name: paymentForm.name, last4, exp: paymentForm.exp };
+      supabase
+        .from('photo_saved_payments')
+        .upsert({ phone, ...captured, updated_at: new Date().toISOString() }, { onConflict: 'phone' })
+        .then(({ error }) => { if (!error) setSavedPayment(captured); });
+    }
+
     setShowPaymentModal(false);
     setPurchaseTarget(null);
     setPaymentMethod('card');
     setPaymentErrors({});
     setPaymentForm({ name: '', cardNumber: '', exp: '', cvc: '' });
+    setSavedCardCvc('');
+    setSavedCardCvcError('');
   };
 
   const handleConfirmPayment = async () => {
     if (paymentMethod !== 'card') {
       alert('Selecciona PayPal o usa tarjeta para completar el pago.');
+      return;
+    }
+
+    // Paying with saved card — only need CVC
+    if (useSavedCard && savedPayment) {
+      if (!/^\d{3,4}$/.test(savedCardCvc)) {
+        setSavedCardCvcError('CVC inválido.');
+        return;
+      }
+      setSavedCardCvcError('');
+      setIsProcessingPayment(true);
+      try {
+        await completePurchase('card');
+      } finally {
+        setIsProcessingPayment(false);
+      }
       return;
     }
 
@@ -969,7 +1025,7 @@ function ClientGallery() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setShowPaymentModal(false)}
+            onClick={() => { setShowPaymentModal(false); setSavedCardCvc(''); setSavedCardCvcError(''); }}
           >
             <motion.div
               initial={{ scale: 0.96, opacity: 0 }}
@@ -1001,7 +1057,44 @@ function ClientGallery() {
                   </GlassButton>
                 </div>
 
-                {paymentMethod === 'card' && (
+                {/* Saved card banner */}
+                {paymentMethod === 'card' && savedPayment && (
+                  <div className="mb-4 p-4 rounded-xl border border-white/20 bg-white/5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-white text-sm font-medium">Tarjeta guardada</p>
+                        <p className="text-white/50 text-xs mt-0.5">
+                          {savedPayment.cardholder_name}&nbsp;&nbsp;••••&nbsp;{savedPayment.last4}
+                          {savedPayment.exp ? `  ${savedPayment.exp}` : ''}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => { setUseSavedCard(!useSavedCard); setSavedCardCvc(''); setSavedCardCvcError(''); }}
+                        className="text-xs text-red-400 underline ml-3 shrink-0"
+                      >
+                        {useSavedCard ? 'Usar otra tarjeta' : 'Usar esta tarjeta'}
+                      </button>
+                    </div>
+                    {useSavedCard && (
+                      <div className="mt-3">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="CVC"
+                          value={savedCardCvc}
+                          onChange={(e) => {
+                            setSavedCardCvcError('');
+                            setSavedCardCvc(e.target.value.replace(/[^0-9]/g, '').slice(0, 4));
+                          }}
+                          className="w-full px-4 py-3 bg-black/30 rounded-xl border border-white/20 text-white placeholder:text-white/40 focus:outline-none"
+                        />
+                        {savedCardCvcError && <p className="text-xs text-red-400 mt-1">{savedCardCvcError}</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {paymentMethod === 'card' && (!savedPayment || !useSavedCard) && (
                 <div className="space-y-3">
                   <input
                     type="text"
@@ -1112,7 +1205,7 @@ function ClientGallery() {
                 )}
 
                 <div className="flex gap-3 mt-6">
-                  <GlassButton variant="secondary" className="flex-1" onClick={() => setShowPaymentModal(false)}>
+                  <GlassButton variant="secondary" className="flex-1" onClick={() => { setShowPaymentModal(false); setSavedCardCvc(''); setSavedCardCvcError(''); }}>
                     Cancelar
                   </GlassButton>
                   {paymentMethod === 'card' ? (

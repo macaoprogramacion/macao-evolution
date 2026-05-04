@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft, Ship, Mountain, Sun, Moon, Camera } from "lucide-react"
+import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft, Ship, Mountain, Sun, Moon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -18,17 +18,15 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
 import { useTheme } from "next-themes"
-import { clearDashboardSession, getDashboardSession } from "@/lib/dashboard-session"
 
 const navigation = [
   { name: "Overview", href: "/admin", icon: Home },
-  { name: "Operacion Buggy", href: "/admin/operation", icon: ClipboardList },
+  { name: "Operation", href: "/admin/operation", icon: ClipboardList },
   { name: "Operación Saona", href: "/admin/operation-saona", icon: Ship },
   { name: "Operación Samaná", href: "/admin/operation-samana", icon: Mountain },
   { name: "Mis Recogidas", href: "/admin/chofer", icon: Navigation },
   { name: "Representantes", href: "/admin/representatives", icon: Handshake },
   { name: "Products", href: "/admin/products", icon: Package },
-  { name: "Fotografía", href: "/admin/photography", icon: Camera },
   { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
   { name: "Team", href: "/admin/team", icon: Users },
   { name: "Usuarios", href: "/admin/users", icon: UserCog },
@@ -42,7 +40,7 @@ const navigation = [
 const rolePageAccess: Record<string, string[]> = {
   operaciones: ["/admin/operation", "/admin/operation-saona", "/admin/operation-samana"],
   chofer: ["/admin/chofer"],
-  contabilidad: ["/admin/analytics", "/admin/products", "/admin/photography"],
+  contabilidad: ["/admin/analytics", "/admin/products"],
 }
 
 function hasAccess(role: string, href: string): boolean {
@@ -50,6 +48,16 @@ function hasAccess(role: string, href: string): boolean {
   const allowed = rolePageAccess[role]
   if (!allowed) return false
   return allowed.some((path) => href === path || href.startsWith(path + "/"))
+}
+
+function getSessionRole(): { role: string; name: string } | null {
+  try {
+    const session = JSON.parse(sessionStorage.getItem("macao_auth_session") || "null")
+    if (session && session.active) {
+      return { role: session.role, name: session.name }
+    }
+  } catch {}
+  return null
 }
 
 interface DashboardLayoutProps {
@@ -66,14 +74,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [userName, setUserName] = useState<string>("")
 
   useEffect(() => {
-    getDashboardSession().then((session) => {
-      if (session && session.active) {
-        setUserRole(session.role)
-        setUserName(session.name)
-      } else {
-        setUserRole("admin") // fallback if no session (bypass mode)
-      }
-    })
+    const session = getSessionRole()
+    if (session) {
+      setUserRole(session.role)
+      setUserName(session.name)
+    } else {
+      setUserRole("admin") // fallback if no session (bypass mode)
+    }
   }, [])
 
   // Don't render until we know the role
@@ -110,8 +117,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               height={48}
               className="h-8 md:h-10 w-auto"
             />
+            <span className="font-title text-gray-900 dark:text-gray-100 hidden sm:inline">Dashboard</span>
           </Link>
           <div className="text-sm text-gray-500 dark:text-gray-400 hidden md:block">
+            <span>Dashboard</span> <span className="mx-1">/</span>
             <span className="capitalize">{pathname === "/admin" ? "Overview" : pathname.replace("/admin/", "")}</span>
           </div>
         </div>
@@ -120,7 +129,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="relative hidden sm:block">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
-              placeholder="Search"
+              placeholder="Search workflows, logs..."
               className="pl-10 w-48 md:w-64 lg:w-80 bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 focus:bg-white dark:focus:bg-gray-800"
             />
           </div>

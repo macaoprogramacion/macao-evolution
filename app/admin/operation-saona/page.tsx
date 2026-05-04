@@ -18,20 +18,16 @@ import {
   AlertCircle,
   XCircle,
   Send,
-  Copy,
-  MessageSquare,
   Loader2,
   Plus,
   Ticket,
   Ship,
   Anchor,
   RefreshCw,
-  UserX,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import {
   Select,
@@ -40,6 +36,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import {
   Dialog,
   DialogContent,
@@ -50,8 +54,6 @@ import {
 } from "@/components/ui/dialog"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { supabase } from "@/lib/supabase"
-import { parseExternalReservationText } from "@/lib/external-reservation-parser"
-import { getSaonaPickupSuggestion, type SaonaProvider } from "@/lib/hotel-pickup-schedules"
 import { Label } from "@/components/ui/label"
 
 type SaonaReservation = {
@@ -69,30 +71,13 @@ type SaonaReservation = {
   channelUrl: string
   channelColor: string
   date: string
-  status: "pending" | "confirmed" | "in_progress" | "completed" | "cancelled" | "no_show"
+  status: "pending" | "confirmed" | "in_progress" | "completed" | "cancelled"
   amount: number | null
   notes: string
   lunchIncluded: boolean
   drinkPackage: string
   gygBookingRef: string
   gygBookingReference: string
-  createdAt: string | null
-}
-
-function getPickupDeadline(dateValue: string, pickupValue: string) {
-  const timeMatch = pickupValue.match(/(\d{1,2})(?::(\d{2}))?\s*([AP]M)/i)
-  if (!timeMatch) return null
-
-  let hours = Number(timeMatch[1])
-  const minutes = Number(timeMatch[2] || "0")
-  const ampm = timeMatch[3].toUpperCase()
-
-  if (ampm === "PM" && hours !== 12) hours += 12
-  if (ampm === "AM" && hours === 12) hours = 0
-
-  const pickupDate = new Date(`${dateValue}T00:00:00`)
-  pickupDate.setHours(hours, minutes, 0, 0)
-  return pickupDate
 }
 
 function mapRow(r: any): SaonaReservation {
@@ -118,7 +103,6 @@ function mapRow(r: any): SaonaReservation {
     drinkPackage: r.drink_package || "standard",
     gygBookingRef: r.gyg_booking_ref || "",
     gygBookingReference: r.gyg_booking_reference || "",
-    createdAt: r.created_at || null,
   }
 }
 
@@ -131,17 +115,10 @@ export default function OperationSaonaPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<string | null>(null)
-  const [copiedMsg, setCopiedMsg] = useState("")
-  const [noShowConfirmId, setNoShowConfirmId] = useState<string | null>(null)
-  const [saonaProvider, setSaonaProvider] = useState<SaonaProvider>("daniel")
-  const [saonaPickupHint, setSaonaPickupHint] = useState<string | null>(null)
-  const [pickupScheduleMode, setPickupScheduleMode] = useState<"saona" | "party_boat">("saona")
 
   // Modal agregar reserva
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [externalReservationText, setExternalReservationText] = useState("")
-  const [externalParseSummary, setExternalParseSummary] = useState<string | null>(null)
   const [newRes, setNewRes] = useState({
     customer_name: "",
     phone: "",
@@ -162,30 +139,25 @@ export default function OperationSaonaPage() {
     drink_package: "standard",
   })
 
-  const resetNewRes = () => {
-    setNewRes({
-      customer_name: "",
-      phone: "",
-      email: "",
-      hotel: "",
-      location: "",
-      guests: 1,
-      children: 0,
-      pickup_time: "",
-      boat_type: "catamaran",
-      channel: "phone",
-      channel_url: "",
-      channel_color: "#6b7280",
-      date: new Date().toISOString().slice(0, 10),
-      amount: 0,
-      notes: "",
-      lunch_included: true,
-      drink_package: "standard",
-    })
-    setExternalReservationText("")
-    setExternalParseSummary(null)
-    setPickupScheduleMode("saona")
-  }
+  const resetNewRes = () => setNewRes({
+    customer_name: "",
+    phone: "",
+    email: "",
+    hotel: "",
+    location: "",
+    guests: 1,
+    children: 0,
+    pickup_time: "",
+    boat_type: "catamaran",
+    channel: "phone",
+    channel_url: "",
+    channel_color: "#6b7280",
+    date: new Date().toISOString().slice(0, 10),
+    amount: 0,
+    notes: "",
+    lunch_included: true,
+    drink_package: "standard",
+  })
 
   const channelColors: Record<string, string> = {
     website: "#dc2626",
@@ -194,82 +166,6 @@ export default function OperationSaonaPage() {
     walk_in: "#8b5cf6",
     seller: "#d97706",
     ota: "#ef4444",
-  }
-
-  const withSaonaAutoPickup = (
-    draft: typeof newRes,
-    provider: SaonaProvider = saonaProvider,
-    options?: { allowAuto?: boolean; keepManualPickup?: boolean },
-  ) => {
-    const allowAuto = options?.allowAuto ?? true
-    if (!allowAuto) {
-      return draft
-    }
-
-    const source = `${draft.hotel} ${draft.location}`.trim()
-    const suggestion = getSaonaPickupSuggestion(source, provider)
-
-    if (!suggestion) {
-      setSaonaPickupHint(null)
-      return draft
-    }
-
-    if (options?.keepManualPickup && draft.pickup_time.trim()) {
-      setSaonaPickupHint(`Proveedor: ${provider.toUpperCase()} | Hotel detectado: ${suggestion.hotel} (manteniendo hora del ticket)`)
-      return draft
-    }
-
-    setSaonaPickupHint(
-      `Proveedor: ${provider.toUpperCase()} | Hora sugerida: ${suggestion.pickupTime} (${suggestion.hotel})`,
-    )
-
-    return {
-      ...draft,
-      pickup_time: suggestion.pickupTime || draft.pickup_time,
-      location: draft.location || suggestion.pickupLabel,
-    }
-  }
-
-  const applyExternalReservation = () => {
-    if (!externalReservationText.trim()) {
-      setExternalParseSummary("Pega el texto de la reserva primero.")
-      return
-    }
-
-    const parsed = parseExternalReservationText(externalReservationText)
-    const pickupValue = parsed.pickupWindow || parsed.pickupTime || ""
-    const isPartyBoat = /party\s*boat|paryboat|5587607P17/i.test(
-      `${parsed.productTitle || ""} ${parsed.optionTitle || ""} ${externalReservationText}`,
-    )
-    setPickupScheduleMode(isPartyBoat ? "party_boat" : "saona")
-
-    const notesFromPaste = [
-      parsed.bookingReference ? `Booking ref: ${parsed.bookingReference}` : "",
-      parsed.ticketCodes.length > 0 ? `Tickets: ${parsed.ticketCodes.join(" | ")}` : "",
-    ].filter(Boolean).join("\n")
-
-    setNewRes((prev) => withSaonaAutoPickup({
-      ...prev,
-      customer_name: parsed.customerName || prev.customer_name,
-      phone: parsed.phone || prev.phone,
-      hotel: parsed.hotel || prev.hotel,
-      location: parsed.location || prev.location,
-      date: parsed.reservationDate || prev.date,
-      pickup_time: pickupValue || prev.pickup_time,
-      guests: parsed.guests || prev.guests,
-      children: parsed.children ?? prev.children,
-      amount: parsed.amount ?? prev.amount,
-      channel: "ota",
-      channel_url: parsed.bookingReference || prev.channel_url,
-      notes: [prev.notes, notesFromPaste].filter(Boolean).join(prev.notes && notesFromPaste ? "\n" : ""),
-      boat_type: parsed.boatType || prev.boat_type,
-      lunch_included: parsed.includesLunch ?? prev.lunch_included,
-      drink_package: parsed.includesOpenBar ? "premium" : prev.drink_package,
-    }, saonaProvider, { allowAuto: !isPartyBoat, keepManualPickup: Boolean(pickupValue) }))
-
-    setExternalParseSummary(
-      `Autocompletado: ${parsed.source.toUpperCase()}${isPartyBoat ? " | Party Boat" : ""}${parsed.bookingReference ? ` | Ref: ${parsed.bookingReference}` : ""}${parsed.customerName ? ` | Cliente: ${parsed.customerName}` : ""}`
-    )
   }
 
   const syncGygBookings = async () => {
@@ -347,77 +243,24 @@ export default function OperationSaonaPage() {
     return () => clearInterval(interval)
   }, [])
 
-  const updateReservationStatus = async (id: string, status: SaonaReservation["status"]) => {
+  const toggleStatus = async (id: string) => {
     try {
       const { error } = await supabase
         .from("saona_reservations")
-        .update({ status, updated_at: new Date().toISOString() })
+        .update({ status: "confirmed", updated_at: new Date().toISOString() })
         .eq("id", id)
       if (error) {
         console.error("Error updating status:", error)
-        alert("Error al actualizar estado: " + error.message)
+        alert("Error al confirmar: " + error.message)
       } else {
         setReservations((prev) =>
           prev.map((r) =>
-            r.id === id ? { ...r, status } : r
+            r.id === id ? { ...r, status: "confirmed" as const } : r
           )
         )
       }
     } catch (e) {
       console.error("Error updating status:", e)
-    }
-  }
-
-  const toggleStatus = async (id: string) => {
-    await updateReservationStatus(id, "confirmed")
-  }
-
-  const markAsNoShow = async (id: string) => {
-    await updateReservationStatus(id, "no_show")
-    setNoShowConfirmId(null)
-  }
-
-  const generateChoferMessage = (res: SaonaReservation) => {
-    const totalPax = res.guests + res.children
-    const dateObj = new Date(res.date + "T12:00:00")
-    const dateStr = `${dateObj.getDate()} de ${dateObj.toLocaleDateString("es-ES", { month: "long" })} de ${dateObj.getFullYear()}`
-    const boatLabel = res.boatType === "catamaran" ? "Catamarán" : "Lancha"
-
-    return `🚨 NUEVA RESERVA - SAONA ISLAND
-👤 Nombre: ${res.customerName}
-📞 Teléfono: ${res.phone}
-🏝️ Tour: Saona Island
-⛵ Embarcación: ${boatLabel}
-👥 PAX: ${res.guests} + ${res.children} | ${totalPax} PAX
-📌 Hotel: ${res.hotel}
-📍 Punto recogida: ${res.location || res.hotel}
-🕖 Hora recogida: ${res.pickupTime}
-📅 Fecha: ${dateStr}${res.lunchIncluded ? "\n🍽️ Almuerzo: Incluido" : ""}`
-  }
-
-  const generateClientMessage = (res: SaonaReservation) => {
-    const totalPax = res.guests + res.children
-    const dateStr = new Date(res.date + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
-    const pickupLocation = res.location || res.hotel
-    const boatLabel = res.boatType === "catamaran" ? "Catamarán" : "Lancha"
-    const ref = res.gygBookingRef || res.gygBookingReference || ""
-    return `Hola ${res.customerName} 👋\n¡Gracias por reservar con Macao Evolution!\n\nTu recogida para el tour Saona Island está confirmada a las ${res.pickupTime}.\n📍 Te esperamos en ${pickupLocation}\n⏰ Por favor sé puntual 🏝️⚓\n\n📋 Detalles de tu reserva\n• 🏝️ Tour: Saona Island\n• ⛵ Embarcación: ${boatLabel}\n• 👥 Pasajeros: ${totalPax} PAX (${res.guests} adultos, ${res.children} niños)\n• 📅 Fecha: ${dateStr}${res.lunchIncluded ? "\n• 🍽️ Almuerzo incluido" : ""}${ref ? `\n• 🔖 Ref: ${ref}` : ""}`
-  }
-
-  const copyToClipboard = async (text: string, key: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopiedMsg(key)
-      setTimeout(() => setCopiedMsg(""), 2000)
-    } catch {
-      const ta = document.createElement("textarea")
-      ta.value = text
-      document.body.appendChild(ta)
-      ta.select()
-      document.execCommand("copy")
-      document.body.removeChild(ta)
-      setCopiedMsg(key)
-      setTimeout(() => setCopiedMsg(""), 2000)
     }
   }
 
@@ -442,10 +285,6 @@ export default function OperationSaonaPage() {
       ? '<div class="amount-box"><div class="label">MONTO A PAGAR</div><div class="amount">$' + res.amount.toFixed(2) + ' USD</div></div>'
       : ""
 
-    const pickupRef = `${res.location || ""} ${res.hotel || ""}`.toLowerCase()
-    const pickupPoint = pickupRef.includes("barrera") ? "Barrera" : "Lobby"
-    const tavisaLogoUrl = `${window.location.origin}/logo-tavisa/Logo%20Principal%20-%20Tavisa%20Travel.png`
-
     const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -457,7 +296,6 @@ export default function OperationSaonaPage() {
   body { font-family: 'Segoe UI', Arial, sans-serif; background: #f3f4f6; padding: 20px; }
   .ticket { max-width: 480px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.1); }
   .header { background: linear-gradient(135deg, #0891b2 0%, #065f73 100%); color: #fff; padding: 28px 24px; text-align: center; }
-  .logo { width: 170px; max-width: 80%; margin: 0 auto 12px; display: block; }
   .header h1 { font-size: 22px; font-weight: 800; letter-spacing: 2px; margin-bottom: 4px; }
   .header p { font-size: 12px; opacity: 0.85; letter-spacing: 1px; }
   .status { text-align: center; padding: 12px; background: #f0fdf4; border-bottom: 1px solid #e5e7eb; }
@@ -481,7 +319,6 @@ export default function OperationSaonaPage() {
 <body>
 <div class="ticket">
   <div class="header">
-    <img class="logo" src="${tavisaLogoUrl}" alt="Tavisa Travel" />
     <h1>SAONA ISLAND</h1>
     <p>EXPERIENCE TICKET</p>
   </div>
@@ -498,7 +335,6 @@ export default function OperationSaonaPage() {
     </div>
     <div class="section">
       <div class="section-title">Recogida</div>
-      <div class="row"><span class="label">Punto de recogida</span><span class="value">${pickupPoint}</span></div>
       <div class="row"><span class="label">Hotel</span><span class="value">${res.hotel}</span></div>
       <div class="row"><span class="label">Ubicación</span><span class="value">${res.location}</span></div>
       <div class="row"><span class="label">Hora de recogida</span><span class="value" style="font-size:16px;color:#0891b2;font-weight:800">${res.pickupTime}</span></div>
@@ -508,7 +344,7 @@ export default function OperationSaonaPage() {
   <hr class="divider" />
   <div class="footer">
     Ticket generado el ${new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}<br/>
-    Para cualquier consulta: tavisatravel@gmail.com | +1 (809) 870-1130
+    Para cualquier consulta: info@macaooffroad.com
   </div>
 </div>
 </body>
@@ -548,62 +384,24 @@ export default function OperationSaonaPage() {
   }
 
   const getStatusButton = (reservation: SaonaReservation) => {
-    const pickupDeadline = getPickupDeadline(reservation.date, reservation.pickupTime)
-    const canNoShow =
-      (reservation.status === "pending" || reservation.status === "confirmed") &&
-      pickupDeadline != null &&
-      new Date().getTime() > pickupDeadline.getTime()
-
-    if (reservation.status === "no_show") {
+    if (reservation.status === "confirmed") {
       return (
-        <Badge className="bg-gray-200 text-gray-700 hover:bg-gray-200 cursor-default">
-          <UserX className="w-3 h-3 mr-1" />
-          NO SHOW
+        <Badge className="bg-green-100 text-green-700 hover:bg-green-100 cursor-default">
+          <CheckCircle2 className="w-3 h-3 mr-1" />
+          Confirmada
         </Badge>
       )
     }
-
-    if (reservation.status === "cancelled") {
-      return (
-        <Badge className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">
-          <XCircle className="w-3 h-3 mr-1" />
-          Cancelada
-        </Badge>
-      )
-    }
-
     return (
-      <div className="flex items-center gap-2 flex-wrap">
-        {reservation.status === "confirmed" ? (
-          <Badge className="bg-green-100 text-green-700 hover:bg-green-100 cursor-default">
-            <CheckCircle2 className="w-3 h-3 mr-1" />
-            Confirmada
-          </Badge>
-        ) : (
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-green-100 hover:text-green-700 hover:border-green-300"
-            onClick={() => toggleStatus(reservation.id)}
-          >
-            <AlertCircle className="w-3 h-3 mr-1" />
-            Pendiente
-          </Button>
-        )}
-        {(reservation.status === "pending" || reservation.status === "confirmed") && (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!canNoShow}
-            className="border-gray-400 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-            onClick={() => setNoShowConfirmId(reservation.id)}
-            title={canNoShow ? "Marcar como NO SHOW" : "Solo disponible despues de la hora de recogida"}
-          >
-            <UserX className="w-3 h-3 mr-1" />
-            NO SHOW
-          </Button>
-        )}
-      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-green-100 hover:text-green-700 hover:border-green-300"
+        onClick={() => toggleStatus(reservation.id)}
+      >
+        <AlertCircle className="w-3 h-3 mr-1" />
+        Pendiente
+      </Button>
     )
   }
 
@@ -613,7 +411,7 @@ export default function OperationSaonaPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl md:text-3xl font-title whitespace-nowrap text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Ship className="w-7 h-7 text-cyan-600" />
               Operacion Saona
             </h1>
@@ -759,7 +557,6 @@ export default function OperationSaonaPage() {
                   <SelectItem value="all">Todos los estados</SelectItem>
                   <SelectItem value="confirmed">Confirmadas</SelectItem>
                   <SelectItem value="pending">Pendientes</SelectItem>
-                  <SelectItem value="no_show">No Show</SelectItem>
                   <SelectItem value="cancelled">Canceladas</SelectItem>
                 </SelectContent>
               </Select>
@@ -767,7 +564,7 @@ export default function OperationSaonaPage() {
           </CardContent>
         </Card>
 
-        {/* Reservations */}
+        {/* Table */}
         <Card className="border-gray-200">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -780,124 +577,152 @@ export default function OperationSaonaPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {filteredReservations.map((reservation) => (
-                <div key={reservation.id} className={`border rounded-lg p-4 space-y-3 transition-colors ${reservation.status === "no_show" ? "bg-red-50 border-red-300" : "hover:border-cyan-200"}`}>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {getStatusButton(reservation)}
-                    <Badge
-                      className="flex items-center gap-1"
-                      style={{
-                        backgroundColor: `${reservation.channelColor}20`,
-                        color: reservation.channelColor,
-                      }}
-                    >
-                      <Globe className="w-3 h-3" />
-                      {reservation.channel}
-                    </Badge>
-                    {(reservation.gygBookingRef || reservation.gygBookingReference) && (
-                      <Badge className="bg-orange-100 text-orange-700 text-xs">
-                        {reservation.gygBookingReference || reservation.gygBookingRef}
-                      </Badge>
-                    )}
-                    {reservation.amount != null && reservation.amount > 0 && (
-                      <span className="ml-auto text-sm font-bold text-cyan-700">${reservation.amount.toFixed(2)} USD</span>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div>
-                      <div className="font-semibold text-gray-900 dark:text-gray-100 text-base">{reservation.customerName}</div>
-                      <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400 mt-0.5 flex-wrap">
-                        <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{reservation.phone}</span>
-                        <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{reservation.email}</span>
-                      </div>
-                    </div>
-                    <div className="sm:text-right">
-                      <div className="flex items-center gap-1 text-sm font-medium text-gray-900 dark:text-gray-100 sm:justify-end">
-                        <Calendar className="w-3.5 h-3.5" />
-                        <span>Travel Date:</span>
-                        {new Date(reservation.date + "T12:00:00").toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })}
-                      </div>
-                      <div className="flex items-center gap-1 text-base text-cyan-700 font-bold sm:justify-end mt-0.5">
-                        <Clock className="w-3.5 h-3.5" />
-                        {reservation.pickupTime}
-                      </div>
-                      {reservation.createdAt && (
-                        <div className="text-xs text-gray-500 mt-1 sm:text-right">
-                          Agregada: {new Date(reservation.createdAt).toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" })}, {new Date(reservation.createdAt).toLocaleTimeString("es-DO", { hour: "numeric", minute: "2-digit" })}
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Contacto</TableHead>
+                    <TableHead>Hotel / Ubicación</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Recogida</TableHead>
+                    <TableHead>Personas</TableHead>
+                    <TableHead>Embarcación</TableHead>
+                    <TableHead>Almuerzo</TableHead>
+                    <TableHead>Bebidas</TableHead>
+                    <TableHead>Monto</TableHead>
+                    <TableHead>Canal</TableHead>
+                    <TableHead>Ref. GYG</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredReservations.map((reservation) => (
+                    <TableRow key={reservation.id}>
+                      <TableCell className="font-mono text-sm">{reservation.id}</TableCell>
+                      <TableCell>
+                        <div className="font-medium text-gray-900">{reservation.customerName}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 text-sm text-gray-600">
+                            <Phone className="w-3 h-3" />
+                            {reservation.phone}
+                          </div>
+                          <div className="flex items-center gap-1 text-sm text-gray-600">
+                            <Mail className="w-3 h-3" />
+                            {reservation.email}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="bg-gray-50 dark:bg-gray-900 rounded-md px-3 py-2 text-sm">
-                    <div className="flex items-center gap-1.5 font-medium text-gray-900 dark:text-gray-100">
-                      <Hotel className="w-3.5 h-3.5 text-gray-500" />
-                      {reservation.hotel}
-                    </div>
-                    {reservation.location && (
-                      <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400 mt-0.5">
-                        <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                        {reservation.location}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-wrap text-sm">
-                    <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-100">
-                      <Users className="w-3 h-3 mr-1" />
-                      {reservation.guests} + {reservation.children} niños | {reservation.guests + reservation.children} PAX
-                    </Badge>
-                    <Badge className={reservation.boatType === "catamaran" ? "bg-cyan-100 text-cyan-700 hover:bg-cyan-100" : "bg-blue-100 text-blue-700 hover:bg-blue-100"}>
-                      <Ship className="w-3 h-3 mr-1" />
-                      {reservation.boatType === "catamaran" ? "Catamarán" : "Lancha"}
-                    </Badge>
-                    <Badge className={reservation.lunchIncluded ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-gray-100 text-gray-500 dark:text-gray-400 hover:bg-gray-100"}>
-                      🍽️ {reservation.lunchIncluded ? "Almuerzo ✓" : "Sin almuerzo"}
-                    </Badge>
-                    <Badge className={reservation.drinkPackage === "premium" ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : "bg-gray-100 text-gray-700 hover:bg-gray-100"}>
-                      🍹 {reservation.drinkPackage === "premium" ? "Premium" : reservation.drinkPackage === "standard" ? "Estándar" : "No"}
-                    </Badge>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-gray-100">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className={copiedMsg === `chofer-${reservation.id}` ? "border-green-500 bg-green-50 text-green-700" : "border-amber-300 text-amber-700 hover:bg-amber-50"}
-                      onClick={() => copyToClipboard(generateChoferMessage(reservation), `chofer-${reservation.id}`)}
-                    >
-                      {copiedMsg === `chofer-${reservation.id}` ? (
-                        <><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Copiado</>
-                      ) : (
-                        <><Copy className="w-3.5 h-3.5 mr-1" />Msg Chofer</>
-                      )}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-cyan-300 text-cyan-700 hover:bg-cyan-50"
-                      onClick={() => downloadTicket(reservation)}
-                    >
-                      <Ticket className="w-3 h-3 mr-1" />
-                      Ticket
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className={copiedMsg === `client-${reservation.id}` ? "border-green-500 bg-green-50 text-green-700" : "border-blue-300 text-blue-700 hover:bg-blue-50"}
-                      onClick={() => copyToClipboard(generateClientMessage(reservation), `client-${reservation.id}`)}
-                    >
-                      {copiedMsg === `client-${reservation.id}` ? (
-                        <><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Copiado</>
-                      ) : (
-                        <><MessageSquare className="w-3.5 h-3.5 mr-1" />Msg Cliente</>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
+                            <Hotel className="w-3 h-3" />
+                            {reservation.hotel}
+                          </div>
+                          <div className="flex items-center gap-1 text-sm text-gray-600">
+                            <MapPin className="w-3 h-3" />
+                            {reservation.location}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-sm text-gray-900">
+                          <Calendar className="w-3 h-3" />
+                          {new Date(reservation.date).toLocaleDateString("es-ES", {
+                            day: "2-digit",
+                            month: "short",
+                          })}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-sm text-gray-900">
+                          <Clock className="w-3 h-3" />
+                          {reservation.pickupTime}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
+                          <Users className="w-3 h-3" />
+                          {reservation.guests}
+                          {reservation.children > 0 && (
+                            <span className="text-gray-400 text-xs ml-1">+{reservation.children}n</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={
+                          reservation.boatType === "catamaran"
+                            ? "bg-cyan-100 text-cyan-700 hover:bg-cyan-100"
+                            : "bg-blue-100 text-blue-700 hover:bg-blue-100"
+                        }>
+                          <Ship className="w-3 h-3 mr-1" />
+                          {reservation.boatType === "catamaran" ? "Catamarán" : "Lancha"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={
+                          reservation.lunchIncluded
+                            ? "bg-green-100 text-green-700 hover:bg-green-100"
+                            : "bg-gray-100 text-gray-500 dark:text-gray-400 hover:bg-gray-100"
+                        }>
+                          {reservation.lunchIncluded ? "Sí" : "No"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-gray-700">
+                          {reservation.drinkPackage === "premium" ? "Premium" : reservation.drinkPackage === "standard" ? "Estándar" : "No"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm font-medium text-gray-900">
+                          {reservation.amount != null ? `$${reservation.amount.toFixed(2)}` : "—"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className="flex items-center gap-1 w-fit"
+                          style={{
+                            backgroundColor: `${reservation.channelColor}20`,
+                            color: reservation.channelColor,
+                          }}
+                        >
+                          <Globe className="w-3 h-3" />
+                          {reservation.channel}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {reservation.gygBookingRef ? (
+                          <span className="font-mono text-xs text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
+                            {reservation.gygBookingRef}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">{getStatusButton(reservation)}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col items-start gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-cyan-300 text-cyan-700 hover:bg-cyan-50 w-full"
+                            onClick={() => downloadTicket(reservation)}
+                          >
+                            <Ticket className="w-3 h-3 mr-1" />
+                            Ticket
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
 
             {filteredReservations.length === 0 && (
@@ -912,28 +737,6 @@ export default function OperationSaonaPage() {
         </Card>
       </div>
 
-      {/* Modal: Confirmar NO SHOW */}
-      <Dialog open={!!noShowConfirmId} onOpenChange={(open) => { if (!open) setNoShowConfirmId(null) }}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-red-700">⚠️ Confirmar NO SHOW</DialogTitle>
-            <DialogDescription>
-              Estás a punto de marcar esta reserva como <strong>NO SHOW</strong>. Esta acción <strong>no se puede revertir</strong>. ¿Deseas continuar?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => setNoShowConfirmId(null)}>Cancelar</Button>
-            <Button
-              className="bg-red-600 hover:bg-red-700 text-white"
-              onClick={() => noShowConfirmId && markAsNoShow(noShowConfirmId)}
-            >
-              <UserX className="w-4 h-4 mr-2" />
-              Confirmar NO SHOW
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Modal: Agregar reserva */}
       <Dialog open={addDialogOpen} onOpenChange={(open) => { setAddDialogOpen(open); if (!open) resetNewRes() }}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -945,22 +748,6 @@ export default function OperationSaonaPage() {
           </DialogHeader>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2 sm:col-span-2 rounded-md border border-dashed border-cyan-300 bg-cyan-50/60 p-3">
-              <Label>Pegar reserva externa (GetYourGuide / Viator)</Label>
-              <Textarea
-                value={externalReservationText}
-                onChange={(e) => setExternalReservationText(e.target.value)}
-                placeholder="Pega aqui el texto completo de la reserva..."
-                className="min-h-[120px]"
-              />
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                <Button type="button" variant="outline" className="border-cyan-300 text-cyan-700 hover:bg-cyan-50" onClick={applyExternalReservation}>
-                  Autocompletar campos
-                </Button>
-                {externalParseSummary && <p className="text-xs text-cyan-700">{externalParseSummary}</p>}
-              </div>
-            </div>
-
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Nombre del cliente *</Label>
               <Input
@@ -993,7 +780,7 @@ export default function OperationSaonaPage() {
               <Label>Hotel</Label>
               <Input
                 value={newRes.hotel}
-                onChange={(e) => setNewRes((prev) => withSaonaAutoPickup({ ...prev, hotel: e.target.value }, saonaProvider, { allowAuto: pickupScheduleMode !== "party_boat" }))}
+                onChange={(e) => setNewRes({ ...newRes, hotel: e.target.value })}
                 placeholder="Hard Rock Hotel & Casino"
               />
             </div>
@@ -1002,7 +789,7 @@ export default function OperationSaonaPage() {
               <Label>Ubicación</Label>
               <Input
                 value={newRes.location}
-                onChange={(e) => setNewRes((prev) => withSaonaAutoPickup({ ...prev, location: e.target.value }, saonaProvider, { allowAuto: pickupScheduleMode !== "party_boat" }))}
+                onChange={(e) => setNewRes({ ...newRes, location: e.target.value })}
                 placeholder="Punta Cana"
               />
             </div>
@@ -1023,25 +810,6 @@ export default function OperationSaonaPage() {
                 onChange={(e) => setNewRes({ ...newRes, pickup_time: e.target.value })}
                 placeholder="6:00 AM"
               />
-              {saonaPickupHint && <p className="text-xs text-cyan-700">{saonaPickupHint}</p>}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Proveedor de recogida</Label>
-              <Select
-                value={saonaProvider}
-                onValueChange={(v) => {
-                  const provider = v as SaonaProvider
-                  setSaonaProvider(provider)
-                  setNewRes((prev) => withSaonaAutoPickup(prev, provider, { allowAuto: pickupScheduleMode !== "party_boat" }))
-                }}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="daniel">Daniel</SelectItem>
-                  <SelectItem value="julio">Julio</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             <div className="space-y-1.5">

@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useCart } from "@/context/cart-context";
 import { products } from "@/lib/products";
 import { getCustomerProfile, getCustomerById, upsertCustomerProfile } from "@/lib/customer-accounts";
+import { saveCustomerReservation } from "@/lib/customer-reservations";
 import { getCustomerSession } from "@/lib/customer-session";
 import {
   X,
@@ -396,6 +397,9 @@ export function CheckoutModal({
     setIsProcessing(true);
     // Simulate payment processing
     setTimeout(async () => {
+      const ownerEmail = customer.email.trim().toLowerCase();
+      const reservationId = crypto.randomUUID();
+
       if (customerAccountId) {
         await upsertCustomerProfile({
           accountId: customerAccountId,
@@ -411,6 +415,50 @@ export function CheckoutModal({
           pickupMode,
           pickupHotel,
           pickupCustom,
+        });
+      }
+
+      if (ownerEmail) {
+        await saveCustomerReservation(ownerEmail, {
+          id: reservationId,
+          createdAt: new Date().toISOString(),
+          customer: {
+            name: customer.name,
+            phone: customer.phone,
+            email: ownerEmail,
+          },
+          items: items.map((item) => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+            image: item.image,
+          })),
+          totals: {
+            totalPrice,
+            totalPaid: amountToPay,
+            remainingAmount: paymentOption === "partial" ? remainingAmount : 0,
+            paymentOption,
+            paymentMethod,
+          },
+          pickup: !hasPrivateTransport
+            ? {
+                mode: pickupMode,
+                hotel: pickupHotel || undefined,
+                custom: pickupCustom || undefined,
+                date: pickupDate || undefined,
+                time:
+                  pickupTimeSlot !== null
+                    ? `${activeTimes[pickupTimeSlot].time} (${activeTimes[pickupTimeSlot].label})`
+                    : undefined,
+                point: activePickupPoint || undefined,
+              }
+            : undefined,
+          customerActions: {
+            pickupStatus: "pending",
+            reviewedProductIds: [],
+            notificationsSent: {},
+          },
         });
       }
 

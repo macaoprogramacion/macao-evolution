@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import * as XLSX from 'xlsx';
 import DashboardAuthGate from '@/components/photographer/DashboardAuthGate';
 import {
   FileText,
@@ -39,21 +38,20 @@ import {
 } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
-import { clearDashboardSession, getDashboardSession, setDashboardSession } from '@/lib/dashboard-session';
 import {
+  getInvoices as getStoredInvoices,
+  saveInvoices,
+  getInvoiceCounter as getNextInvoiceNumber,
+  setInvoiceCounter as saveInvoiceCounter,
   formatInvoiceNumber,
   addBillingClient,
+  getReturns,
+  saveReturns,
+  addReturn,
   logActivity,
   getActivity,
   calculateSalesByTurno,
 } from '@/lib/store';
-import {
-  addPhotoSaleEvent,
-  getPhotoExchangeRates,
-  getLatestDailyClosure,
-  savePhotoExchangeRates,
-  saveDailyClosure,
-} from '@/lib/photography-db';
 
 // Background image
 
@@ -93,6 +91,25 @@ const DEFAULT_PRODUCTS = [
   },
 ];
 
+const PRODUCTS_KEY = 'macao_billing_products';
+const loadProducts = () => {
+  try {
+    const stored = localStorage.getItem(PRODUCTS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Merge with defaults to pick up any new products added in code
+      return DEFAULT_PRODUCTS.map(dp => {
+        const saved = parsed.find(p => p.id === dp.id);
+        return saved ? { ...dp, price: saved.price, name: saved.name } : dp;
+      });
+    }
+  } catch {}
+  return DEFAULT_PRODUCTS;
+};
+const persistProducts = (products) => {
+  localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+};
+
 // Photographers will be loaded from Supabase
 
 // Sidebar menu items
@@ -101,62 +118,12 @@ const sidebarItems = [
   { id: 'usuario', icon: User, label: 'Usuario' },
   { id: 'devolucion', icon: RotateCcw, label: 'Devolucion' },
   { id: 'turnos', icon: Clock, label: 'Ventas por Turno' },
-  { id: 'cierre-turno', icon: ClipboardList, label: 'Resumen Turno' },
-  { id: 'cierre-dia', icon: Sun, label: 'Historial Cierres' },
+  { id: 'cierre-turno', icon: ClipboardList, label: 'Cierre Turno' },
+  { id: 'cierre-dia', icon: Sun, label: 'Cierre del Dia' },
 ];
 
 // Usuario Panel Component
-function UsuarioPanel({ user, invoices, onLogout, onSaveProfile, savingProfile }) {
-  // Real stats from actual invoices
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const activeInvoices = invoices.filter(i => i.status !== 'cancelled');
-  const monthInvoices = activeInvoices.filter(i => new Date(i.timestamp) >= monthStart);
-  const ventasMes = monthInvoices.length;
-  const totalMes = monthInvoices.reduce((s, i) => s + i.total, 0);
-
-  // Exchange rates state — pesos dominicanos por unidad de moneda extranjera
-  const [rates, setRates] = useState({ USD: 60, EUR: 65 });
-  const [editingRates, setEditingRates] = useState(false);
-  const [profileForm, setProfileForm] = useState({ name: '', email: '', phone: '' });
-  const [activity, setActivity] = useState([]);
-
-  useEffect(() => {
-    getPhotoExchangeRates().then(setRates);
-  }, []);
-
-  useEffect(() => {
-    const loadActivity = async () => {
-      setActivity(await getActivity());
-    };
-    loadActivity();
-    const interval = setInterval(loadActivity, 4000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    setProfileForm({
-      name: user?.name || '',
-      email: user?.email || '',
-      phone: user?.phone || '',
-    });
-  }, [user?.name, user?.email, user?.phone]);
-
-  const saveRates = async (newRates) => {
-    setRates(newRates);
-    await savePhotoExchangeRates(newRates, user?.email || user?.name || null);
-  };
-
-  const roleLabels = {
-    billing: 'Cajero(a)',
-    photographer: 'Fotógrafo(a)',
-    both: 'Fotógrafo(a) / Cajero(a)',
-    admin: 'Administrador',
-    operaciones: 'Operaciones',
-    chofer: 'Chofer',
-    contabilidad: 'Contabilidad',
-  };
-
+function UsuarioPanel() {
   return (
     <div className="flex-1 flex flex-col lg:flex-row gap-6">
       {/* User Profile */}
@@ -170,108 +137,21 @@ function UsuarioPanel({ user, invoices, onLogout, onSaveProfile, savingProfile }
               <User className="w-12 h-12 text-[#DC2626]" />
             </div>
             <div>
-              <h2 className="text-white text-2xl font-title">{user.name || 'Usuario'}</h2>
-              <p className="text-white/70">{roleLabels[user.role] || user.role || 'Cajero(a)'}</p>
-              {user.email && <p className="text-white/50 text-sm mt-1">{user.email}</p>}
-              {user.phone && <p className="text-white/50 text-sm">{user.phone}</p>}
+              <h2 className="text-white text-2xl font-title">Carlos Mendez</h2>
+              <p className="text-white/70">Fotógrafo Senior</p>
+              <p className="text-white/50 text-sm mt-1">carlos.mendez@macao.com</p>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
-            <input
-              type="text"
-              value={profileForm.name}
-              onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
-              placeholder="Nombre"
-              className="w-full px-4 py-2.5 bg-black/30 rounded-2xl border border-white/20 text-white text-sm placeholder:text-white/40"
-            />
-            <input
-              type="email"
-              value={profileForm.email}
-              onChange={(e) => setProfileForm((prev) => ({ ...prev, email: e.target.value }))}
-              placeholder="Email"
-              className="w-full px-4 py-2.5 bg-black/30 rounded-2xl border border-white/20 text-white text-sm placeholder:text-white/40"
-            />
-            <input
-              type="text"
-              value={profileForm.phone}
-              onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
-              placeholder="Teléfono"
-              className="w-full px-4 py-2.5 bg-black/30 rounded-2xl border border-white/20 text-white text-sm placeholder:text-white/40"
-            />
-          </div>
-
-          <div className="flex justify-end mb-5">
-            <button
-              type="button"
-              disabled={savingProfile}
-              onClick={() => onSaveProfile(profileForm)}
-              className="px-4 py-2 rounded-xl bg-[#DC2626] text-white text-sm font-medium hover:bg-[#b91c1c] disabled:opacity-60"
-            >
-              {savingProfile ? 'Guardando...' : 'Guardar perfil'}
-            </button>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 bg-black/15 rounded-2xl text-center">
-              <p className="text-white text-2xl font-bold">{ventasMes}</p>
+              <p className="text-white text-2xl font-bold">156</p>
               <p className="text-white/70 text-xs">Ventas Este Mes</p>
             </div>
             <div className="p-4 bg-black/15 rounded-2xl text-center">
-              <p className="text-white text-2xl font-bold">{fmtMoney(totalMes)}</p>
+              <p className="text-white text-2xl font-bold">US$ 234K</p>
               <p className="text-white/70 text-xs">Total Vendido</p>
             </div>
-          </div>
-        </div>
-
-        {/* Exchange Rates */}
-        <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-6 border border-white/20 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#DC2626]/20 flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-[#DC2626]" />
-              </div>
-              <div>
-                <h3 className="text-white font-semibold">Tasas de Cambio</h3>
-                <p className="text-white/50 text-xs">Pesos dominicanos (RD$) por unidad</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setEditingRates(!editingRates)}
-              className="text-xs px-3 py-1.5 rounded-xl bg-white/10 text-white/70 hover:bg-white/20 transition-colors flex items-center gap-1.5"
-            >
-              <Edit className="w-3 h-3" />
-              {editingRates ? 'Cerrar' : 'Editar Tasas'}
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {['USD', 'EUR'].map(cur => (
-              <div key={cur} className="p-4 bg-black/15 rounded-2xl">
-                <p className="text-white/50 text-xs mb-1">1 {cur} =</p>
-                {editingRates ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-white/50 text-sm">RD$</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={rates[cur] || ''}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        if (!isNaN(val) && val > 0) saveRates({ ...rates, [cur]: val });
-                      }}
-                      className="w-full bg-black/30 rounded-xl px-3 py-1.5 text-white text-sm border border-white/20 focus:outline-none focus:ring-1 focus:ring-[#DC2626]/30"
-                    />
-                  </div>
-                ) : (
-                  <p className="text-white font-bold text-xl">RD$ {(rates[cur] || 0).toFixed(2)}</p>
-                )}
-                <p className="text-white/40 text-[10px] mt-1.5">
-                  {CURRENCY_SYMBOLS[cur]} ({cur}) → Peso Dominicano
-                </p>
-              </div>
-            ))}
           </div>
         </div>
 
@@ -280,14 +160,14 @@ function UsuarioPanel({ user, invoices, onLogout, onSaveProfile, savingProfile }
           <h3 className="text-white font-semibold mb-4">Configuración Rápida</h3>
           <div className="space-y-3">
             {[
+              { icon: Settings, label: 'Configuración General', desc: 'Preferencias del sistema' },
               { icon: Bell, label: 'Notificaciones', desc: 'Alertas y sonidos' },
               { icon: CreditCard, label: 'Métodos de Pago', desc: 'Configurar métodos' },
-              { icon: LogOut, label: 'Cerrar Sesión', desc: 'Salir de la cuenta', action: onLogout },
+              { icon: LogOut, label: 'Cerrar Sesión', desc: 'Salir de la cuenta' },
             ].map((item, i) => (
               <motion.button
                 key={i}
                 whileHover={{ x: 4 }}
-                onClick={item.action || undefined}
                 className="w-full flex items-center gap-4 p-4 bg-black/15 rounded-2xl hover:bg-black/20 transition-colors"
               >
                 <div className="w-10 h-10 rounded-xl bg-[#DC2626]/20 flex items-center justify-center">
@@ -307,7 +187,7 @@ function UsuarioPanel({ user, invoices, onLogout, onSaveProfile, savingProfile }
       <div className="lg:w-80 bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20">
         <h3 className="text-white font-semibold mb-4">Actividad Reciente</h3>
         <div className="space-y-4">
-          {activity.slice(0, 5).map((activity) => {
+          {getActivity().slice(0, 5).map((activity) => {
             const elapsed = (() => {
               const diff = Date.now() - new Date(activity.time).getTime();
               const mins = Math.floor(diff / 60000);
@@ -328,7 +208,7 @@ function UsuarioPanel({ user, invoices, onLogout, onSaveProfile, savingProfile }
             </div>
             );
           })}
-          {activity.length === 0 && (
+          {getActivity().length === 0 && (
             <p className="text-white/50 text-sm text-center py-4">Sin actividad reciente</p>
           )}
         </div>
@@ -337,9 +217,10 @@ function UsuarioPanel({ user, invoices, onLogout, onSaveProfile, savingProfile }
   );
 }
 
-// Devolución Panel Component
-function DevolucionPanel({ invoices, returns, setReturns }) {
+// Devolución Panel Component — reads real invoices from localStorage
+function DevolucionPanel({ invoices }) {
   const [searchReturn, setSearchReturn] = useState('');
+  const [returns, setReturns] = useState(getReturns);
   const [showNewReturn, setShowNewReturn] = useState(false);
   const [newReturnInvoice, setNewReturnInvoice] = useState('');
   const [newReturnReason, setNewReturnReason] = useState('');
@@ -347,7 +228,6 @@ function DevolucionPanel({ invoices, returns, setReturns }) {
   // Build returnable list from invoices that are not already returned
   const returnedInvoiceNums = new Set(returns.map(r => r.invoice));
   const returnableInvoices = invoices.filter(i => !returnedInvoiceNums.has(i.invoiceNumber) && i.status !== 'cancelled');
-  const getInvoiceCurrency = (invoiceNumber) => invoices.find((i) => i.invoiceNumber === invoiceNumber)?.currency || 'USD';
 
   const filteredReturns = returns.filter(r => {
     if (!searchReturn.trim()) return true;
@@ -363,7 +243,6 @@ function DevolucionPanel({ invoices, returns, setReturns }) {
       invoice: inv.invoiceNumber,
       client: inv.clientName || 'Cliente General',
       amount: inv.total,
-      currency: inv.currency || 'USD',
       reason: newReturnReason || 'Sin motivo especificado',
       date: new Date().toLocaleDateString('es-DO'),
       status: 'pendiente',
@@ -383,8 +262,9 @@ function DevolucionPanel({ invoices, returns, setReturns }) {
       .update({ status: 'cancelled', cancelled_at: new Date().toISOString(), cancel_reason: newReturnReason || 'Devolucion' })
       .eq('invoice_number', inv.invoiceNumber);
 
-    setReturns((prev) => [ret, ...prev]);
-    logActivity('Devolucion creada', `${ret.invoice} — ${fmtMoney(ret.amount, ret.currency)}`);
+    const updated = addReturn(ret);
+    setReturns(updated);
+    logActivity('Devolucion creada', `${ret.invoice} — US$ ${ret.amount.toFixed(2)}`);
     setShowNewReturn(false);
     setNewReturnInvoice('');
     setNewReturnReason('');
@@ -392,6 +272,7 @@ function DevolucionPanel({ invoices, returns, setReturns }) {
 
   const handleApprove = async (id) => {
     const updated = returns.map(r => r.id === id ? { ...r, status: 'aprobada' } : r);
+    saveReturns(updated);
     setReturns(updated);
     const r = updated.find(x => x.id === id);
     logActivity('Devolucion aprobada', r.invoice);
@@ -404,6 +285,7 @@ function DevolucionPanel({ invoices, returns, setReturns }) {
 
   const handleReject = async (id) => {
     const updated = returns.map(r => r.id === id ? { ...r, status: 'rechazada' } : r);
+    saveReturns(updated);
     setReturns(updated);
     const r = updated.find(x => x.id === id);
 
@@ -458,7 +340,7 @@ function DevolucionPanel({ invoices, returns, setReturns }) {
                   className="w-full px-4 py-2.5 bg-black/30 rounded-2xl border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-[#EF4444]/30 text-sm">
                   <option value="">Seleccionar factura...</option>
                   {returnableInvoices.map(inv => (
-                    <option key={inv.id} value={inv.invoiceNumber}>{inv.invoiceNumber} — {inv.clientName} ({fmtMoney(inv.total, inv.currency || 'USD')})</option>
+                    <option key={inv.id} value={inv.invoiceNumber}>{inv.invoiceNumber} — {inv.clientName} (US$ {inv.total.toFixed(2)})</option>
                   ))}
                 </select>
               </div>
@@ -502,7 +384,7 @@ function DevolucionPanel({ invoices, returns, setReturns }) {
                   <td className="py-4 px-3 text-white text-sm font-medium">{ret.invoice}</td>
                   <td className="py-4 px-3 text-white text-sm">{ret.client}</td>
                   <td className="py-4 px-3 text-right text-[#DC2626] text-sm font-medium">
-                    {fmtMoney(ret.amount, ret.currency || getInvoiceCurrency(ret.invoice))}
+                    US$ {ret.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </td>
                   <td className="py-4 px-3 text-white/70 text-sm">{ret.reason}</td>
                   <td className="py-4 px-3 text-white/70 text-sm">{ret.date}</td>
@@ -692,9 +574,10 @@ const fmtMoney = (amount, cur = 'USD') =>
   `${currencyLabel(cur)} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
 
 // ─── Cierre Turno Panel ──────────────────────────────────────────
-function CierreTurnoPanel({ invoices, returns }) {
+function CierreTurnoPanel({ invoices }) {
   const [selectedTurno, setSelectedTurno] = useState('');
   const todayStr = new Date().toLocaleDateString('es-DO');
+  const returns = getReturns();
 
   // Only today's invoices
   const todayInvoices = invoices.filter(inv => inv.date === todayStr);
@@ -842,105 +725,31 @@ function CierreTurnoPanel({ invoices, returns }) {
 }
 
 // ─── Cierre del Dia Panel ────────────────────────────────────────
-function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled, billingUser }) {
-  const toDayKey = (date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  };
+function CierreDiaPanel({ invoices }) {
+  const todayStr = new Date().toLocaleDateString('es-DO');
+  const returns = getReturns();
 
-  const parseDayKey = (value) => {
-    if (!value) return null;
-    const fromIso = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (fromIso) return `${fromIso[1]}-${fromIso[2]}-${fromIso[3]}`;
-
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) return toDayKey(parsed);
-
-    const fromEs = String(value).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (fromEs) {
-      const d = String(Number(fromEs[1])).padStart(2, '0');
-      const m = String(Number(fromEs[2])).padStart(2, '0');
-      const y = fromEs[3];
-      return `${y}-${m}-${d}`;
-    }
-
-    return null;
-  };
-
-  const formatDayLabel = (dayKey) => {
-    const parsed = new Date(`${dayKey}T00:00:00`);
-    if (Number.isNaN(parsed.getTime())) return dayKey;
-    return parsed.toLocaleDateString('es-DO');
-  };
-
-  const invoiceDayKey = (inv) => parseDayKey(inv.timestamp) || parseDayKey(inv.date);
-  const returnDayKey = (ret) => parseDayKey(ret.timestamp) || parseDayKey(ret.date);
-
-  const todayKey = toDayKey(new Date());
-
-  // Exchange rates state — pesos dominicanos por unidad de moneda extranjera
-  const [rates, setRates] = useState({ USD: 60, EUR: 65 });
+  // Exchange rates state — cashier can edit
+  const [rates, setRates] = useState(() => {
+    try {
+      const stored = localStorage.getItem('macao_exchange_rates');
+      return stored ? JSON.parse(stored) : { USD: 1, EUR: 1.08, DOP: 0.0167 };
+    } catch { return { USD: 1, EUR: 1.08, DOP: 0.0167 }; }
+  });
   const [editingRates, setEditingRates] = useState(false);
   const [convertToDOP, setConvertToDOP] = useState(false);
-  const [dailyClosures, setDailyClosures] = useState([]);
-  const [selectedClosureDate, setSelectedClosureDate] = useState(todayKey);
-  const [historySearchDate, setHistorySearchDate] = useState('');
 
-  useEffect(() => {
-    getPhotoExchangeRates().then(setRates);
-  }, []);
-
-  useEffect(() => {
-    async function loadClosures() {
-      const { data } = await supabase
-        .from('photo_daily_closures')
-        .select('closure_date, closed_by, closed_at, total_invoices, by_currency')
-        .order('closure_date', { ascending: false })
-        .limit(180);
-      setDailyClosures(Array.isArray(data) ? data : []);
-    }
-    loadClosures();
-  }, []);
-
-  const saveRates = async (newRates) => {
+  const saveRates = (newRates) => {
     setRates(newRates);
-    await savePhotoExchangeRates(newRates, billingUser?.email || billingUser?.name || null);
+    localStorage.setItem('macao_exchange_rates', JSON.stringify(newRates));
   };
 
-  const availableDayKeys = Array.from(new Set(
-    invoices
-      .filter(inv => inv.status !== 'cancelled')
-      .map(invoiceDayKey)
-      .filter(Boolean),
-  )).sort((a, b) => (a > b ? -1 : 1));
-
-  useEffect(() => {
-    if (availableDayKeys.length === 0) {
-      if (selectedClosureDate !== todayKey) setSelectedClosureDate(todayKey);
-      return;
-    }
-
-    if (!availableDayKeys.includes(selectedClosureDate)) {
-      setSelectedClosureDate(availableDayKeys[0]);
-    }
-  }, [availableDayKeys, selectedClosureDate, todayKey]);
-
-  const selectedInvoices = invoices.filter(inv => (
-    inv.status !== 'cancelled' && invoiceDayKey(inv) === selectedClosureDate
-  ));
-
-  const selectedDateLabel = formatDayLabel(selectedClosureDate);
-  const existingClosure = dailyClosures.find((c) => String(c.closure_date || '').slice(0, 10) === selectedClosureDate) || null;
-  const filteredClosures = dailyClosures.filter((c) => {
-    if (!historySearchDate) return true;
-    return String(c.closure_date || '').slice(0, 10) === historySearchDate;
-  });
+  // Today's invoices
+  const todayInvoices = invoices.filter(inv => inv.date === todayStr);
 
   // Group by currency
   const byCurrency = {};
-  selectedInvoices.forEach(inv => {
+  todayInvoices.forEach(inv => {
     const cur = inv.currency || 'USD';
     if (!byCurrency[cur]) byCurrency[cur] = { total: 0, subtotal: 0, tax: 0, count: 0 };
     byCurrency[cur].total += inv.total;
@@ -951,7 +760,7 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
 
   // Group by turno
   const byTurno = {};
-  selectedInvoices.forEach(inv => {
+  todayInvoices.forEach(inv => {
     const t = inv.turno || 'Turno 9:00';
     if (!byTurno[t]) byTurno[t] = { total: 0, count: 0, currencies: {} };
     byTurno[t].total += inv.total;
@@ -962,150 +771,32 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
   });
 
   // Returns
-  const selectedReturns = returns.filter(r => {
-    const d = returnDayKey(r);
-    return d === selectedClosureDate && (r.status === 'aprobada' || r.status === 'procesada');
+  const todayReturns = returns.filter(r => {
+    const d = r.date || (r.timestamp ? new Date(r.timestamp).toLocaleDateString('es-DO') : '');
+    return d === todayStr && (r.status === 'aprobada' || r.status === 'procesada');
   });
-  const returnsTotal = selectedReturns.reduce((s, r) => s + (r.amount || 0), 0);
+  const returnsTotal = todayReturns.reduce((s, r) => s + (r.amount || 0), 0);
 
-  // Convert to DOP — rates = pesos por unidad (ej: USD: 60 = 1 USD = 60 DOP)
+  // Convert to DOP
   const toDOP = (amount, cur) => {
     if (cur === 'DOP') return amount;
-    return amount * (rates[cur] || 60);
+    // rates store how much 1 unit of currency = in USD. DOP rate = how much 1 DOP = USD
+    // To convert to DOP: amount_in_cur * (rate_cur_to_usd / rate_dop_to_usd)
+    const rateToUSD = rates[cur] || 1;
+    const dopToUSD = rates['DOP'] || 0.0167;
+    return amount * rateToUSD / dopToUSD;
   };
 
   const totalAllInDOP = Object.entries(byCurrency).reduce((sum, [cur, data]) => sum + toDOP(data.total, cur), 0);
 
   const turnoTimes = { 'Turno 9:00': '9:00 AM', 'Turno 12:00': '12:00 PM', 'Turno 3:00': '3:00 PM' };
 
-  const getClosureTotalByCurrency = (closure, currencyCode) => {
-    const bucket = closure?.by_currency?.[currencyCode];
-    return Number(bucket?.total || 0);
-  };
-
-  const getClosureGrandTotal = (closure) => {
-    const byCurrencyRow = closure?.by_currency || {};
-    return Object.values(byCurrencyRow).reduce((sum, row) => sum + Number(row?.total || 0), 0);
-  };
-
-  const handleCloseAndDownload = async () => {
-    if (selectedInvoices.length === 0) {
-      alert('No hay facturas en la fecha seleccionada para cerrar.');
-      return;
-    }
-
-    const closed = await onCloseDay({
-      closureDate: selectedClosureDate,
-      byCurrency,
-      totalInvoices: selectedInvoices.length,
-    });
-
-    if (!closed) {
-      alert('No se pudo registrar el cierre del dia. Intenta nuevamente.');
-      return;
-    }
-
-    const workbook = XLSX.utils.book_new();
-
-    const summaryRows = [
-      { Campo: 'Fecha', Valor: selectedDateLabel },
-      { Campo: 'Facturas', Valor: selectedInvoices.length },
-      { Campo: 'ITBIS en facturas nuevas', Valor: taxEnabled ? 'ACTIVO' : 'DESACTIVADO' },
-      { Campo: 'Estado de cierre previo', Valor: existingClosure ? 'YA EXISTIA' : 'PENDIENTE' },
-      { Campo: 'Devoluciones aprobadas (USD)', Valor: Number(returnsTotal.toFixed(2)) },
-      { Campo: 'Total equivalente DOP', Valor: Number(totalAllInDOP.toFixed(2)) },
-    ];
-
-    Object.entries(byCurrency).forEach(([cur, data]) => {
-      summaryRows.push({ Campo: `Total ${cur}`, Valor: Number((data?.total || 0).toFixed(2)) });
-      summaryRows.push({ Campo: `Subtotal ${cur}`, Valor: Number((data?.subtotal || 0).toFixed(2)) });
-      summaryRows.push({ Campo: `ITBIS ${cur}`, Valor: Number((data?.tax || 0).toFixed(2)) });
-      summaryRows.push({ Campo: `Facturas ${cur}`, Valor: data?.count || 0 });
-    });
-
-    const turnoRows = ['Turno 9:00', 'Turno 12:00', 'Turno 3:00'].map((turno) => {
-      const data = byTurno[turno] || { total: 0, count: 0, currencies: {} };
-      return {
-        Turno: turno,
-        Facturas: data.count || 0,
-        Total_USD_Ref: Number((data.total || 0).toFixed(2)),
-        USD: Number((data.currencies?.USD || 0).toFixed(2)),
-        EUR: Number((data.currencies?.EUR || 0).toFixed(2)),
-        DOP: Number((data.currencies?.DOP || 0).toFixed(2)),
-      };
-    });
-
-    const invoiceRows = selectedInvoices.map((inv) => ({
-      Factura: inv.invoiceNumber,
-      Cliente: inv.clientName,
-      Telefono: inv.clientPhone || '',
-      Turno: inv.turno || 'Turno 9:00',
-      Moneda: inv.currency || 'USD',
-      Subtotal: Number((inv.subtotal || 0).toFixed(2)),
-      ITBIS: Number((inv.tax || 0).toFixed(2)),
-      Total: Number((inv.total || 0).toFixed(2)),
-      Equiv_DOP: Number((toDOP(inv.total || 0, inv.currency || 'USD') || 0).toFixed(2)),
-      Hora: new Date(inv.timestamp).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }),
-      Fotografo: inv.photographer || '',
-      Items: (inv.items || []).map((it) => `${it.quantity}x ${it.name}`).join(' | '),
-    }));
-
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryRows), 'Resumen');
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(turnoRows), 'Turnos');
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(invoiceRows), 'Facturas');
-
-    XLSX.writeFile(workbook, `cierre-dia-${selectedClosureDate}.xlsx`);
-  };
-
   return (
     <div className="flex-1 flex flex-col lg:flex-row gap-6">
       <div className="flex-1 flex flex-col">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="font-title text-3xl lg:text-4xl text-white">Historial de Cierres y Ventas</h1>
-          <p className="text-white/50 text-sm">{selectedDateLabel}</p>
-        </div>
-
-        <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-4 border border-white/20 mb-6">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-3 items-end">
-            <div>
-              <label className="block text-white/60 text-xs mb-1.5">Fecha a cerrar</label>
-              <select
-                value={selectedClosureDate}
-                onChange={(e) => setSelectedClosureDate(e.target.value)}
-                className="w-full px-4 py-2.5 bg-black/30 rounded-2xl border border-white/20 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#DC2626]/30"
-              >
-                {availableDayKeys.length === 0 ? (
-                  <option value={todayKey}>Sin ventas registradas</option>
-                ) : (
-                  availableDayKeys.map((dayKey) => (
-                    <option key={dayKey} value={dayKey}>
-                      {formatDayLabel(dayKey)}
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-white/60 text-xs mb-1.5">Buscar historial por día</label>
-              <input
-                type="date"
-                value={historySearchDate}
-                onChange={(e) => setHistorySearchDate(e.target.value)}
-                className="w-full px-4 py-2.5 bg-black/30 rounded-2xl border border-white/20 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#DC2626]/30"
-              />
-            </div>
-
-            {existingClosure ? (
-              <span className="inline-flex items-center rounded-xl px-3 py-2 text-xs font-semibold bg-emerald-500/20 text-emerald-300">
-                Cierre ya registrado
-              </span>
-            ) : (
-              <span className="inline-flex items-center rounded-xl px-3 py-2 text-xs font-semibold bg-amber-500/20 text-amber-300">
-                Cierre pendiente
-              </span>
-            )}
-          </div>
+          <h1 className="font-title text-3xl lg:text-4xl text-white">Cierre del Dia</h1>
+          <p className="text-white/50 text-sm">{todayStr}</p>
         </div>
 
         {/* Exchange Rate Config */}
@@ -1121,7 +812,7 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
               </div>
               <div>
                 <h3 className="text-white font-semibold">Tasas de Cambio</h3>
-                <p className="text-white/50 text-xs">Pesos dominicanos (RD$) por unidad</p>
+                <p className="text-white/50 text-xs">Equivalencia a 1 USD</p>
               </div>
             </div>
             <button
@@ -1133,31 +824,32 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {['USD', 'EUR'].map(cur => (
-              <div key={cur} className="p-4 bg-black/15 rounded-2xl">
-                <p className="text-white/50 text-xs mb-1">1 {cur} =</p>
-                {editingRates ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-white/50 text-sm">RD$</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={rates[cur] || ''}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        if (!isNaN(val) && val > 0) saveRates({ ...rates, [cur]: val });
-                      }}
-                      className="w-full bg-black/30 rounded-xl px-3 py-1.5 text-white text-sm border border-white/20 focus:outline-none focus:ring-1 focus:ring-[#DC2626]/30"
-                    />
-                  </div>
+          <div className="grid grid-cols-3 gap-3">
+            {Object.entries(CURRENCY_SYMBOLS).map(([cur, symbol]) => (
+              <div key={cur} className="p-3 bg-black/15 rounded-2xl">
+                <p className="text-white/50 text-xs mb-1">{symbol} ({cur})</p>
+                {editingRates && cur !== 'USD' ? (
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={rates[cur] || ''}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      if (!isNaN(val) && val > 0) saveRates({ ...rates, [cur]: val });
+                    }}
+                    className="w-full bg-black/30 rounded-xl px-3 py-1.5 text-white text-sm border border-white/20 focus:outline-none focus:ring-1 focus:ring-[#DC2626]/30"
+                  />
                 ) : (
-                  <p className="text-white font-bold text-xl">RD$ {(rates[cur] || 0).toFixed(2)}</p>
+                  <p className="text-white font-semibold">{cur === 'USD' ? '1.0000' : (rates[cur] || 0).toFixed(4)}</p>
                 )}
-                <p className="text-white/40 text-[10px] mt-1.5">
-                  {CURRENCY_SYMBOLS[cur]} ({cur}) → Peso Dominicano
-                </p>
+                {cur !== 'USD' && (
+                  <p className="text-white/40 text-[10px] mt-1">
+                    1 {cur} = {cur === 'DOP'
+                      ? `${(rates['DOP'] || 0.0167).toFixed(4)} USD`
+                      : `${(rates[cur] || 1).toFixed(4)} USD`
+                    }
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -1238,7 +930,7 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
 
         {/* Invoice Detail Table */}
         <div className="flex-1 bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20 overflow-hidden">
-          <h3 className="text-white font-semibold mb-4">Todas las Facturas de la Fecha Seleccionada</h3>
+          <h3 className="text-white font-semibold mb-4">Todas las Facturas del D\u00eda</h3>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -1253,11 +945,11 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
                 </tr>
               </thead>
               <tbody>
-                {selectedInvoices.length === 0 ? (
+                {todayInvoices.length === 0 ? (
                   <tr>
-                    <td colSpan={convertToDOP ? 7 : 6} className="py-8 text-center text-white/50">No hay facturas para esta fecha</td>
+                    <td colSpan={convertToDOP ? 7 : 6} className="py-8 text-center text-white/50">No hay facturas hoy</td>
                   </tr>
-                ) : selectedInvoices.map(inv => {
+                ) : todayInvoices.map(inv => {
                   const cur = inv.currency || 'USD';
                   return (
                     <tr key={inv.id} className="border-b border-white/5 hover:bg-black/10">
@@ -1279,104 +971,12 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
             </table>
           </div>
         </div>
-
-        <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20 mt-6 overflow-hidden">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-white font-semibold">Historial de Cierres Registrados</h3>
-            {historySearchDate && (
-              <button
-                onClick={() => setHistorySearchDate('')}
-                className="text-xs px-3 py-1.5 rounded-xl bg-white/10 text-white/70 hover:bg-white/20 transition-colors"
-              >
-                Limpiar filtro
-              </button>
-            )}
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-white/70 text-xs border-b border-white/10">
-                  <th className="text-left py-3 px-2">Fecha</th>
-                  <th className="text-right py-3 px-2">Facturas</th>
-                  <th className="text-right py-3 px-2">USD</th>
-                  <th className="text-right py-3 px-2">EUR</th>
-                  <th className="text-right py-3 px-2">DOP</th>
-                  <th className="text-right py-3 px-2">Total Ref.</th>
-                  <th className="text-left py-3 px-2">Cerrado por</th>
-                  <th className="text-left py-3 px-2">Hora cierre</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredClosures.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-8 text-center text-white/50">No hay cierres para el filtro actual</td>
-                  </tr>
-                ) : filteredClosures.map((closure) => {
-                  const dayKey = String(closure.closure_date || '').slice(0, 10);
-                  const isSelected = dayKey === selectedClosureDate;
-                  return (
-                    <tr key={`${dayKey}-${closure.closed_at || 'no-time'}`} className={`border-b border-white/5 hover:bg-black/10 ${isSelected ? 'bg-white/5' : ''}`}>
-                      <td className="py-3 px-2 text-white text-sm">{formatDayLabel(dayKey)}</td>
-                      <td className="py-3 px-2 text-right text-white text-sm">{closure.total_invoices || 0}</td>
-                      <td className="py-3 px-2 text-right text-white/80 text-sm">{fmtMoney(getClosureTotalByCurrency(closure, 'USD'), 'USD')}</td>
-                      <td className="py-3 px-2 text-right text-white/80 text-sm">{fmtMoney(getClosureTotalByCurrency(closure, 'EUR'), 'EUR')}</td>
-                      <td className="py-3 px-2 text-right text-white/80 text-sm">{fmtMoney(getClosureTotalByCurrency(closure, 'DOP'), 'DOP')}</td>
-                      <td className="py-3 px-2 text-right text-white text-sm">{fmtMoney(getClosureGrandTotal(closure), 'USD')}</td>
-                      <td className="py-3 px-2 text-white/70 text-sm">{closure.closed_by || 'Sin usuario'}</td>
-                      <td className="py-3 px-2 text-white/70 text-sm">{closure.closed_at ? new Date(closure.closed_at).toLocaleString('es-DO') : '—'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20 mt-6 overflow-hidden">
-          <h3 className="text-white font-semibold mb-4">Devoluciones de la Fecha Seleccionada</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-white/70 text-xs border-b border-white/10">
-                  <th className="text-left py-3 px-2">Factura</th>
-                  <th className="text-left py-3 px-2">Cliente</th>
-                  <th className="text-left py-3 px-2">Motivo</th>
-                  <th className="text-left py-3 px-2">Estado</th>
-                  <th className="text-right py-3 px-2">Monto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedReturns.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-white/50">No hay devoluciones para esta fecha</td>
-                  </tr>
-                ) : selectedReturns.map((ret) => (
-                  <tr key={ret.id} className="border-b border-white/5 hover:bg-black/10">
-                    <td className="py-3 px-2 text-white text-sm">{ret.invoice || ret.invoiceNumber || '—'}</td>
-                    <td className="py-3 px-2 text-white text-sm">{ret.client || ret.clientName || 'Cliente General'}</td>
-                    <td className="py-3 px-2 text-white/70 text-sm">{ret.reason || 'Sin motivo'}</td>
-                    <td className="py-3 px-2 text-white/70 text-sm">{ret.status || 'pendiente'}</td>
-                    <td className="py-3 px-2 text-right text-white text-sm">{fmtMoney(ret.amount || 0, 'USD')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
 
       {/* Right Summary */}
       <div className="lg:w-80 space-y-4">
         {/* Convert toggle */}
         <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20">
-          <button
-            onClick={handleCloseAndDownload}
-            disabled={closingDay}
-            className="w-full mb-3 py-3 rounded-2xl font-medium text-sm transition-all bg-[#DC2626] text-white hover:bg-[#b91c1c] disabled:opacity-60"
-          >
-            {closingDay ? 'Registrando cierre...' : existingClosure ? 'Actualizar cierre y descargar resumen' : 'Cerrar dia y descargar resumen'}
-          </button>
           <button
             onClick={() => setConvertToDOP(!convertToDOP)}
             className={`w-full py-3 rounded-2xl font-medium text-sm transition-all ${
@@ -1391,11 +991,11 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
 
         {/* Summary Card */}
         <div className="bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20">
-          <h3 className="text-white font-semibold mb-4">Resumen de la Fecha</h3>
+          <h3 className="text-white font-semibold mb-4">Resumen del Dia</h3>
           <div className="space-y-3">
             <div className="p-4 bg-[#DC2626]/20 rounded-2xl">
               <p className="text-white/70 text-xs mb-1">Total Facturas</p>
-              <p className="text-white text-2xl font-bold">{selectedInvoices.length}</p>
+              <p className="text-white text-2xl font-bold">{todayInvoices.length}</p>
             </div>
 
             {Object.entries(byCurrency).map(([cur, data]) => (
@@ -1422,8 +1022,8 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
             <div className="p-4 bg-black/15 rounded-2xl">
               <p className="text-white/70 text-xs mb-1">Ticket Promedio</p>
               <p className="text-white text-xl font-bold">
-                {selectedInvoices.length > 0
-                  ? `US$ ${(selectedInvoices.filter(i => (i.currency || 'USD') === 'USD').reduce((s, i) => s + i.total, 0) / Math.max(1, selectedInvoices.filter(i => (i.currency || 'USD') === 'USD').length)).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                {todayInvoices.length > 0
+                  ? `US$ ${(todayInvoices.filter(i => (i.currency || 'USD') === 'USD').reduce((s, i) => s + i.total, 0) / Math.max(1, todayInvoices.filter(i => (i.currency || 'USD') === 'USD').length)).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
                   : 'US$ 0.00'
                 }
               </p>
@@ -1436,7 +1036,7 @@ function CierreDiaPanel({ invoices, returns, onCloseDay, closingDay, taxEnabled,
 }
 
 // Product Card Component
-function ProductCard({ product, onAdd, onEdit, currency = 'USD' }) {
+function ProductCard({ product, onAdd, onEdit }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -1470,7 +1070,7 @@ function ProductCard({ product, onAdd, onEdit, currency = 'USD' }) {
           {product.name}
         </h3>
         <p className="text-[#DC2626] font-medium text-lg">
-          {fmtMoney(product.price, currency)}
+          US$ {product.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
         </p>
       </div>
     </motion.div>
@@ -1550,7 +1150,7 @@ function ProductEditModal({ product, onSave, onClose }) {
 }
 
 // Cart Item Component
-function CartItem({ item, onUpdateQuantity, onRemove, currency = 'USD' }) {
+function CartItem({ item, onUpdateQuantity, onRemove }) {
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
@@ -1564,7 +1164,7 @@ function CartItem({ item, onUpdateQuantity, onRemove, currency = 'USD' }) {
       <div className="flex-1 min-w-0">
         <p className="text-white font-medium text-sm truncate">{item.name}</p>
         <p className="text-[#DC2626] text-xs">
-          {fmtMoney(item.price, currency)}
+          US$ {item.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
         </p>
       </div>
       <div className="flex items-center gap-2">
@@ -1652,8 +1252,6 @@ function CustomSelect({ label, value, onChange, options, placeholder }) {
 // POS Receipt Component for printing (80mm width)
 function POSReceipt({ invoice, onClose }) {
   const receiptRef = useRef(null);
-  const invoiceCurrency = invoice.currency || 'USD';
-  const invoiceCurrencyLabel = currencyLabel(invoiceCurrency);
   
   const handlePrint = () => {
     const printWindow = window.open('', '', 'width=302,height=600');
@@ -1663,8 +1261,8 @@ function POSReceipt({ invoice, onClose }) {
       <tr>
         <td style="text-align: left; padding: 4px 0;">${item.name}</td>
         <td style="text-align: center; padding: 4px 0;">${item.quantity}</td>
-        <td style="text-align: right; padding: 4px 0;">${invoiceCurrencyLabel} ${item.price.toFixed(2)}</td>
-        <td style="text-align: right; padding: 4px 0;">${invoiceCurrencyLabel} ${(item.quantity * item.price).toFixed(2)}</td>
+        <td style="text-align: right; padding: 4px 0;">$${item.price.toFixed(2)}</td>
+        <td style="text-align: right; padding: 4px 0;">$${(item.quantity * item.price).toFixed(2)}</td>
       </tr>
     `).join('');
     
@@ -1850,15 +1448,15 @@ function POSReceipt({ invoice, onClose }) {
             <table class="totals-table">
               <tr>
                 <td>SUBTOTAL:</td>
-                <td>${invoiceCurrencyLabel} ${invoice.subtotal.toFixed(2)}</td>
+                <td>US$ ${invoice.subtotal.toFixed(2)}</td>
               </tr>
               <tr>
                 <td>ITBIS (18%):</td>
-                <td>${invoiceCurrencyLabel} ${invoice.tax.toFixed(2)}</td>
+                <td>US$ ${invoice.tax.toFixed(2)}</td>
               </tr>
               <tr class="total-row">
                 <td>TOTAL A PAGAR:</td>
-                <td>${invoiceCurrencyLabel} ${invoice.total.toFixed(2)}</td>
+                <td>US$ ${invoice.total.toFixed(2)}</td>
               </tr>
             </table>
             
@@ -1949,8 +1547,8 @@ function POSReceipt({ invoice, onClose }) {
                 <tr key={idx} className="border-b border-dotted border-gray-300">
                   <td className="py-2 text-left">{item.name}</td>
                   <td className="py-2 text-center">{item.quantity}</td>
-                  <td className="py-2 text-right">{invoiceCurrencyLabel} {item.price.toFixed(2)}</td>
-                  <td className="py-2 text-right">{invoiceCurrencyLabel} {(item.quantity * item.price).toFixed(2)}</td>
+                  <td className="py-2 text-right">${item.price.toFixed(2)}</td>
+                  <td className="py-2 text-right">${(item.quantity * item.price).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1963,15 +1561,15 @@ function POSReceipt({ invoice, onClose }) {
             <tbody>
               <tr>
                 <td className="py-1">SUBTOTAL:</td>
-                <td className="py-1 text-right font-semibold">{invoiceCurrencyLabel} {invoice.subtotal.toFixed(2)}</td>
+                <td className="py-1 text-right font-semibold">US$ {invoice.subtotal.toFixed(2)}</td>
               </tr>
               <tr>
                 <td className="py-1">ITBIS (18%):</td>
-                <td className="py-1 text-right font-semibold">{invoiceCurrencyLabel} {invoice.tax.toFixed(2)}</td>
+                <td className="py-1 text-right font-semibold">US$ {invoice.tax.toFixed(2)}</td>
               </tr>
               <tr className="border-t-2 border-black">
                 <td className="py-2 text-sm font-bold">TOTAL A PAGAR:</td>
-                <td className="py-2 text-right text-sm font-bold">{invoiceCurrencyLabel} {invoice.total.toFixed(2)}</td>
+                <td className="py-2 text-right text-sm font-bold">US$ {invoice.total.toFixed(2)}</td>
               </tr>
             </tbody>
           </table>
@@ -2024,176 +1622,36 @@ export default function BillingPage() {
   const [products, setProducts] = useState(DEFAULT_PRODUCTS);
   const [editingProduct, setEditingProduct] = useState(null);
   const [billingUserName, setBillingUserName] = useState('');
-  const [billingUserId, setBillingUserId] = useState(null);
-  const [billingUser, setBillingUser] = useState({ name: '', email: '', phone: '', role: 'billing' });
 
   // Read user from session
   useEffect(() => {
-    getDashboardSession().then((session) => {
-      if (session && session.active) {
-        setBillingUserName(session.name);
-        setBillingUserId(session.id || null);
-        setBillingUser({
-          name: session.name || '',
-          email: session.email || '',
-          phone: session.phone || '',
-          role: session.role || 'billing',
-        });
-      }
-    });
+    try {
+      const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || 'null');
+      if (session && session.active) setBillingUserName(session.name);
+    } catch {}
   }, []);
 
-  const handleBillingLogout = async () => {
-    await clearDashboardSession();
+  const handleBillingLogout = () => {
+    sessionStorage.removeItem('macao_auth_session');
     window.location.reload();
   };
 
-  // Load products from localStorage, then sync defaults from Supabase
+  // Load products from localStorage
   useEffect(() => {
-    setProducts(DEFAULT_PRODUCTS);
-
-    // Fetch central pricing from Supabase and update defaults
-    async function syncPricing() {
-      try {
-        const { data, error } = await supabase
-          .from('photo_pricing')
-          .select('code, name, price, description')
-          .eq('active', true)
-          .order('sort_order', { ascending: true });
-        if (error || !data || data.length === 0) return;
-
-        setProducts(prev => {
-          const updated = prev.map(p => {
-            const remote = data.find(r => r.code === p.code);
-            if (remote) {
-              return { ...p, price: parseFloat(remote.price), name: remote.name, description: remote.description || p.description };
-            }
-            return p;
-          });
-          return updated;
-        });
-      } catch (err) {
-        console.error('Error syncing pricing:', err);
-      }
-    }
-    syncPricing();
+    setProducts(loadProducts());
   }, []);
   
   // Invoice management state
   const [invoices, setInvoices] = useState([]);
-  const [returns, setReturns] = useState([]);
   const [nextInvoiceNum, setNextInvoiceNum] = useState(1);
-  const [taxEnabled, setTaxEnabled] = useState(true);
-  const [closingDay, setClosingDay] = useState(false);
-  const [savingProfile, setSavingProfile] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [currentInvoice, setCurrentInvoice] = useState(null);
-
-  const parseInvoiceCounter = (rows) => {
-    let maxNum = 0;
-    rows.forEach((inv) => {
-      const raw = String(inv.invoiceNumber || inv.invoice_number || '');
-      const match = raw.match(/FAC-(\d+)/i);
-      if (!match) return;
-      const parsed = Number.parseInt(match[1], 10);
-      if (!Number.isNaN(parsed) && parsed > maxNum) maxNum = parsed;
-    });
-    return maxNum + 1;
-  };
-
-  const extractInvoiceCounter = (rawInvoiceNumber) => {
-    const raw = String(rawInvoiceNumber || '');
-    const match = raw.match(/FAC-(\d+)/i);
-    if (!match) return 0;
-    const parsed = Number.parseInt(match[1], 10);
-    return Number.isNaN(parsed) ? 0 : parsed;
-  };
-
-  const isInvoiceNumberConflict = (error) => {
-    if (!error) return false;
-    if (error.code !== '23505') return false;
-    const details = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`.toLowerCase();
-    return details.includes('invoice_number');
-  };
-
-  const resolveInvoiceInsertErrorMessage = (error) => {
-    if (!error) {
-      return 'No se pudo guardar la factura en la base de datos. Intenta nuevamente.';
-    }
-
-    if (error.code === '42P01') {
-      return 'No existe la tabla de facturas en la base de datos. Ejecuta las migraciones de fotografia.';
-    }
-
-    if (error.code === '42501') {
-      return 'No hay permisos para guardar facturas (RLS/policies). Revisa las politicas de Supabase.';
-    }
-
-    if (isInvoiceNumberConflict(error)) {
-      return 'El numero de factura ya existe. Recarga la pagina e intenta de nuevo.';
-    }
-
-    return `No se pudo guardar la factura: ${error.message || 'error desconocido'}`;
-  };
   
-  // Load invoices, devoluciones y estado de cierre desde Supabase
+  // Load invoices from localStorage on mount
   useEffect(() => {
-    async function loadBillingData() {
-      const { data: invRows, error: invErr } = await supabase
-        .from('photo_invoices')
-        .select('*')
-        .order('created_at', { ascending: true });
-
-      if (!invErr && Array.isArray(invRows)) {
-        const mapped = invRows.map((inv) => ({
-          id: inv.id,
-          invoiceNumber: inv.invoice_number,
-          timestamp: inv.created_at || new Date().toISOString(),
-          clientName: String(inv.client_name || '').trim() || 'Cliente General',
-          clientPhone: inv.client_phone || '',
-          turno: inv.turno || 'Turno 9:00',
-          photographer: inv.photographer || null,
-          source: inv.source || 'billing',
-          date: inv.date || new Date(inv.created_at || Date.now()).toLocaleDateString('es-DO'),
-          items: inv.items || [],
-          subtotal: Number(inv.subtotal || 0),
-          tax: Number(inv.tax || 0),
-          total: Number(inv.total || 0),
-          currency: inv.currency || 'USD',
-          status: inv.status || 'active',
-        }));
-        setInvoices(mapped);
-        setNextInvoiceNum(parseInvoiceCounter(mapped));
-      }
-
-      const { data: returnRows, error: retErr } = await supabase
-        .from('photo_returns')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (!retErr && Array.isArray(returnRows)) {
-        setReturns(
-          returnRows.map((ret) => ({
-            id: ret.id,
-            invoice: ret.invoice_number,
-            client: ret.client_name || 'Cliente General',
-            amount: Number(ret.amount || 0),
-            currency: ret.currency || null,
-            reason: ret.reason || '',
-            date: new Date(ret.created_at || Date.now()).toLocaleDateString('es-DO'),
-            status: ret.status || 'pendiente',
-            timestamp: ret.created_at || null,
-          })),
-        );
-      }
-
-      const latestClosure = await getLatestDailyClosure();
-      if (latestClosure?.disable_tax_after_close) {
-        setTaxEnabled(false);
-      }
-    }
-
-    loadBillingData();
+    const stored = getStoredInvoices();
+    setInvoices(stored);
+    setNextInvoiceNum(getNextInvoiceNumber());
   }, []);
 
   // Load photographers from Supabase
@@ -2257,7 +1715,7 @@ export default function BillingPage() {
 
   // Calculate totals
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const tax = taxEnabled ? subtotal * 0.18 : 0;
+  const tax = subtotal * 0.18; // 18% ITBIS
   const total = subtotal + tax;
 
   // Clear cart
@@ -2276,10 +1734,8 @@ export default function BillingPage() {
       alert('Agrega productos al carrito');
       return;
     }
-
-    const normalizedClientName = String(clientName || '').trim();
-    const effectiveClientName = normalizedClientName || 'Cliente General';
     
+    const invoiceNum = formatInvoiceNumber(nextInvoiceNum);
     const itemsList = cart.map(item => ({
       id: item.id,
       name: item.name,
@@ -2290,56 +1746,12 @@ export default function BillingPage() {
     // Resolve photographer name from ID
     const photographerName = photographers.find(p => p.id.toString() === photographer)?.name || photographer || null;
 
-    let invoiceCounter = nextInvoiceNum;
-    let invoiceNum = formatInvoiceNumber(invoiceCounter);
-    let sbErr = null;
-
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      const supabaseRow = {
-        invoice_number: invoiceNum,
-        client_name: effectiveClientName,
-        client_phone: clientPhone || null,
-        turno: turno || 'Turno 9:00',
-        photographer: photographerName,
-        source: 'billing',
-        date: new Date().toLocaleDateString('es-DO'),
-        items: itemsList,
-        subtotal,
-        tax,
-        total,
-        currency: currency,
-        status: 'active',
-      };
-
-      const { error } = await supabase.from('photo_invoices').insert(supabaseRow);
-      sbErr = error || null;
-      if (!sbErr) break;
-
-      if (!isInvoiceNumberConflict(sbErr)) break;
-
-      const { data: latestRows } = await supabase
-        .from('photo_invoices')
-        .select('invoice_number')
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      const latestCounter = extractInvoiceCounter(latestRows?.[0]?.invoice_number);
-      invoiceCounter = Math.max(invoiceCounter + 1, latestCounter + 1);
-      invoiceNum = formatInvoiceNumber(invoiceCounter);
-    }
-
-    if (sbErr) {
-      console.error('Error inserting invoice into photo_invoices:', sbErr);
-      alert(resolveInvoiceInsertErrorMessage(sbErr));
-      return;
-    }
-
-    // Create invoice object after DB write succeeds
+    // Create invoice object
     const newInvoice = {
       id: `inv_${Date.now()}`,
       invoiceNumber: invoiceNum,
       timestamp: new Date().toISOString(),
-      clientName: effectiveClientName,
+      clientName: clientName || 'Cliente General',
       clientPhone: clientPhone,
       turno: turno || 'Turno 9:00',
       photographer: photographerName,
@@ -2352,36 +1764,39 @@ export default function BillingPage() {
       currency: currency,
       status: 'active',
     };
-
-    await addPhotoSaleEvent({
-      eventType: 'online_purchase',
-      phone: clientPhone || null,
-      clientName: effectiveClientName,
-      invoiceNumber: invoiceNum,
-      planName: 'Factura Caja',
-      amount: total,
-      currency,
+    
+    // Save to Supabase (non-blocking — localStorage is the primary store)
+    supabase.from('photo_invoices').insert({
+      invoice_number: invoiceNum,
+      client_name: clientName || 'Cliente General',
+      client_phone: clientPhone || null,
+      turno: turno || 'Turno 9:00',
+      photographer: photographerName,
       source: 'billing',
-      metadata: {
-        turno: turno || 'Turno 9:00',
-        photographer: photographerName,
-        items: itemsList,
-        tax,
-        subtotal,
-      },
+      date: new Date().toLocaleDateString('es-DO'),
+      items: itemsList,
+      subtotal,
+      tax,
+      total,
+      currency: currency,
+      status: 'active',
+    }).then(({ error }) => {
+      if (error) console.warn('Supabase insert error (offline fallback active):', error.message);
     });
 
+    // Also save to localStorage (offline fallback)
     const updatedInvoices = [...invoices, newInvoice];
     setInvoices(updatedInvoices);
+    saveInvoices(updatedInvoices);
 
     // Push billing client for photographer dashboard
     if (clientPhone) {
-      await addBillingClient({
+      addBillingClient({
         id: `bc_${Date.now()}`,
-        clientName: effectiveClientName,
+        name: clientName || 'Cliente General',
         phone: clientPhone,
         turno: turno || 'Turno 9:00',
-        photographerName,
+        photographer: photographerName,
         invoiceNumber: newInvoice.invoiceNumber,
         total: total,
         date: newInvoice.date,
@@ -2390,11 +1805,12 @@ export default function BillingPage() {
     }
 
     // Log activity
-    logActivity('Factura generada', `${newInvoice.invoiceNumber} — ${currencyLabel(currency)} ${total.toFixed(2)} — ${effectiveClientName}`);
+    logActivity('Factura generada', `${newInvoice.invoiceNumber} — US$ ${total.toFixed(2)} — ${clientName || 'Cliente General'}`);
     
     // Update invoice counter
-    const newNum = invoiceCounter + 1;
+    const newNum = nextInvoiceNum + 1;
     setNextInvoiceNum(newNum);
+    saveInvoiceCounter(newNum);
     
     // Set current invoice and show print modal
     setCurrentInvoice(newInvoice);
@@ -2408,66 +1824,6 @@ export default function BillingPage() {
   const handleClosePrintModal = () => {
     setShowPrintModal(false);
     setCurrentInvoice(null);
-  };
-
-  const handleCloseDay = async ({ closureDate, byCurrency, totalInvoices }) => {
-    setClosingDay(true);
-    const saved = await saveDailyClosure({
-      closureDate,
-      closedBy: billingUserName || billingUser?.name || null,
-      totalInvoices,
-      byCurrency,
-      disableTaxAfterClose: true,
-    });
-    setClosingDay(false);
-
-    if (saved) {
-      setTaxEnabled(false);
-      logActivity('Cierre del dia', `${closureDate} - ${totalInvoices} factura(s)`);
-    }
-
-    return saved;
-  };
-
-  const handleSaveProfile = async (nextProfile) => {
-    if (!billingUserId) {
-      alert('No se encontro el usuario activo para actualizar el perfil.');
-      return;
-    }
-
-    setSavingProfile(true);
-    const payload = {
-      name: String(nextProfile?.name || '').trim(),
-      email: String(nextProfile?.email || '').trim(),
-      phone: String(nextProfile?.phone || '').trim(),
-      updated_at: new Date().toISOString(),
-    };
-
-    const { error } = await supabase
-      .from('dashboard_users')
-      .update(payload)
-      .eq('id', billingUserId);
-
-    setSavingProfile(false);
-
-    if (error) {
-      alert('No se pudo guardar el perfil. Intenta nuevamente.');
-      return;
-    }
-
-    setBillingUser((prev) => ({ ...prev, ...payload }));
-    setBillingUserName(payload.name || billingUserName);
-
-    const session = await getDashboardSession();
-    if (session) {
-      await setDashboardSession({
-        ...session,
-        ...payload,
-        active: true,
-      });
-    }
-
-    logActivity('Perfil actualizado', payload.name || 'Usuario');
   };
 
   return (
@@ -2613,7 +1969,7 @@ export default function BillingPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4">
                 <AnimatePresence mode="popLayout">
                   {filteredProducts.map((product) => (
-                    <ProductCard key={product.id} product={product} onAdd={addToCart} onEdit={setEditingProduct} currency={currency} />
+                    <ProductCard key={product.id} product={product} onAdd={addToCart} onEdit={setEditingProduct} />
                   ))}
                 </AnimatePresence>
               </div>
@@ -2776,7 +2132,6 @@ export default function BillingPage() {
                       item={item}
                       onUpdateQuantity={updateQuantity}
                       onRemove={removeFromCart}
-                      currency={currency}
                     />
                   ))
                 )}
@@ -2789,19 +2144,19 @@ export default function BillingPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-white/60">Subtotal</span>
                   <span className="text-white">
-                    {fmtMoney(subtotal, currency)}
+                    US$ {subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-white/60">ITBIS (18%)</span>
                   <span className="text-white">
-                    {fmtMoney(tax, currency)}
+                    US$ {tax.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex justify-between text-lg font-semibold pt-2 border-t border-white/15">
                   <span className="text-white">Total</span>
                   <span className="text-[#DC2626]">
-                    {fmtMoney(total, currency)}
+                    US$ {total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
@@ -2836,19 +2191,13 @@ export default function BillingPage() {
 
       {activeTab === 'usuario' && (
         <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
-          <UsuarioPanel
-            user={billingUser}
-            invoices={invoices}
-            onLogout={handleBillingLogout}
-            onSaveProfile={handleSaveProfile}
-            savingProfile={savingProfile}
-          />
+          <UsuarioPanel />
         </main>
       )}
 
       {activeTab === 'devolucion' && (
         <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
-          <DevolucionPanel invoices={invoices} returns={returns} setReturns={setReturns} />
+          <DevolucionPanel invoices={invoices} />
         </main>
       )}
 
@@ -2860,20 +2209,13 @@ export default function BillingPage() {
 
       {activeTab === 'cierre-turno' && (
         <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
-          <CierreTurnoPanel invoices={invoices} returns={returns} />
+          <CierreTurnoPanel invoices={invoices} />
         </main>
       )}
 
       {activeTab === 'cierre-dia' && (
         <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
-          <CierreDiaPanel
-            invoices={invoices}
-            returns={returns}
-            onCloseDay={handleCloseDay}
-            closingDay={closingDay}
-            taxEnabled={taxEnabled}
-            billingUser={billingUser}
-          />
+          <CierreDiaPanel invoices={invoices} />
         </main>
       )}
 
@@ -2890,18 +2232,10 @@ export default function BillingPage() {
           <ProductEditModal
             product={editingProduct}
             onClose={() => setEditingProduct(null)}
-            onSave={async (updated) => {
-              await supabase
-                .from('photo_pricing')
-                .update({
-                  name: updated.name,
-                  price: Number(updated.price || 0),
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('code', updated.code)
-
+            onSave={(updated) => {
               const newProducts = products.map(p => p.id === updated.id ? { ...p, name: updated.name, price: updated.price } : p);
               setProducts(newProducts);
+              persistProducts(newProducts);
               setEditingProduct(null);
             }}
           />
