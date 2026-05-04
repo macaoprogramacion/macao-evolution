@@ -65,8 +65,13 @@ export async function POST(request: NextRequest) {
       </html>
     `;
 
+    const resendDomain = process.env.RESEND_DOMAIN;
+    const fromAddress = resendDomain
+      ? `Macao Adventure Park <reservas@${resendDomain}>`
+      : "Macao Adventure Park <onboarding@resend.dev>";
+
     const { data, error } = await getResend().emails.send({
-      from: `Macao Adventure Park <reservas@${process.env.RESEND_DOMAIN || "resend.dev"}>`,
+      from: fromAddress,
       to: email,
       subject: code
         ? "Código de verificación - Macao Adventure Park"

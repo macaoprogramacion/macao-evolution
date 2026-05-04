@@ -40,6 +40,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [forgotAccountId, setForgotAccountId] = useState<string | null>(null);
   const [forgotName, setForgotName] = useState("");
   const [forgotMessage, setForgotMessage] = useState("");
+  const [forgotFallbackCode, setForgotFallbackCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -60,6 +61,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [regRole, setRegRole] = useState<UserRole>("cliente");
   const [verificationCode, setVerificationCode] = useState("");
   const [verificationMessage, setVerificationMessage] = useState("");
+  const [verificationFallbackCode, setVerificationFallbackCode] = useState("");
   const [pendingVerification, setPendingVerification] = useState<{
     id: string;
     name: string;
@@ -88,6 +90,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setRegisterStep("form");
       setVerificationCode("");
       setVerificationMessage("");
+      setVerificationFallbackCode("");
       setPendingVerification(null);
       setForgotStep(null);
       setForgotEmail("");
@@ -97,6 +100,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setForgotAccountId(null);
       setForgotName("");
       setForgotMessage("");
+      setForgotFallbackCode("");
     }
   }, [isOpen]);
 
@@ -288,10 +292,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       });
       const payload = await response.json().catch(() => null);
       if (payload?.code) {
-        setVerificationMessage(`El correo no se pudo enviar. Tu código es: ${payload.code}`);
-      } else if (payload?.reason === "resend_not_configured") {
-        setVerificationMessage("El correo no se pudo enviar. Contacta al soporte para obtener tu código.");
+        setVerificationFallbackCode(payload.code);
+        setVerificationMessage("El correo no llegó. Usa el código que aparece a continuación:");
       } else {
+        setVerificationFallbackCode("");
         setVerificationMessage(`Te enviamos un código de 6 dígitos a ${newUser.email}.`);
       }
     } catch {
@@ -385,10 +389,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       });
       const payload = await response.json().catch(() => null);
       if (payload?.code) {
-        setVerificationMessage(`El correo no se pudo enviar. Tu código es: ${payload.code}`);
-      } else if (payload?.reason === "resend_not_configured") {
-        setVerificationMessage("El correo no se pudo enviar. Contacta al soporte para obtener tu código.");
+        setVerificationFallbackCode(payload.code);
+        setVerificationMessage("El correo no llegó. Usa el código que aparece a continuación:");
       } else {
+        setVerificationFallbackCode("");
         setVerificationMessage(`Te enviamos un nuevo código a ${pendingVerification.email}.`);
       }
     } catch {
@@ -428,10 +432,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         });
         const payload = await res.json().catch(() => null);
         if (payload?.code) {
-          setForgotMessage(`El correo no se pudo enviar. Tu código es: ${payload.code}`);
-        } else if (payload?.reason === "resend_not_configured") {
-          setForgotMessage("El correo no se pudo enviar. Contacta al soporte para obtener tu código.");
+          setForgotFallbackCode(payload.code);
+          setForgotMessage("El correo no llegó. Usa el código que aparece a continuación:");
         } else {
+          setForgotFallbackCode("");
           setForgotMessage(`Te enviamos un código de 6 dígitos a ${email}.`);
         }
       } catch {
@@ -475,7 +479,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setForgotConfirmPassword("");
     setForgotAccountId(null);
     setForgotName("");
-    setForgotMessage("");
+    setForgotFallbackCode("");
     setErrors({ loginPassword: "✓ Contraseña actualizada. Inicia sesión con tu nueva contraseña." });
   }
 
@@ -556,7 +560,13 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 <ArrowLeft size={14} /> Volver
               </button>
               <h2 className="text-xl font-bold mb-1">Nueva contraseña</h2>
-              {forgotMessage && <p className="text-sm text-muted-foreground mb-5">{forgotMessage}</p>}
+              {forgotMessage && <p className="text-sm text-muted-foreground mb-3">{forgotMessage}</p>}
+              {forgotFallbackCode && (
+                <div className="mb-5 rounded-xl border-2 border-foreground bg-foreground/5 p-4 text-center">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-1">Tu código</p>
+                  <p className="text-4xl font-black tracking-[0.3em] text-foreground">{forgotFallbackCode}</p>
+                </div>
+              )}
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Código de 6 dígitos</label>
@@ -1062,6 +1072,12 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     )}
                     {verificationMessage && (
                       <p className="mt-1 text-xs text-muted-foreground">{verificationMessage}</p>
+                    )}
+                    {verificationFallbackCode && (
+                      <div className="mt-3 rounded-xl border-2 border-foreground bg-foreground/5 p-4 text-center">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-1">Tu código</p>
+                        <p className="text-4xl font-black tracking-[0.3em] text-foreground">{verificationFallbackCode}</p>
+                      </div>
                     )}
                   </div>
 

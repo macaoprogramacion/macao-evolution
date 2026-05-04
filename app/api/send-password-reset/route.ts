@@ -23,8 +23,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, reason: "resend_not_configured", code }, { status: 200 });
     }
 
-    const domain = process.env.RESEND_DOMAIN || "macaoadventurepark.com";
-    const fromEmail = `MACAO <no-reply@${domain}>`;
+    const domain = process.env.RESEND_DOMAIN;
+    const fromEmail = domain
+      ? `MACAO <no-reply@${domain}>`
+      : "MACAO Adventure Park <onboarding@resend.dev>";
 
     const html = `
       <!DOCTYPE html>
