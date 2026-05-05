@@ -106,7 +106,7 @@ const newUsers = [
 
 // Canales de venta
 const salesChannels = [
-  { name: "Macao Off Road", url: "macaooffroad.com", sales: 145, revenue: 18920, color: "#dc2626" },
+  { name: "Macao Off Road", url: "www.jonathanarache.com", sales: 145, revenue: 18920, color: "#dc2626" },
   { name: "Caribe Buggy", url: "caribebuggy.com", sales: 98, revenue: 12740, color: "#ef4444" },
   { name: "Saona Island", url: "saonaislandpuntacana.com", sales: 76, revenue: 9880, color: "#f87171" },
   { name: "Viator", url: "viator.com", sales: 124, revenue: 16120, color: "#fca5a5" },

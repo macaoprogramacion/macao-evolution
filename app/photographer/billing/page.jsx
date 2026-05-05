@@ -123,7 +123,7 @@ const sidebarItems = [
 ];
 
 // Usuario Panel Component
-function UsuarioPanel() {
+function UsuarioPanel({ activities }) {
   return (
     <div className="flex-1 flex flex-col lg:flex-row gap-6">
       {/* User Profile */}
@@ -187,7 +187,7 @@ function UsuarioPanel() {
       <div className="lg:w-80 bg-black/25 backdrop-blur-xl rounded-3xl p-5 border border-white/20">
         <h3 className="text-white font-semibold mb-4">Actividad Reciente</h3>
         <div className="space-y-4">
-          {getActivity().slice(0, 5).map((activity) => {
+          {activities.slice(0, 5).map((activity) => {
             const elapsed = (() => {
               const diff = Date.now() - new Date(activity.time).getTime();
               const mins = Math.floor(diff / 60000);
@@ -208,7 +208,7 @@ function UsuarioPanel() {
             </div>
             );
           })}
-          {getActivity().length === 0 && (
+          {activities.length === 0 && (
             <p className="text-white/50 text-sm text-center py-4">Sin actividad reciente</p>
           )}
         </div>
@@ -1467,7 +1467,7 @@ function POSReceipt({ invoice, onClose }) {
                 📅 Tiene 15 días para descargar sus fotos y videos
               </div>
               <div class="footer-note">Conserve este recibo para cualquier reclamación</div>
-              <div class="footer-note">www.macaooffroad.com</div>
+              <div class="footer-note">www.jonathanarache.com</div>
             </div>
           </div>
         </body>
@@ -1581,7 +1581,7 @@ function POSReceipt({ invoice, onClose }) {
               📅 Tiene 15 días para descargar sus fotos y videos
             </div>
             <div className="text-[9px] text-gray-500">Conserve este recibo para cualquier reclamación</div>
-            <div className="text-[9px] text-gray-500">www.macaooffroad.com</div>
+            <div className="text-[9px] text-gray-500">www.jonathanarache.com</div>
           </div>
         </div>
         
@@ -1622,6 +1622,7 @@ export default function BillingPage() {
   const [products, setProducts] = useState(DEFAULT_PRODUCTS);
   const [editingProduct, setEditingProduct] = useState(null);
   const [billingUserName, setBillingUserName] = useState('');
+  const [activityFeed, setActivityFeed] = useState([]);
 
   // Read user from session
   useEffect(() => {
@@ -1668,6 +1669,18 @@ export default function BillingPage() {
       }
     }
     fetchPhotographers();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getActivity().then((rows) => {
+      if (active) setActivityFeed(Array.isArray(rows) ? rows : []);
+    }).catch(() => {
+      if (active) setActivityFeed([]);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
   
   // Current invoice number display
@@ -2191,7 +2204,7 @@ export default function BillingPage() {
 
       {activeTab === 'usuario' && (
         <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
-          <UsuarioPanel />
+          <UsuarioPanel activities={activityFeed} />
         </main>
       )}
 

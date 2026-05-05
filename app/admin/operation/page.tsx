@@ -527,7 +527,7 @@ export default function OperationPage() {
   <hr class="divider" />
   <div class="footer">
     Ticket generado el ${new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}<br/>
-    Para cualquier consulta: info@macaooffroad.com
+    Para cualquier consulta: info@jonathanarache.com
   </div>
 </div>
 </body>
@@ -590,7 +590,7 @@ export default function OperationPage() {
 
     if (reservation.status === "no_show") {
       return (
-        <Badge className="bg-gray-200 text-gray-700 hover:bg-gray-200 cursor-default">
+        <Badge className="bg-gray-200 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-700 cursor-default">
           <UserX className="w-3 h-3 mr-1" />
           NO SHOW
         </Badge>
@@ -629,7 +629,7 @@ export default function OperationPage() {
             size="sm"
             variant="outline"
             disabled={!canNoShow}
-            className="border-gray-400 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+            className="border-gray-400 text-gray-700 hover:bg-gray-100 dark:border-gray-500 dark:text-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
             onClick={() => setNoShowConfirmId(reservation.id)}
             title={canNoShow ? "Marcar como NO SHOW" : "Solo disponible despues de la hora de recogida"}
           >
@@ -647,7 +647,7 @@ export default function OperationPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl md:text-3xl font-title text-gray-900">Operacion Buggy</h1>
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900 dark:text-gray-100">Operacion Buggy</h1>
             <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">Gestión de reservas de todas las plataformas</p>
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
@@ -668,8 +668,8 @@ export default function OperationPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Total Reservas</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Total Reservas</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.total}</p>
                 </div>
                 <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
                   <Calendar className="w-6 h-6 text-red-600" />
@@ -682,7 +682,7 @@ export default function OperationPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Confirmadas</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Confirmadas</p>
                   <p className="text-2xl font-bold text-green-600">{stats.confirmed}</p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -696,7 +696,7 @@ export default function OperationPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Pendientes</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Pendientes</p>
                   <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
                 </div>
                 <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -710,8 +710,8 @@ export default function OperationPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Total Personas</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalGuests}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Total Personas</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalGuests}</p>
                 </div>
                 <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
                   <Users className="w-6 h-6 text-gray-800" />
@@ -813,7 +813,7 @@ export default function OperationPage() {
           <CardContent>
             <div className="space-y-3">
               {filteredReservations.map((reservation) => (
-                <div key={reservation.id} className={`border rounded-lg p-4 space-y-3 transition-colors ${reservation.status === "no_show" ? "bg-red-50 border-red-300" : "hover:border-red-200"}`}>
+                <div key={reservation.id} className={`border rounded-lg p-4 space-y-3 transition-colors ${reservation.status === "no_show" ? "bg-red-50 border-red-300 dark:bg-red-900/20 dark:border-red-700" : "hover:border-red-200"}`}>
                   <div className="flex items-center gap-2 flex-wrap">
                     {getStatusButton(reservation)}
                     <Badge
@@ -890,7 +890,7 @@ export default function OperationPage() {
                       {reservation.transportType}
                     </Badge>
                     {reservation.experience && (
-                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/40">
                         {reservation.experience}
                       </Badge>
                     )}
@@ -899,7 +899,7 @@ export default function OperationPage() {
                   <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-gray-100">
                     {reservation.assignedChoferId ? (
                       <>
-                        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/40">
                           <Send className="w-3 h-3 mr-1" />
                           Enviada
                         </Badge>
@@ -924,7 +924,7 @@ export default function OperationPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                        className="border-blue-300 text-blue-700 hover:bg-blue-100 dark:border-blue-500 dark:text-blue-200 dark:hover:bg-blue-900/30"
                         onClick={() => openSendDialog(reservation)}
                       >
                         <Send className="w-3 h-3 mr-1" />
@@ -944,7 +944,7 @@ export default function OperationPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className={copiedMsg === `client-${reservation.id}` ? "border-green-500 bg-green-50 text-green-700" : "border-blue-300 text-blue-700 hover:bg-blue-50"}
+                      className={copiedMsg === `client-${reservation.id}` ? "border-green-500 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300" : "border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-200 dark:hover:bg-blue-900/30"}
                       onClick={() => copyToClipboard(generateClientMessage(reservation), `client-${reservation.id}`)}
                     >
                       {copiedMsg === `client-${reservation.id}` ? (
@@ -1100,10 +1100,10 @@ export default function OperationPage() {
                 className="min-h-[120px]"
               />
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                <Button type="button" variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50" onClick={applyExternalReservation}>
+                <Button type="button" variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-200 dark:hover:bg-blue-900/30" onClick={applyExternalReservation}>
                   Autocompletar campos
                 </Button>
-                {externalParseSummary && <p className="text-xs text-blue-700">{externalParseSummary}</p>}
+                {externalParseSummary && <p className="text-xs text-blue-700 dark:text-blue-300">{externalParseSummary}</p>}
               </div>
             </div>
 

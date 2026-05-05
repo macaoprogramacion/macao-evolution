@@ -31,6 +31,7 @@ const trenches = localFont({
 export const metadata: Metadata = {
   title: 'MACAO | Offroad Experience',
   description: 'Vive la mejor aventura offroad en Punta Cana. Excursiones en buggies por las rutas más emocionantes.',
+  metadataBase: new URL('https://www.jonathanarache.com'),
   generator: 'v0.app',
   icons: {
     icon: [

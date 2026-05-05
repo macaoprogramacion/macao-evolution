@@ -1129,7 +1129,7 @@ ${t.getReady} 🐋⚓
 
     if (reservation.status === "no_show") {
       return (
-        <Badge className="bg-gray-200 text-gray-700 hover:bg-gray-200 cursor-default">
+        <Badge className="bg-gray-200 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-700 cursor-default">
           <UserX className="w-3 h-3 mr-1" />
           NO SHOW
         </Badge>
@@ -1168,7 +1168,7 @@ ${t.getReady} 🐋⚓
             size="sm"
             variant="outline"
             disabled={!canNoShow}
-            className="border-gray-400 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+            className="border-gray-400 text-gray-700 hover:bg-gray-100 dark:border-gray-500 dark:text-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
             onClick={() => setNoShowConfirmId(reservation.id)}
             title={canNoShow ? "Marcar como NO SHOW" : "Solo disponible despues de la hora de recogida"}
           >
@@ -1206,7 +1206,7 @@ ${t.getReady} 🐋⚓
               <Plus className="w-4 h-4 mr-2" />
               Agregar Reserva
             </Button>
-            <Button asChild variant="outline" className="flex-1 sm:flex-none border-blue-300 text-blue-700 hover:bg-blue-50">
+            <Button asChild variant="outline" className="flex-1 sm:flex-none border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-200 dark:hover:bg-blue-900/30">
               <Link href="/admin/operation-samana/disponibilidad">
                 <Calendar className="w-4 h-4 mr-2" />
                 Disponibilidad
@@ -1234,8 +1234,8 @@ ${t.getReady} 🐋⚓
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Total Reservas</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Total Reservas</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.total}</p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <Calendar className="w-6 h-6 text-green-600" />
@@ -1248,7 +1248,7 @@ ${t.getReady} 🐋⚓
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Confirmadas</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Confirmadas</p>
                   <p className="text-2xl font-bold text-green-600">{stats.confirmed}</p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -1262,7 +1262,7 @@ ${t.getReady} 🐋⚓
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Pendientes</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Pendientes</p>
                   <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
                 </div>
                 <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -1276,8 +1276,8 @@ ${t.getReady} 🐋⚓
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Total Personas</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalGuests}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Total Personas</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalGuests}</p>
                 </div>
                 <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
                   <Users className="w-6 h-6 text-gray-800" />
@@ -1291,8 +1291,8 @@ ${t.getReady} 🐋⚓
           <CardContent className="pt-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <p className="text-lg font-semibold text-gray-900">Gestion de Disponibilidad</p>
-                <p className="text-sm text-gray-600">Abre el panel dedicado para buscar por fecha y actualizar cupos o bloqueos.</p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">Gestion de Disponibilidad</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Abre el panel dedicado para buscar por fecha y actualizar cupos o bloqueos.</p>
               </div>
               <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white">
                 <Link href="/admin/operation-samana/disponibilidad">
@@ -1380,7 +1380,7 @@ ${t.getReady} 🐋⚓
           <CardContent>
             <div className="space-y-3">
               {filteredReservations.map((reservation) => (
-                <div key={reservation.id} className={`border rounded-lg p-4 space-y-3 transition-colors ${reservation.status === "no_show" ? "bg-red-50 border-red-300" : "hover:border-green-200"}`}>
+                <div key={reservation.id} className={`border rounded-lg p-4 space-y-3 transition-colors ${reservation.status === "no_show" ? "bg-red-50 border-red-300 dark:bg-red-900/20 dark:border-red-700" : "hover:border-green-200"}`}>
                   {/* Row 1: Status + Channel + Ref + Language */}
                   <div className="flex items-center gap-2 flex-wrap">
                     {getStatusButton(reservation)}
@@ -1436,7 +1436,7 @@ ${t.getReady} 🐋⚓
 
                   {/* Row 3: Hotel + Location */}
                   <div className="bg-gray-50 dark:bg-gray-900 rounded-md px-3 py-2 text-sm">
-                    <div className="flex items-center gap-1.5 font-medium text-gray-900">
+                    <div className="flex items-center gap-1.5 font-medium text-gray-900 dark:text-gray-100">
                       <Hotel className="w-3.5 h-3.5 text-gray-500" />
                       {reservation.hotel}
                     </div>
@@ -1464,7 +1464,7 @@ ${t.getReady} 🐋⚓
                     <Badge className={reservation.lunchIncluded ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-gray-100 text-gray-500 dark:text-gray-400 hover:bg-gray-100"}>
                       🍽️ {reservation.lunchIncluded ? "Almuerzo ✓" : "Sin almuerzo"}
                     </Badge>
-                    <Badge className={reservation.whaleWatching ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : "bg-gray-100 text-gray-500 dark:text-gray-400 hover:bg-gray-100"}>
+                    <Badge className={reservation.whaleWatching ? "bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/40" : "bg-gray-100 text-gray-500 dark:text-gray-400 hover:bg-gray-100"}>
                       🐋 {reservation.whaleWatching ? "Ballenas ✓" : "Sin ballenas"}
                     </Badge>
                   </div>
@@ -1495,7 +1495,7 @@ ${t.getReady} 🐋⚓
                     <Button
                       size="sm"
                       variant="outline"
-                      className={copiedMsg === `client-${reservation.id}` ? "border-green-500 bg-green-50 text-green-700" : "border-blue-300 text-blue-700 hover:bg-blue-50"}
+                      className={copiedMsg === `client-${reservation.id}` ? "border-green-500 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300" : "border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-200 dark:hover:bg-blue-900/30"}
                       onClick={() => copyToClipboard(generateClientMessage(reservation), `client-${reservation.id}`)}
                     >
                       {copiedMsg === `client-${reservation.id}` ? (
@@ -1563,11 +1563,11 @@ ${t.getReady} 🐋⚓
                 className="min-h-[140px]"
               />
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                <Button type="button" variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50" onClick={applyExternalReservation}>
+                <Button type="button" variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-200 dark:hover:bg-blue-900/30" onClick={applyExternalReservation}>
                   Autocompletar campos
                 </Button>
                 {externalParseSummary && (
-                  <p className="text-xs text-blue-700">{externalParseSummary}</p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">{externalParseSummary}</p>
                 )}
               </div>
             </div>

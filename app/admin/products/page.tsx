@@ -52,7 +52,7 @@ import { products as fallbackProducts } from "@/lib/products"
 
 // Webs disponibles (sin Viator ni GetYourGuide)
 const websites = [
-  { value: "macaooffroad", label: "Macao Off Road", url: "macaooffroad.com", color: "#dc2626" },
+  { value: "macaooffroad", label: "Macao Off Road", url: "www.jonathanarache.com", color: "#dc2626" },
   { value: "caribebuggy", label: "Caribe Buggy", url: "caribebuggy.com", color: "#3b82f6" },
   { value: "saonaisland", label: "Saona Island", url: "saonaislandpuntacana.com", color: "#10b981" },
 ]

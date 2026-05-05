@@ -45,6 +45,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabase"
 import { getPhotoSalesEvents } from "@/lib/photography-db"
 import * as XLSX from "xlsx"

@@ -344,7 +344,7 @@ export default function OperationSaonaPage() {
   <hr class="divider" />
   <div class="footer">
     Ticket generado el ${new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}<br/>
-    Para cualquier consulta: info@macaooffroad.com
+    Para cualquier consulta: info@jonathanarache.com
   </div>
 </div>
 </body>
