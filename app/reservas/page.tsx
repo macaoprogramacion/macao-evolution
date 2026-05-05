@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronLeft,
   Clock3,
+  Download,
   MapPin,
   ReceiptText,
   Star,
@@ -57,6 +58,196 @@ function formatDateTime(value: Date | null) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function buildTicketHTML(reservation: StoredCustomerReservation): string {
+  const itemRows = reservation.items
+    .map(
+      (item) => `
+      <tr>
+        <td>${item.name}</td>
+        <td style="text-align:center">${item.quantity}</td>
+        <td style="text-align:right">${formatMoney(item.price)}</td>
+        <td style="text-align:right">${formatMoney(item.price * item.quantity)}</td>
+      </tr>`,
+    )
+    .join("");
+
+  const pickupSection = reservation.pickup
+    ? `<div class="section">
+        <div class="section-title">Detalle de Recogida</div>
+        <table class="info-table">
+          <tr><td class="label">Lugar</td><td>${reservation.pickup.hotel || reservation.pickup.custom || "Pendiente"}</td></tr>
+          ${reservation.pickup.point ? `<tr><td class="label">Punto</td><td>${reservation.pickup.point}</td></tr>` : ""}
+          ${reservation.pickup.date ? `<tr><td class="label">Fecha</td><td>${formatDate(reservation.pickup.date)}</td></tr>` : ""}
+          ${reservation.pickup.time ? `<tr><td class="label">Hora</td><td>${reservation.pickup.time}</td></tr>` : ""}
+        </table>
+      </div>`
+    : "";
+
+  const pendingRow =
+    reservation.totals.remainingAmount > 0
+      ? `<tr class="pending"><td class="label">Saldo pendiente</td><td style="text-align:right">${formatMoney(reservation.totals.remainingAmount)}</td></tr>`
+      : "";
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ticket de Reserva ${reservation.id}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      color: #111;
+      background: #fff;
+      padding: 32px;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #111;
+      margin-bottom: 24px;
+    }
+    .brand { font-size: 22px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+    .brand-sub { font-size: 11px; color: #555; margin-top: 3px; }
+    .ticket-meta { text-align: right; }
+    .ticket-meta .ticket-id { font-size: 11px; color: #555; }
+    .ticket-meta .ticket-date { font-size: 12px; margin-top: 4px; }
+    .badge {
+      display: inline-block;
+      background: #111;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-bottom: 6px;
+    }
+    .section { margin-bottom: 20px; }
+    .section-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #555;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #e5e5e5;
+    }
+    .info-table { width: 100%; border-collapse: collapse; }
+    .info-table td { padding: 4px 0; vertical-align: top; }
+    .info-table .label { color: #555; width: 130px; }
+    .items-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+    .items-table thead tr { border-bottom: 1px solid #e5e5e5; }
+    .items-table th {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #555;
+      padding: 4px 6px 6px 6px;
+      text-align: left;
+    }
+    .items-table th:not(:first-child) { text-align: center; }
+    .items-table th:last-child { text-align: right; }
+    .items-table td { padding: 6px 6px; border-bottom: 1px solid #f0f0f0; }
+    .totals-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .totals-table td { padding: 5px 0; }
+    .totals-table .label { color: #555; }
+    .totals-table .total-row td { font-size: 15px; font-weight: 700; padding-top: 10px; border-top: 2px solid #111; }
+    .totals-table .pending { color: #b45309; }
+    .footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid #e5e5e5;
+      text-align: center;
+      font-size: 11px;
+      color: #888;
+    }
+    .footer strong { color: #111; }
+    .qr-note {
+      text-align: center;
+      font-size: 11px;
+      color: #888;
+      margin-top: 12px;
+      padding: 10px;
+      border: 1px dashed #ddd;
+      border-radius: 6px;
+    }
+    @media print {
+      body { padding: 16px; }
+      @page { margin: 12mm 14mm; size: A4; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="brand">Macao Memories</div>
+      <div class="brand-sub">www.jonathanarache.com</div>
+    </div>
+    <div class="ticket-meta">
+      <div class="badge">Ticket de Reserva</div>
+      <div class="ticket-id">ID: ${reservation.id}</div>
+      <div class="ticket-date">Emitido: ${formatDate(reservation.createdAt)}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Datos del Cliente</div>
+    <table class="info-table">
+      <tr><td class="label">Nombre</td><td>${reservation.customer.name}</td></tr>
+      <tr><td class="label">Email</td><td>${reservation.customer.email}</td></tr>
+      <tr><td class="label">Teléfono</td><td>${reservation.customer.phone}</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Experiencias Reservadas</div>
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>Descripción</th>
+          <th>Cant.</th>
+          <th>Precio unit.</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>${itemRows}</tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Resumen de Pago</div>
+    <table class="totals-table">
+      <tr><td class="label">Total de la reserva</td><td style="text-align:right">${formatMoney(reservation.totals.totalPrice)}</td></tr>
+      <tr><td class="label">Monto pagado</td><td style="text-align:right">${formatMoney(reservation.totals.totalPaid)}</td></tr>
+      ${pendingRow}
+      <tr class="total-row"><td>Total</td><td style="text-align:right">${formatMoney(reservation.totals.totalPrice)}</td></tr>
+    </table>
+  </div>
+
+  ${pickupSection}
+
+  <div class="qr-note">
+    Presenta este ticket al llegar al punto de recogida.<br/>
+    <strong>Macao Evolution</strong> — Punta Cana, República Dominicana
+  </div>
+
+  <div class="footer">
+    Generado por <strong>www.jonathanarache.com</strong> &nbsp;·&nbsp; Macao Memories &copy; ${new Date().getFullYear()}
+  </div>
+</body>
+</html>`;
 }
 
 function StarPicker({ value, onChange }: { value: number; onChange: (rating: number) => void }) {
@@ -360,6 +551,18 @@ export default function ReservasPage() {
     reloadReservations();
   };
 
+  const handleTicketDownload = (reservation: StoredCustomerReservation) => {
+    const html = buildTicketHTML(reservation);
+    const win = window.open("", "_blank", "width=780,height=900");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => {
+      win.print();
+    }, 400);
+  };
+
   return (
     <>
     <main className="min-h-screen bg-background px-4 pb-16 pt-28 md:px-8">
@@ -466,8 +669,16 @@ export default function ReservasPage() {
                         </div>
                       )}
 
-                      {canCancelReservation(reservation, now) && (
-                        <div className="mb-4">
+                      <div className="mb-4 grid gap-3 md:grid-cols-2">
+                        <button
+                          type="button"
+                          onClick={() => handleTicketDownload(reservation)}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary/60"
+                        >
+                          <Download className="h-4 w-4" />
+                          Descargar ticket
+                        </button>
+                        {canCancelReservation(reservation, now) && (
                           <button
                             type="button"
                             onClick={() => setCancelConfirmId(reservation.id)}
@@ -475,8 +686,8 @@ export default function ReservasPage() {
                           >
                             Cancelar reserva
                           </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
 
                       <div className="grid gap-4 md:grid-cols-2">
                         <section className="space-y-3 rounded-xl border border-border bg-background p-4">

@@ -34,9 +34,14 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
     return () => clearInterval(interval)
   }, [])
 
-  // Check if already authenticated in this session
+  // Check if already authenticated in this session and re-validate every minute.
   useEffect(() => {
-    getDashboardSession().then((session) => {
+    let mounted = true
+
+    const verifySession = async () => {
+      const session = await getDashboardSession()
+      if (!mounted) return
+
       if (session && session.active) {
         const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles]
         if (roles.includes(session.role) || session.role === 'both' || session.role === 'admin') {
@@ -52,11 +57,36 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
           if (defaultPage && window.location.pathname === '/admin') {
             router.replace(defaultPage)
           }
+          setChecking(false)
+          return
         }
       }
+
+      setAuthed(false)
+      setUserName('')
       setChecking(false)
-    })
-  }, [allowedRoles])
+    }
+
+    void verifySession()
+
+    const interval = setInterval(() => {
+      void verifySession()
+    }, 60_000)
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void verifySession()
+      }
+    }
+
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      mounted = false
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [allowedRoles, router])
 
   const handlePinChange = (index, value) => {
     if (!/^\d?$/.test(value)) return

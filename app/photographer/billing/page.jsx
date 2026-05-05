@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
+import { clearDashboardSession, getDashboardSession } from '@/lib/dashboard-session';
 import {
   getInvoices as getStoredInvoices,
   saveInvoices,
@@ -123,7 +124,7 @@ const sidebarItems = [
 ];
 
 // Usuario Panel Component
-function UsuarioPanel({ activities }) {
+function UsuarioPanel({ activities, userProfile }) {
   return (
     <div className="flex-1 flex flex-col lg:flex-row gap-6">
       {/* User Profile */}
@@ -137,9 +138,9 @@ function UsuarioPanel({ activities }) {
               <User className="w-12 h-12 text-[#DC2626]" />
             </div>
             <div>
-              <h2 className="text-white text-2xl font-title">Carlos Mendez</h2>
-              <p className="text-white/70">Fotógrafo Senior</p>
-              <p className="text-white/50 text-sm mt-1">carlos.mendez@macao.com</p>
+              <h2 className="text-white text-2xl font-title">{userProfile?.name || 'Usuario'}</h2>
+              <p className="text-white/70">{userProfile?.role || 'Equipo de fotografia'}</p>
+              <p className="text-white/50 text-sm mt-1">{userProfile?.email || 'Sin correo registrado'}</p>
             </div>
           </div>
           
@@ -1199,7 +1200,9 @@ function CartItem({ item, onUpdateQuantity, onRemove }) {
 // Custom Select Component
 function CustomSelect({ label, value, onChange, options, placeholder }) {
   const [isOpen, setIsOpen] = useState(false);
-  
+  const selectedOption = options.find((option) => option.value === value);
+  const displayValue = selectedOption?.label || value || placeholder;
+
   return (
     <div className="relative">
       <label className="block text-white/60 text-xs mb-1.5">{label}</label>
@@ -1210,8 +1213,8 @@ function CustomSelect({ label, value, onChange, options, placeholder }) {
                    hover:bg-black/35 transition-colors focus:outline-none focus:ring-2 
                    focus:ring-[#EF4444]/30"
       >
-        <span className={value ? 'text-white' : 'text-white/60/60'}>
-          {value || placeholder}
+        <span className={selectedOption || value ? 'text-white' : 'text-white/60/60'}>
+          {displayValue}
         </span>
         <ChevronDown className={`w-4 h-4 text-white/60 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
@@ -1621,19 +1624,19 @@ export default function BillingPage() {
   const [currency, setCurrency] = useState('USD');
   const [products, setProducts] = useState(DEFAULT_PRODUCTS);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [billingUserName, setBillingUserName] = useState('');
+  const [dashboardUser, setDashboardUser] = useState(null);
   const [activityFeed, setActivityFeed] = useState([]);
 
-  // Read user from session
   useEffect(() => {
-    try {
-      const session = JSON.parse(sessionStorage.getItem('macao_auth_session') || 'null');
-      if (session && session.active) setBillingUserName(session.name);
-    } catch {}
+    getDashboardSession().then((session) => {
+      if (session?.active) {
+        setDashboardUser(session);
+      }
+    });
   }, []);
 
-  const handleBillingLogout = () => {
-    sessionStorage.removeItem('macao_auth_session');
+  const handleBillingLogout = async () => {
+    await clearDashboardSession();
     window.location.reload();
   };
 
@@ -1898,11 +1901,11 @@ export default function BillingPage() {
         </nav>
 
         {/* User badge + Logout at bottom of sidebar */}
-        {billingUserName && (
+        {dashboardUser?.name && (
           <div className="flex flex-col items-center gap-2 pb-4">
             <div className="text-[9px] text-white/60 flex items-center gap-1">
               <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              <span className="hidden lg:inline">{billingUserName}</span>
+              <span className="hidden lg:inline">{dashboardUser.name}</span>
             </div>
             <button
               onClick={handleBillingLogout}
@@ -2209,7 +2212,7 @@ export default function BillingPage() {
 
       {activeTab === 'usuario' && (
         <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
-          <UsuarioPanel activities={activityFeed} />
+          <UsuarioPanel activities={activityFeed} userProfile={dashboardUser} />
         </main>
       )}
 

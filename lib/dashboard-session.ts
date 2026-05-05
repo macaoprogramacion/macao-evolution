@@ -6,6 +6,8 @@ export type DashboardSession = {
   role: string;
   avatar_url?: string | null;
   active: boolean;
+  issuedAt?: string;
+  expiresAt?: string;
 };
 
 const DASHBOARD_EVENT = "macao-dashboard-session-changed";

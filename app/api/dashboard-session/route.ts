@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 const COOKIE_NAME = "macao_dashboard_session";
-const MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+const MAX_AGE_SECONDS = 60 * 60 * 24;
 
 type DashboardSession = {
   id: string;
@@ -13,6 +13,8 @@ type DashboardSession = {
   role: string;
   avatar_url?: string | null;
   active: boolean;
+  issuedAt: string;
+  expiresAt: string;
 };
 
 function getSecret() {
@@ -40,7 +42,10 @@ function decodeSession(token: string): DashboardSession | null {
 
   try {
     const parsed = JSON.parse(Buffer.from(payloadBase64, "base64url").toString("utf8")) as DashboardSession;
-    if (!parsed?.id || !parsed?.role || !parsed?.name || !parsed?.active) return null;
+    if (!parsed?.id || !parsed?.role || !parsed?.name || parsed?.active !== true) return null;
+    if (!parsed?.issuedAt || !parsed?.expiresAt) return null;
+    const expiresAt = new Date(parsed.expiresAt).getTime();
+    if (!Number.isFinite(expiresAt) || Date.now() > expiresAt) return null;
     return parsed;
   } catch {
     return null;
@@ -69,20 +74,37 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as { session?: DashboardSession } | null;
+  const body = (await request.json().catch(() => null)) as { session?: Partial<DashboardSession> } | null;
   const session = body?.session;
   if (!session?.id || !session?.name || !session?.role) {
     return NextResponse.json({ ok: false, error: "invalid_session" }, { status: 400 });
   }
 
+  const issuedAt = new Date();
+  const expiresAt = new Date(issuedAt.getTime() + MAX_AGE_SECONDS * 1000);
+
   const response = NextResponse.json({ ok: true });
-  response.cookies.set(COOKIE_NAME, encodeSession({ ...session, active: true }), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: MAX_AGE_SECONDS,
-  });
+  response.cookies.set(
+    COOKIE_NAME,
+    encodeSession({
+      id: session.id,
+      name: session.name,
+      email: session.email,
+      phone: session.phone,
+      role: session.role,
+      avatar_url: session.avatar_url ?? null,
+      active: true,
+      issuedAt: issuedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    }),
+    {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: MAX_AGE_SECONDS,
+    },
+  );
   return response;
 }
 
