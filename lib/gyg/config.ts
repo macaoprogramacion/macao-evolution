@@ -21,8 +21,9 @@ export function authenticate(req: NextApiRequest): boolean {
 
   const user = decoded.slice(0, idx)
   const pass = decoded.slice(idx + 1)
-  const expectedUser = process.env.GYG_USER ?? ""
-  const expectedPass = process.env.GYG_PASSWORD ?? ""
+  // Support both env naming schemes used across this project.
+  const expectedUser = (process.env.GYG_USER || process.env.GYG_API_USER || "").trim()
+  const expectedPass = (process.env.GYG_PASSWORD || process.env.GYG_API_PASSWORD || "").trim()
 
   if (!expectedUser || !expectedPass) return false
   return safeEqual(user, expectedUser) && safeEqual(pass, expectedPass)
