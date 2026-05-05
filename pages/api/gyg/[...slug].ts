@@ -38,7 +38,16 @@ const routeMap: Record<string, (req: NextApiRequest, res: NextApiResponse) => Pr
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader("Content-Type", "application/json")
+  try {
+    return await _handler(req, res)
+  } catch (err: any) {
+    if (!res.headersSent) {
+      return res.status(200).json(gygError("INTERNAL_SYSTEM_FAILURE", err?.message || "Unexpected server error."))
+    }
+  }
+}
 
+async function _handler(req: NextApiRequest, res: NextApiResponse) {
   if (!authenticate(req)) {
     return res.status(200).json(authError())
   }

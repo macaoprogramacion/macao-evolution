@@ -48,12 +48,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const fromDate = from.toISOString().split("T")[0]
     const toDate = to.toISOString().split("T")[0]
 
-    const { data: manualOverrides, error: overridesError } = await supabase
-      .from("gyg_availability_overrides")
-      .select("date, manual_vacancies, is_blocked")
-      .eq("product_id", productId)
-      .gte("date", fromDate)
-      .lte("date", toDate)
+    // Run all 3 Supabase queries in parallel to minimize latency
+    const now = new Date().toISOString()
+    const [overridesResult, reservationsResult, holdsResult] = await Promise.all([
+      supabase
+        .from("gyg_availability_overrides")
+        .select("date, manual_vacancies, is_blocked")
+        .eq("product_id", productId)
+        .gte("date", fromDate)
+        .lte("date", toDate),
+      supabase
+        .from(product.destinationTable)
+        .select("date, guests, children")
+        .gte("date", fromDate)
+        .lte("date", toDate)
+        .in("status", ["confirmed", "pending"]),
+      supabase
+        .from("gyg_reservations")
+        .select("date_time, total_participants")
+        .eq("product_id", productId)
+        .eq("status", "active")
+        .gte("expires_at", now),
+    ])
+
+    const { data: manualOverrides, error: overridesError } = overridesResult
+    const { data: existingReservations } = reservationsResult
+    const { data: activeHolds } = holdsResult
 
     // Keep integration backwards compatible if migration has not been applied yet.
     if (overridesError && !overridesError.message?.includes("gyg_availability_overrides")) {
@@ -70,13 +90,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    const { data: existingReservations } = await supabase
-      .from(product.destinationTable)
-      .select("date, guests, children")
-      .gte("date", fromDate)
-      .lte("date", toDate)
-      .in("status", ["confirmed", "pending"])
-
     // Build a map of booked guests per date
     const bookedPerDate: Record<string, number> = {}
     if (existingReservations) {
@@ -85,14 +98,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         bookedPerDate[d] = (bookedPerDate[d] || 0) + (r.guests || 0) + (r.children || 0)
       }
     }
-
-    // Also count active GYG reservations (holds) that haven't expired
-    const { data: activeHolds } = await supabase
-      .from("gyg_reservations")
-      .select("date_time, total_participants")
-      .eq("product_id", productId)
-      .eq("status", "active")
-      .gte("expires_at", new Date().toISOString())
 
     if (activeHolds) {
       for (const h of activeHolds) {
