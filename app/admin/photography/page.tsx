@@ -281,6 +281,7 @@ export default function PhotographyPage() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([])
   const [supabasePortfolios, setSupabasePortfolios] = useState<Portfolio[]>([])
   const [supabaseInvoices, setSupabaseInvoices] = useState<Invoice[]>([])
+  const [localInvoices, setLocalInvoices] = useState<Invoice[]>([])
   const [supabaseReturns, setSupabaseReturns] = useState<Return[]>([])
   const [dailyClosures, setDailyClosures] = useState<DailyClosure[]>([])
   const [activeTab, setActiveTab] = useState("overview")
@@ -294,6 +295,36 @@ export default function PhotographyPage() {
 
   // ─── Load data ──────────────────────────────────────────────────
   useEffect(() => {
+    function loadLocalBillingInvoices() {
+      if (typeof window === "undefined") return
+      try {
+        const raw = localStorage.getItem("macao_billing_invoices")
+        const parsed = raw ? JSON.parse(raw) : []
+        if (!Array.isArray(parsed)) return
+
+        const mapped: Invoice[] = parsed.map((inv: any) => ({
+          id: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          clientName: inv.clientName || "Cliente General",
+          clientPhone: inv.clientPhone,
+          turno: inv.turno,
+          photographer: inv.photographer,
+          items: Array.isArray(inv.items) ? inv.items : [],
+          subtotal: Number.parseFloat(inv.subtotal) || 0,
+          tax: Number.parseFloat(inv.tax) || 0,
+          total: Number.parseFloat(inv.total) || 0,
+          currency: inv.currency || "USD",
+          status: inv.status || "active",
+          date: inv.date || fmtDate(inv.timestamp),
+          timestamp: inv.timestamp || "",
+        }))
+
+        setLocalInvoices(mapped)
+      } catch {
+        setLocalInvoices([])
+      }
+    }
+
     // Supabase data
     async function fetchSupabase() {
       try {
@@ -376,12 +407,21 @@ export default function PhotographyPage() {
       }
     }
 
+    loadLocalBillingInvoices()
     fetchSupabase()
     fetchPortfoliosFromApi()
     fetchPricing()
 
-    const interval = setInterval(fetchPortfoliosFromApi, 12000)
-    return () => clearInterval(interval)
+    const portfoliosInterval = setInterval(fetchPortfoliosFromApi, 12000)
+    const invoicesInterval = setInterval(() => {
+      loadLocalBillingInvoices()
+      fetchSupabase()
+    }, 12000)
+
+    return () => {
+      clearInterval(portfoliosInterval)
+      clearInterval(invoicesInterval)
+    }
   }, [])
 
   async function fetchPricing() {
@@ -474,8 +514,22 @@ export default function PhotographyPage() {
 
   // ─── Merge data: prefer Supabase, fallback to localStorage ────
   const allInvoices = useMemo(() => {
-    return supabaseInvoices
-  }, [supabaseInvoices])
+    const merged = new Map<string, Invoice>()
+
+    for (const inv of localInvoices) {
+      if (inv?.invoiceNumber) merged.set(inv.invoiceNumber, inv)
+    }
+
+    for (const inv of supabaseInvoices) {
+      if (inv?.invoiceNumber) merged.set(inv.invoiceNumber, inv)
+    }
+
+    return Array.from(merged.values()).sort((a, b) => {
+      const aTs = parseSafeDate(a.timestamp)?.getTime() ?? 0
+      const bTs = parseSafeDate(b.timestamp)?.getTime() ?? 0
+      return bTs - aTs
+    })
+  }, [supabaseInvoices, localInvoices])
 
   const allReturns = useMemo(() => {
     return supabaseReturns

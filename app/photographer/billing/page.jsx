@@ -1749,6 +1749,9 @@ export default function BillingPage() {
     }
     
     const invoiceNum = formatInvoiceNumber(nextInvoiceNum);
+    const now = new Date();
+    const isoTimestamp = now.toISOString();
+    const localDate = now.toLocaleDateString('es-DO');
     const itemsList = cart.map(item => ({
       id: item.id,
       name: item.name,
@@ -1763,13 +1766,13 @@ export default function BillingPage() {
     const newInvoice = {
       id: `inv_${Date.now()}`,
       invoiceNumber: invoiceNum,
-      timestamp: new Date().toISOString(),
+      timestamp: isoTimestamp,
       clientName: clientName || 'Cliente General',
       clientPhone: clientPhone,
       turno: turno || 'Turno 9:00',
       photographer: photographerName,
       source: 'billing',
-      date: new Date().toLocaleDateString('es-DO'),
+      date: localDate,
       items: itemsList,
       subtotal: subtotal,
       tax: tax,
@@ -1777,25 +1780,27 @@ export default function BillingPage() {
       currency: currency,
       status: 'active',
     };
-    
-    // Save to Supabase (non-blocking — localStorage is the primary store)
-    supabase.from('photo_invoices').insert({
+
+    // Save to Supabase first, keep local fallback even if it fails.
+    const { error: supabaseInsertError } = await supabase.from('photo_invoices').insert({
       invoice_number: invoiceNum,
       client_name: clientName || 'Cliente General',
       client_phone: clientPhone || null,
       turno: turno || 'Turno 9:00',
       photographer: photographerName,
       source: 'billing',
-      date: new Date().toLocaleDateString('es-DO'),
+      date: localDate,
       items: itemsList,
       subtotal,
       tax,
       total,
       currency: currency,
       status: 'active',
-    }).then(({ error }) => {
-      if (error) console.warn('Supabase insert error (offline fallback active):', error.message);
     });
+
+    if (supabaseInsertError) {
+      console.warn('Supabase insert error (offline fallback active):', supabaseInsertError.message);
+    }
 
     // Also save to localStorage (offline fallback)
     const updatedInvoices = [...invoices, newInvoice];
