@@ -48,7 +48,7 @@ const representatives = [
     company: "Excursiones Punta Cana",
     type: "Tour Operador",
     initials: "CM",
-    color: "bg-gray-200 text-gray-900",
+    color: "bg-gray-200 text-gray-900 dark:text-gray-900",
     totalBookings: 87,
     totalRevenue: 12480,
     avgTicket: 143,
@@ -173,7 +173,7 @@ export default function RepresentativesAnalyticsPage() {
       <div className="space-y-4 md:space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900">Representantes — Analytics</h1>
+          <h1 className="text-2xl md:text-3xl font-title text-gray-900 dark:text-gray-100">Representantes — Analytics</h1>
           <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">
             Rendimiento de ventas por representantes. Gestión de reservas en{" "}
             <a
@@ -191,8 +191,8 @@ export default function RepresentativesAnalyticsPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Total Reservas (Reps)</p>
-                  <p className="text-2xl font-bold text-gray-900">{totals.totalBookings}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Total Reservas (Reps)</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{totals.totalBookings}</p>
                 </div>
                 <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
                   <Handshake className="w-6 h-6 text-red-600" />
@@ -205,8 +205,8 @@ export default function RepresentativesAnalyticsPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Ingresos por Reps</p>
-                  <p className="text-2xl font-bold text-gray-900">${totals.totalRevenue.toLocaleString()}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Ingresos por Reps</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">${totals.totalRevenue.toLocaleString()}</p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <DollarSign className="w-6 h-6 text-green-600" />
@@ -219,7 +219,7 @@ export default function RepresentativesAnalyticsPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Saldo Pendiente</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Saldo Pendiente</p>
                   <p className="text-2xl font-bold text-red-600">${totals.totalPending.toLocaleString()}</p>
                 </div>
                 <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
@@ -233,11 +233,11 @@ export default function RepresentativesAnalyticsPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Representantes</p>
-                  <p className="text-2xl font-bold text-gray-900">{totals.activeReps}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Representantes</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{totals.activeReps}</p>
                 </div>
                 <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                  <Users className="w-6 h-6 text-gray-800" />
+                  <Users className="w-6 h-6 text-gray-800 dark:text-gray-800" />
                 </div>
               </div>
             </CardContent>
@@ -413,7 +413,7 @@ export default function RepresentativesAnalyticsPage() {
           <Card className="border-gray-200">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Hotel className="w-4 h-4 text-gray-900" />
+                <Hotel className="w-4 h-4 text-gray-900 dark:text-gray-100" />
                 Hoteles Top (Reps)
               </CardTitle>
               <CardDescription>Hoteles con más reservas de reps</CardDescription>

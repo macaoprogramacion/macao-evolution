@@ -209,7 +209,7 @@ export default function WorkflowsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-title text-gray-900">Automatizaciones</h1>
+            <h1 className="text-2xl font-title text-gray-900 dark:text-gray-100">Automatizaciones</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">Gestiona y personaliza tus workflows automaticos</p>
           </div>
           <div className="flex items-center gap-3">
@@ -308,7 +308,7 @@ export default function WorkflowsPage() {
               className="pl-10"
             />
           </div>
-          <div className="flex items-center gap-6 text-sm text-gray-600">
+          <div className="flex items-center gap-6 text-sm text-gray-600 dark:text-gray-300">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
               <span>{activeCount} Activos</span>
@@ -351,7 +351,7 @@ export default function WorkflowsPage() {
                         {workflow.status === "active" ? "Activo" : workflow.status === "paused" ? "Pausado" : "Error"}
                       </Badge>
                       {workflow.notifications && (
-                        <Badge variant="secondary" className="bg-gray-200 text-gray-900">
+                        <Badge variant="secondary" className="bg-gray-200 text-gray-900 dark:text-gray-900">
                           <Bell className="w-3 h-3 mr-1" />
                           Notificaciones
                         </Badge>
@@ -362,15 +362,15 @@ export default function WorkflowsPage() {
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm mb-4">
                       <div>
                         <span className="text-gray-500 dark:text-gray-400 block mb-1">Última Ejecución</span>
-                        <div className="font-medium text-gray-900">{workflow.lastRun}</div>
+                        <div className="font-medium text-gray-900 dark:text-gray-100">{workflow.lastRun}</div>
                       </div>
                       <div>
                         <span className="text-gray-500 dark:text-gray-400 block mb-1">Próxima Ejecución</span>
-                        <div className="font-medium text-gray-900">{workflow.nextRun}</div>
+                        <div className="font-medium text-gray-900 dark:text-gray-100">{workflow.nextRun}</div>
                       </div>
                       <div>
                         <span className="text-gray-500 dark:text-gray-400 block mb-1">Ejecuciones</span>
-                        <div className="font-medium text-gray-900">{workflow.runs}</div>
+                        <div className="font-medium text-gray-900 dark:text-gray-100">{workflow.runs}</div>
                       </div>
                       <div>
                         <span className="text-gray-500 dark:text-gray-400 block mb-1">Tasa de Éxito</span>
@@ -378,16 +378,16 @@ export default function WorkflowsPage() {
                       </div>
                       <div>
                         <span className="text-gray-500 dark:text-gray-400 block mb-1">Duración Promedio</span>
-                        <div className="font-medium text-gray-900">{workflow.avgDuration}</div>
+                        <div className="font-medium text-gray-900 dark:text-gray-100">{workflow.avgDuration}</div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4 text-sm">
-                      <div className="flex items-center gap-2 text-gray-600">
+                      <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
                         <Clock className="w-4 h-4 text-red-500" />
                         <span className="font-medium">Disparador:</span> {workflow.trigger}
                       </div>
-                      <div className="flex items-center gap-2 text-gray-600">
+                      <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
                         <Zap className="w-4 h-4 text-red-500" />
                         <span className="font-medium">Acciones:</span> {workflow.actions.join(", ")}
                       </div>
@@ -480,7 +480,7 @@ export default function WorkflowsPage() {
               Los workflows te permiten automatizar tareas repetitivas y mejorar la experiencia de tus clientes. 
               Crea workflows personalizados para:
             </p>
-            <ul className="space-y-2 text-gray-700">
+            <ul className="space-y-2 text-gray-700 dark:text-gray-300">
               <li className="flex items-start gap-2">
                 <Mail className="w-4 h-4 text-red-600 mt-1" />
                 <span>Enviar confirmaciones y recordatorios automáticos</span>

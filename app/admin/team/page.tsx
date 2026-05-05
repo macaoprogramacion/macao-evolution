@@ -62,7 +62,7 @@ const positions = [
 
 // Colores para badges de posiciones
 const positionColors: { [key: string]: string } = {
-  "atencion-cliente": "bg-gray-200 text-gray-900",
+  "atencion-cliente": "bg-gray-200 text-gray-900 dark:text-gray-900",
   "ventas": "bg-green-100 text-green-700",
   "fotografo": "bg-red-100 text-red-700",
   "cajero-fotografia": "bg-yellow-100 text-yellow-700",
@@ -252,7 +252,7 @@ export default function TeamPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl md:text-3xl font-title text-gray-900">Equipo</h1>
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900 dark:text-gray-100">Equipo</h1>
             <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">Gestión de usuarios y miembros del equipo</p>
           </div>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -321,7 +321,7 @@ export default function TeamPage() {
           <Card className="border-gray-200">
             <CardContent className="pt-6">
               <div className="text-center">
-                <p className="text-sm text-gray-600">Total Miembros</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Total Miembros</p>
                 <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-2">{stats.total}</p>
               </div>
             </CardContent>
@@ -330,7 +330,7 @@ export default function TeamPage() {
           <Card className="border-gray-200">
             <CardContent className="pt-6">
               <div className="text-center">
-                <p className="text-sm text-gray-600">Activos</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Activos</p>
                 <p className="text-3xl font-bold text-green-600 mt-2">{stats.active}</p>
               </div>
             </CardContent>
@@ -344,8 +344,8 @@ export default function TeamPage() {
                     key={stat.label}
                     className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-900 rounded-lg"
                   >
-                    <span className="text-sm text-gray-600">{stat.label}:</span>
-                    <span className="text-sm font-semibold text-gray-900">{stat.count}</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">{stat.label}:</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{stat.count}</span>
                   </div>
                 ))}
               </div>
@@ -409,18 +409,18 @@ export default function TeamPage() {
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <div className="font-medium text-gray-900">{member.name}</div>
+                            <div className="font-medium text-gray-900 dark:text-gray-100">{member.name}</div>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                           <Phone className="w-4 h-4" />
                           {member.phone}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                           <Mail className="w-4 h-4" />
                           {member.email}
                         </div>
@@ -441,7 +441,7 @@ export default function TeamPage() {
                           {member.status === "active" ? "Activo" : "Inactivo"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm text-gray-600">
+                      <TableCell className="text-sm text-gray-600 dark:text-gray-300">
                         {new Date(member.joinDate).toLocaleDateString("es-ES", {
                           year: "numeric",
                           month: "short",

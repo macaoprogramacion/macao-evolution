@@ -242,7 +242,7 @@ export default function UsersPage() {
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Gestión de Usuarios</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100">Gestión de Usuarios</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Administra los usuarios con acceso a Billing y Photographer Dashboard
             </p>
@@ -268,7 +268,7 @@ export default function UsersPage() {
                   <Users className="w-5 h-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.total}</p>
                   <p className="text-xs text-gray-500">Total Usuarios</p>
                 </div>
               </div>
@@ -281,7 +281,7 @@ export default function UsersPage() {
                   <CheckCircle className="w-5 h-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.active}</p>
                   <p className="text-xs text-gray-500">Activos</p>
                 </div>
               </div>
@@ -294,7 +294,7 @@ export default function UsersPage() {
                   <DollarSign className="w-5 h-5 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900">{stats.billing}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.billing}</p>
                   <p className="text-xs text-gray-500">Acceso Billing</p>
                 </div>
               </div>
@@ -307,7 +307,7 @@ export default function UsersPage() {
                   <Camera className="w-5 h-5 text-violet-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900">{stats.photographer}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.photographer}</p>
                   <p className="text-xs text-gray-500">Acceso Photographer</p>
                 </div>
               </div>
@@ -407,7 +407,7 @@ export default function UsersPage() {
                         </TableCell>
                         <TableCell>
                           <div className="text-sm">
-                            <p className="text-gray-700">{user.email || "—"}</p>
+                            <p className="text-gray-700 dark:text-gray-300">{user.email || "—"}</p>
                             <p className="text-xs text-gray-400">{user.phone || "—"}</p>
                           </div>
                         </TableCell>
@@ -730,7 +730,7 @@ export default function UsersPage() {
           <div className="py-4 text-center">
             <div className="inline-flex items-center gap-2 bg-gray-50 dark:bg-gray-900 rounded-lg px-6 py-4 border">
               <KeyRound className="w-5 h-5 text-gray-400" />
-              <span className="font-mono text-3xl tracking-[0.3em] text-gray-900">
+              <span className="font-mono text-3xl tracking-[0.3em] text-gray-900 dark:text-gray-100">
                 {showPin ? formData.pin : "••••"}
               </span>
               <button
