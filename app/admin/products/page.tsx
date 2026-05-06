@@ -426,7 +426,7 @@ export default function ProductsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl md:text-3xl font-title whitespace-nowrap text-gray-900">Gestion de Productos</h1>
+            <h1 className="text-xl md:text-3xl font-title whitespace-nowrap text-gray-900 dark:text-gray-100">Gestion de Productos</h1>
             <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">
               Administra precios, ofertas y fotos de tus experiencias
             </p>
@@ -455,8 +455,8 @@ export default function ProductsPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Total Productos</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Total Productos</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.total}</p>
                 </div>
                 <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
                   <ImageIcon className="w-6 h-6 text-red-600" />
@@ -469,7 +469,7 @@ export default function ProductsPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Activos</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Activos</p>
                   <p className="text-2xl font-bold text-green-600">{stats.active}</p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -483,7 +483,7 @@ export default function ProductsPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Con Oferta</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Con Oferta</p>
                   <p className="text-2xl font-bold text-red-600">{stats.withDiscount}</p>
                 </div>
                 <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
@@ -497,8 +497,8 @@ export default function ProductsPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Valor Total</p>
-                  <p className="text-2xl font-bold text-gray-900">${stats.totalRevenue}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Valor Total</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">${stats.totalRevenue}</p>
                 </div>
                 <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
                   <DollarSign className="w-6 h-6 text-gray-800" />
@@ -602,7 +602,7 @@ export default function ProductsPage() {
                             </div>
                           </div>
                           <div>
-                            <div className="font-medium text-gray-900">{product.name}</div>
+                            <div className="font-medium text-gray-900 dark:text-gray-100">{product.name}</div>
                             <div className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1">{product.description}</div>
                           </div>
                         </div>
@@ -623,7 +623,7 @@ export default function ProductsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <span className="text-lg font-semibold text-gray-900">${product.price}</span>
+                          <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">${product.price}</span>
                           {product.hasDiscount && product.originalPrice && (
                             <span className="text-sm text-gray-500 dark:text-gray-400 line-through">${product.originalPrice}</span>
                           )}
@@ -645,7 +645,7 @@ export default function ProductsPage() {
                             checked={product.active}
                             onCheckedChange={() => handleToggleActive(product.id)}
                           />
-                          <span className="text-sm text-gray-600">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
                             {product.active ? "Activo" : "Inactivo"}
                           </span>
                         </div>
@@ -681,7 +681,7 @@ export default function ProductsPage() {
                 <div className="text-gray-400 mb-2">
                   <Search className="w-12 h-12 mx-auto" />
                 </div>
-                <p className="text-gray-600">No se encontraron productos</p>
+                <p className="text-gray-600 dark:text-gray-400">No se encontraron productos</p>
               </div>
             )}
           </CardContent>
@@ -767,7 +767,7 @@ export default function ProductsPage() {
               </div>
 
               <div className="border-t pt-4 space-y-4">
-                <h3 className="font-semibold text-gray-900">Precios</h3>
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100">Precios</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="edit-price">Precio Actual ($)</Label>
@@ -797,7 +797,7 @@ export default function ProductsPage() {
                     <Label htmlFor="has-discount" className="font-medium">
                       Activar Oferta
                     </Label>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
                       Mostrar precio con descuento en el sitio web
                     </p>
                   </div>
@@ -830,7 +830,7 @@ export default function ProductsPage() {
               </div>
 
               <div className="border-t pt-4 space-y-4">
-                <h3 className="font-semibold text-gray-900">Imagen Principal</h3>
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100">Imagen Principal</h3>
                 <div className="space-y-2">
                   <Label htmlFor="edit-image">URL de la Imagen</Label>
                   <Input

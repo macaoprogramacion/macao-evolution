@@ -270,10 +270,10 @@ export default function SamanaAvailabilityPage() {
           </div>
         </div>
 
-        <Card className="border-gray-200">
+        <Card className="border-gray-200 dark:border-gray-800">
           <CardHeader>
-            <CardTitle className="text-lg">Buscar disponibilidad</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-lg text-gray-900 dark:text-gray-100">Buscar disponibilidad</CardTitle>
+            <CardDescription className="text-gray-600 dark:text-gray-400">
               Filtra por fecha o por texto para ubicar rapido el dia que quieres editar.
             </CardDescription>
           </CardHeader>
@@ -292,7 +292,7 @@ export default function SamanaAvailabilityPage() {
             </div>
             {selectedDate && (
               <div className="mt-3">
-                <Button variant="ghost" size="sm" onClick={() => setSelectedDate("")}>Limpiar fecha</Button>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedDate("")} className="text-gray-700 dark:text-gray-300">Limpiar fecha</Button>
               </div>
             )}
           </CardContent>
@@ -301,16 +301,16 @@ export default function SamanaAvailabilityPage() {
         {availabilityMessage && (
           <div className={`rounded-lg px-3 py-2 text-sm font-medium ${
             availabilityMessage.includes("Error") || availabilityMessage.includes("No se pudo") || availabilityMessage.includes("Falta")
-              ? "bg-red-50 text-red-700"
-              : "bg-green-50 text-green-700"
+              ? "bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300"
+              : "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300"
           }`}>
             {availabilityMessage}
           </div>
         )}
 
         {availabilityLoading ? (
-          <Card className="border-gray-200">
-            <CardContent className="pt-6 flex items-center gap-2 text-sm text-gray-600">
+          <Card className="border-gray-200 dark:border-gray-800">
+            <CardContent className="pt-6 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
               <Loader2 className="w-4 h-4 animate-spin" />
               Cargando disponibilidad...
             </CardContent>
@@ -320,12 +320,12 @@ export default function SamanaAvailabilityPage() {
             {filteredRows.map((row) => {
               const isSaving = availabilitySavingDate === row.date
               return (
-                <Card key={row.date} className="border-gray-200">
+                <Card key={row.date} className="border-gray-200 dark:border-gray-800">
                   <CardContent className="pt-5">
                     <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                       <div className="space-y-2">
-                        <p className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-gray-500" />
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                           {new Date(row.date + "T12:00:00").toLocaleDateString("es-DO", {
                             weekday: "long",
                             day: "2-digit",
@@ -333,8 +333,8 @@ export default function SamanaAvailabilityPage() {
                             year: "numeric",
                           })}
                         </p>
-                        <p className="text-sm font-medium text-gray-800">{SAMANA_PRODUCT_NAME}</p>
-                        <p className="text-xs text-gray-500 flex items-center gap-1">
+                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{SAMANA_PRODUCT_NAME}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5" />
                           Salida {SAMANA_DEPARTURE_TIME} | Cut-off {SAMANA_CUTOFF_HOURS} horas
                         </p>
@@ -349,9 +349,9 @@ export default function SamanaAvailabilityPage() {
 
                     <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
                       <div className="lg:col-span-4 flex flex-wrap gap-2">
-                        <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">Disponibilidad {row.available} / {(row.manualCapacity ?? row.baseCapacity)} participantes</Badge>
-                        <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">Reservado {row.booked}</Badge>
-                        <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">Holds {row.holds}</Badge>
+                        <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800">Disponibilidad {row.available} / {(row.manualCapacity ?? row.baseCapacity)} participantes</Badge>
+                        <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 dark:bg-orange-950/40 dark:text-orange-300 dark:hover:bg-orange-950/40">Reservado {row.booked}</Badge>
+                        <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100 dark:bg-yellow-950/40 dark:text-yellow-300 dark:hover:bg-yellow-950/40">Holds {row.holds}</Badge>
                       </div>
 
                       <div className="lg:col-span-3">
@@ -364,8 +364,8 @@ export default function SamanaAvailabilityPage() {
                         />
                       </div>
 
-                      <div className="lg:col-span-3 flex items-center gap-3 rounded-md border border-gray-200 px-3 py-2">
-                        <Label htmlFor={`block-${row.date}`} className="text-sm text-gray-700">Block</Label>
+                      <div className="lg:col-span-3 flex items-center gap-3 rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2">
+                        <Label htmlFor={`block-${row.date}`} className="text-sm text-gray-700 dark:text-gray-300">Block</Label>
                         <Switch
                           id={`block-${row.date}`}
                           checked={row.isBlocked}
@@ -373,9 +373,9 @@ export default function SamanaAvailabilityPage() {
                           disabled={isSaving}
                         />
                         {row.isBlocked ? (
-                          <span className="text-xs text-red-600 flex items-center gap-1"><Lock className="w-3.5 h-3.5" />Bloqueado</span>
+                          <span className="text-xs text-red-600 dark:text-red-300 flex items-center gap-1"><Lock className="w-3.5 h-3.5" />Bloqueado</span>
                         ) : (
-                          <span className="text-xs text-gray-500 flex items-center gap-1"><Unlock className="w-3.5 h-3.5" />Activo</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1"><Unlock className="w-3.5 h-3.5" />Activo</span>
                         )}
                       </div>
 
@@ -392,8 +392,8 @@ export default function SamanaAvailabilityPage() {
             })}
 
             {filteredRows.length === 0 && (
-              <Card className="border-gray-200">
-                <CardContent className="pt-6 text-sm text-gray-600">No hay resultados para los filtros actuales.</CardContent>
+              <Card className="border-gray-200 dark:border-gray-800">
+                <CardContent className="pt-6 text-sm text-gray-600 dark:text-gray-400">No hay resultados para los filtros actuales.</CardContent>
               </Card>
             )}
           </div>

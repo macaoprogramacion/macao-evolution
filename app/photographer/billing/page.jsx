@@ -35,9 +35,12 @@ import {
   Printer,
   ClipboardList,
   Sun,
+  Lock,
+  Send,
 } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
+import { saveDailyClosure } from '@/lib/photography-db';
 import { clearDashboardSession, getDashboardSession } from '@/lib/dashboard-session';
 import {
   getInvoices as getStoredInvoices,
@@ -726,9 +729,107 @@ function CierreTurnoPanel({ invoices }) {
 }
 
 // ─── Cierre del Dia Panel ────────────────────────────────────────
-function CierreDiaPanel({ invoices }) {
+function CierreDiaPanel({ invoices, pendingDays = [], dashboardUser, onCierreSent }) {
   const todayStr = new Date().toLocaleDateString('es-DO');
+  const todayISO = new Date().toISOString().slice(0, 10);
   const returns = getReturns();
+
+  // Date selection — today or any pending past day
+  const [selectedDateISO, setSelectedDateISO] = useState(
+    pendingDays.length > 0 ? pendingDays[0] : todayISO
+  );
+  const isToday = selectedDateISO === todayISO;
+  const [pastDayInvoices, setPastDayInvoices] = useState([]);
+  const [loadingPastInvoices, setLoadingPastInvoices] = useState(false);
+  const [sendingCierre, setSendingCierre] = useState(false);
+  const [cierreMessage, setCierreMessage] = useState(null);
+
+  // Fetch invoices for past days from Supabase
+  useEffect(() => {
+    if (isToday) {
+      setPastDayInvoices([]);
+      return;
+    }
+    let cancelled = false;
+    async function fetchPastDayInvoices() {
+      setLoadingPastInvoices(true);
+      const { data, error } = await supabase
+        .from('photo_invoices')
+        .select('invoice_number, created_at, client_name, turno, currency, total, subtotal, tax')
+        .gte('created_at', `${selectedDateISO}T00:00:00.000Z`)
+        .lte('created_at', `${selectedDateISO}T23:59:59.999Z`)
+        .neq('status', 'cancelled');
+      if (!cancelled) {
+        if (!error && data) {
+          setPastDayInvoices(data.map(inv => ({
+            invoiceNumber: inv.invoice_number,
+            timestamp: inv.created_at,
+            clientName: inv.client_name,
+            turno: inv.turno,
+            currency: inv.currency || 'USD',
+            total: Number(inv.total || 0),
+            subtotal: Number(inv.subtotal || 0),
+            tax: Number(inv.tax || 0),
+          })));
+        }
+        setLoadingPastInvoices(false);
+      }
+    }
+    fetchPastDayInvoices();
+    return () => { cancelled = true; };
+  }, [selectedDateISO, isToday]);
+
+  const activeInvoices = isToday
+    ? invoices.filter(inv => new Date(inv.timestamp).toISOString().slice(0, 10) === todayISO)
+    : pastDayInvoices;
+
+  const fmtDayISO = (iso) => {
+    const d = new Date(iso + 'T12:00:00');
+    return d.toLocaleDateString('es-DO', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  // All date options: pending past days + today
+  const dateOptions = [
+    ...pendingDays.map(d => ({ value: d, label: `${fmtDayISO(d)} ⚠️ sin cierre` })),
+    { value: todayISO, label: `${fmtDayISO(todayISO)} (hoy)` },
+  ];
+
+  const handleSendCierre = async () => {
+    if (activeInvoices.length === 0) {
+      alert('No hay facturas para cerrar en este día.');
+      return;
+    }
+    setSendingCierre(true);
+    try {
+      const byCurrencyForSave = {};
+      activeInvoices.forEach(inv => {
+        const cur = inv.currency || 'USD';
+        if (!byCurrencyForSave[cur]) byCurrencyForSave[cur] = { total: 0, subtotal: 0, tax: 0, count: 0 };
+        byCurrencyForSave[cur].total += inv.total;
+        byCurrencyForSave[cur].subtotal += inv.subtotal;
+        byCurrencyForSave[cur].tax += inv.tax;
+        byCurrencyForSave[cur].count++;
+      });
+      const success = await saveDailyClosure({
+        closureDate: selectedDateISO,
+        closedBy: dashboardUser?.name || null,
+        totalInvoices: activeInvoices.length,
+        byCurrency: byCurrencyForSave,
+      });
+      if (success) {
+        setCierreMessage({ type: 'ok', text: 'Cierre enviado exitosamente al administrador.' });
+        onCierreSent?.();
+      } else {
+        setCierreMessage({ type: 'err', text: 'Error al enviar cierre. Intente de nuevo.' });
+      }
+    } catch (e) {
+      console.error('Error sending cierre:', e);
+      setCierreMessage({ type: 'err', text: 'Error inesperado al enviar cierre.' });
+    } finally {
+      setSendingCierre(false);
+      setTimeout(() => setCierreMessage(null), 6000);
+    }
+  };
 
   // Exchange rates state — cashier can edit
   const [rates, setRates] = useState(() => {
@@ -745,12 +846,12 @@ function CierreDiaPanel({ invoices }) {
     localStorage.setItem('macao_exchange_rates', JSON.stringify(newRates));
   };
 
-  // Today's invoices
-  const todayInvoices = invoices.filter(inv => inv.date === todayStr);
+  // Today's invoices (use activeInvoices which handles date selection)
+  const todayInvoices = activeInvoices;
 
   // Group by currency
   const byCurrency = {};
-  todayInvoices.forEach(inv => {
+  activeInvoices.forEach(inv => {
     const cur = inv.currency || 'USD';
     if (!byCurrency[cur]) byCurrency[cur] = { total: 0, subtotal: 0, tax: 0, count: 0 };
     byCurrency[cur].total += inv.total;
@@ -761,7 +862,7 @@ function CierreDiaPanel({ invoices }) {
 
   // Group by turno
   const byTurno = {};
-  todayInvoices.forEach(inv => {
+  activeInvoices.forEach(inv => {
     const t = inv.turno || 'Turno 9:00';
     if (!byTurno[t]) byTurno[t] = { total: 0, count: 0, currencies: {} };
     byTurno[t].total += inv.total;
@@ -795,10 +896,46 @@ function CierreDiaPanel({ invoices }) {
   return (
     <div className="flex-1 flex flex-col lg:flex-row gap-6">
       <div className="flex-1 flex flex-col">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <h1 className="font-title text-3xl lg:text-4xl text-white">Cierre del Dia</h1>
-          <p className="text-white/50 text-sm">{todayStr}</p>
+          <p className="text-white/50 text-sm">{fmtDayISO(selectedDateISO)}</p>
         </div>
+
+        {/* Date selector — today or pending past days */}
+        {dateOptions.length > 1 && (
+          <div className="mb-4 flex gap-2 flex-wrap">
+            {dateOptions.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setSelectedDateISO(opt.value)}
+                className={`px-4 py-2 rounded-2xl text-sm font-medium border transition-all ${
+                  selectedDateISO === opt.value
+                    ? 'bg-[#DC2626] text-white border-[#DC2626]'
+                    : 'bg-black/25 text-white/70 border-white/20 hover:border-white/40'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Cierre send feedback */}
+        {cierreMessage && (
+          <div className={`mb-4 px-4 py-3 rounded-2xl text-sm font-medium flex items-center gap-2 ${
+            cierreMessage.type === 'ok'
+              ? 'bg-green-500/20 border border-green-500/30 text-green-300'
+              : 'bg-red-500/20 border border-red-500/30 text-red-300'
+          }`}>
+            {cierreMessage.type === 'ok' ? <CheckCircle className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+            {cierreMessage.text}
+          </div>
+        )}
+
+        {/* Loading past invoices */}
+        {loadingPastInvoices && (
+          <div className="mb-4 text-white/60 text-sm text-center py-4">Cargando facturas del día...</div>
+        )}
 
         {/* Exchange Rate Config */}
         <motion.div
@@ -1029,6 +1166,20 @@ function CierreDiaPanel({ invoices }) {
                 }
               </p>
             </div>
+
+            {/* Send Cierre Button */}
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={handleSendCierre}
+              disabled={sendingCierre || todayInvoices.length === 0}
+              className="w-full py-3.5 rounded-2xl bg-[#DC2626] text-white font-semibold text-sm
+                        flex items-center justify-center gap-2 mt-2
+                        disabled:opacity-50 disabled:cursor-not-allowed
+                        hover:bg-[#B91C1C] transition-colors"
+            >
+              <Send className="w-4 h-4" />
+              {sendingCierre ? 'Enviando...' : 'Enviar Cierre al Administrador'}
+            </motion.button>
           </div>
         </div>
       </div>
@@ -1626,6 +1777,7 @@ export default function BillingPage() {
   const [editingProduct, setEditingProduct] = useState(null);
   const [dashboardUser, setDashboardUser] = useState(null);
   const [activityFeed, setActivityFeed] = useState([]);
+  const [pendingClosureDays, setPendingClosureDays] = useState([]);
 
   useEffect(() => {
     getDashboardSession().then((session) => {
@@ -1672,6 +1824,35 @@ export default function BillingPage() {
       }
     }
     fetchPhotographers();
+  }, []);
+
+  // Load pending closure days
+  const loadPendingClosures = async () => {
+    try {
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const [{ data: invData }, { data: closureData }] = await Promise.all([
+        supabase.from('photo_invoices').select('created_at').neq('status', 'cancelled'),
+        supabase.from('photo_daily_closures').select('closure_date'),
+      ]);
+      if (invData && closureData) {
+        const closureSet = new Set(closureData.map(c => c.closure_date));
+        const daysWithSales = new Set();
+        invData.forEach(inv => {
+          const dayKey = inv.created_at ? inv.created_at.slice(0, 10) : null;
+          if (dayKey && dayKey < todayKey) daysWithSales.add(dayKey);
+        });
+        const pending = Array.from(daysWithSales)
+          .filter(day => !closureSet.has(day))
+          .sort((a, b) => b.localeCompare(a));
+        setPendingClosureDays(pending);
+      }
+    } catch (e) {
+      console.error('Error checking pending closures:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadPendingClosures();
   }, []);
 
   useEffect(() => {
@@ -1952,6 +2133,29 @@ export default function BillingPage() {
         <>
           {/* Main Content - Products Grid */}
           <main className="relative z-10 flex-1 flex flex-col p-4 lg:p-6 overflow-hidden pb-20 lg:pb-6">
+            {/* Pending cierre warning banner */}
+            {pendingClosureDays.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 bg-yellow-500/15 border border-yellow-500/40 rounded-2xl p-4 flex items-start gap-3"
+              >
+                <Lock className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-yellow-200 font-semibold text-sm">Cierres diarios pendientes</p>
+                  <p className="text-yellow-300/80 text-xs mt-0.5">
+                    {pendingClosureDays.length} día(s) sin cierre enviado. Debes enviar el cierre antes de emitir nuevas facturas.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('cierre-dia')}
+                  className="text-xs px-3 py-1.5 bg-yellow-500/30 hover:bg-yellow-500/50 text-yellow-200 rounded-xl transition-colors whitespace-nowrap"
+                >
+                  Ir a Cierre
+                </button>
+              </motion.div>
+            )}
+
             {/* Header with Search */}
             <div className="mb-6">
               <h1 className="font-title text-2xl lg:text-4xl text-white mb-3 lg:mb-4">
@@ -2194,15 +2398,27 @@ export default function BillingPage() {
                   Cancelar
                 </motion.button>
                 <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleGenerateInvoice}
-                  className="flex-1 py-3.5 rounded-2xl bg-[#DC2626] text-white font-medium
-                            hover:bg-[#B91C1C] transition-all duration-200 shadow-lg
-                            disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={cart.length === 0}
+                  whileHover={pendingClosureDays.length === 0 && cart.length > 0 ? { scale: 1.02 } : {}}
+                  whileTap={pendingClosureDays.length === 0 && cart.length > 0 ? { scale: 0.98 } : {}}
+                  onClick={pendingClosureDays.length === 0 ? handleGenerateInvoice : () => setActiveTab('cierre-dia')}
+                  className="flex-1 py-3.5 rounded-2xl font-medium transition-all duration-200 shadow-lg
+                            disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2
+                            text-white"
+                  style={{
+                    background: pendingClosureDays.length > 0
+                      ? 'rgba(234, 179, 8, 0.4)'
+                      : cart.length === 0 ? 'rgba(220,38,38,0.5)' : '#DC2626',
+                  }}
+                  disabled={cart.length === 0 && pendingClosureDays.length === 0}
                 >
-                  Generar Factura
+                  {pendingClosureDays.length > 0 ? (
+                    <>
+                      <Lock className="w-4 h-4" />
+                      Cierre Pendiente
+                    </>
+                  ) : (
+                    'Generar Factura'
+                  )}
                 </motion.button>
               </div>
             </div>
@@ -2236,7 +2452,12 @@ export default function BillingPage() {
 
       {activeTab === 'cierre-dia' && (
         <main className="relative z-10 flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-auto">
-          <CierreDiaPanel invoices={invoices} />
+          <CierreDiaPanel
+            invoices={invoices}
+            pendingDays={pendingClosureDays}
+            dashboardUser={dashboardUser}
+            onCierreSent={loadPendingClosures}
+          />
         </main>
       )}
 

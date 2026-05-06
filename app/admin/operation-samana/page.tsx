@@ -29,6 +29,7 @@ import {
   Save,
   UserX,
   XCircle,
+  Pencil,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -379,6 +380,11 @@ export default function OperationSamanaPage() {
 
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editingReservation, setEditingReservation] = useState<SamanaReservation | null>(null)
+  const [editRes, setEditRes] = useState<NewReservationForm>(createEmptyNewReservation())
+  const [savingEdit, setSavingEdit] = useState(false)
   const [checkingSelectedDateBlocked, setCheckingSelectedDateBlocked] = useState(false)
   const [selectedDateBlocked, setSelectedDateBlocked] = useState(false)
   const [blockedReservationDates, setBlockedReservationDates] = useState<string[]>([])
@@ -506,6 +512,77 @@ export default function OperationSamanaPage() {
       console.error("Error creating reservation:", e)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const openEditDialog = (res: SamanaReservation) => {
+    setEditingReservation(res)
+    setEditRes({
+      customer_name: res.customerName,
+      phone: res.phone === "—" ? "" : res.phone,
+      email: res.email === "—" ? "" : res.email,
+      hotel: res.hotel,
+      location: res.location,
+      guests: res.guests,
+      children: res.children,
+      pickup_time: res.pickupTime,
+      tour_type: res.tourType,
+      channel: res.channel,
+      channel_url: res.channelUrl,
+      channel_color: res.channelColor,
+      date: res.date,
+      amount: res.amount ?? 0,
+      notes: res.notes,
+      lunch_included: res.lunchIncluded,
+      whale_watching: res.whaleWatching,
+      language: res.language || "en",
+    })
+    setEditDialogOpen(true)
+  }
+
+  const saveEditReservation = async () => {
+    if (!editingReservation || !editRes.customer_name || !editRes.date) return
+    setSavingEdit(true)
+    try {
+      const updatePayload = {
+        customer_name: editRes.customer_name,
+        phone: editRes.phone || null,
+        email: editRes.email || null,
+        hotel: editRes.hotel,
+        location: editRes.location,
+        guests: editRes.guests,
+        children: editRes.children,
+        pickup_time: editRes.pickup_time,
+        tour_type: editRes.tour_type,
+        channel: editRes.channel,
+        channel_url: editRes.channel_url,
+        channel_color: channelColors[editRes.channel] || editRes.channel_color || "#6b7280",
+        date: editRes.date,
+        amount: editRes.amount,
+        notes: editRes.notes,
+        lunch_included: editRes.lunch_included,
+        whale_watching: editRes.whale_watching,
+        language: editRes.language,
+        updated_at: new Date().toISOString(),
+      }
+
+      const { error } = await supabase
+        .from("samana_reservations")
+        .update(updatePayload)
+        .eq("id", editingReservation.id)
+
+      if (error) {
+        console.error("Error updating reservation:", error)
+        alert("Error al actualizar reserva: " + error.message)
+      } else {
+        await fetchReservations()
+        setEditDialogOpen(false)
+        setEditingReservation(null)
+      }
+    } catch (e) {
+      console.error("Error updating reservation:", e)
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -1474,6 +1551,15 @@ ${t.getReady} 🐋⚓
                     <Button
                       size="sm"
                       variant="outline"
+                      className="border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-500 dark:text-gray-200 dark:hover:bg-gray-800"
+                      onClick={() => openEditDialog(reservation)}
+                    >
+                      <Pencil className="w-3.5 h-3.5 mr-1" />
+                      Editar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
                       className="border-green-300 text-green-700 hover:bg-green-50"
                       onClick={() => downloadTicket(reservation)}
                     >
@@ -1796,6 +1882,156 @@ ${t.getReady} 🐋⚓
                   <Plus className="w-4 h-4 mr-2" />
                   Crear Reserva
                 </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Editar reserva */}
+      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setEditingReservation(null) }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Reserva — Samaná</DialogTitle>
+            <DialogDescription>
+              Modifica los datos de la reserva. Los cambios se guardarán en la base de datos.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Nombre del cliente *</Label>
+              <Input value={editRes.customer_name} onChange={(e) => setEditRes({ ...editRes, customer_name: e.target.value })} placeholder="John Smith" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Teléfono</Label>
+              <Input value={editRes.phone} onChange={(e) => setEditRes({ ...editRes, phone: e.target.value })} placeholder="+1 809-555-0000" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input type="email" value={editRes.email} onChange={(e) => setEditRes({ ...editRes, email: e.target.value })} placeholder="cliente@email.com" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Hotel</Label>
+              <Input value={editRes.hotel} onChange={(e) => setEditRes({ ...editRes, hotel: e.target.value })} placeholder="Hotel Las Ballenas" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Ubicación exacta de recogida</Label>
+              <Input value={editRes.location} onChange={(e) => setEditRes({ ...editRes, location: e.target.value })} placeholder="Lobby del hotel" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Fecha *</Label>
+              <Input type="date" value={editRes.date} onChange={(e) => setEditRes({ ...editRes, date: e.target.value })} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Hora de recogida</Label>
+              <Input value={editRes.pickup_time} onChange={(e) => setEditRes({ ...editRes, pickup_time: e.target.value })} placeholder="5:00 AM" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Adultos</Label>
+              <Input type="number" min={1} value={editRes.guests} onChange={(e) => setEditRes({ ...editRes, guests: parseInt(e.target.value) || 1 })} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Niños</Label>
+              <Input type="number" min={0} value={editRes.children} onChange={(e) => setEditRes({ ...editRes, children: parseInt(e.target.value) || 0 })} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Idioma del cliente</Label>
+              <Select value={editRes.language} onValueChange={(v) => setEditRes({ ...editRes, language: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {languageOptions.map((lang) => (
+                    <SelectItem key={lang.value} value={lang.value}>{lang.flag} {lang.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Tipo de tour</Label>
+              <Select value={editRes.tour_type} onValueChange={(v) => setEditRes({ ...editRes, tour_type: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="full_day">Tour Completo (Día Entero)</SelectItem>
+                  <SelectItem value="half_day">Medio Día</SelectItem>
+                  <SelectItem value="whale_only">Avistamiento de Ballenas</SelectItem>
+                  <SelectItem value="cayo_levantado">Cayo Levantado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Almuerzo incluido</Label>
+              <Select value={editRes.lunch_included ? "yes" : "no"} onValueChange={(v) => setEditRes({ ...editRes, lunch_included: v === "yes" })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="yes">Sí</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Avistamiento de ballenas</Label>
+              <Select value={editRes.whale_watching ? "yes" : "no"} onValueChange={(v) => setEditRes({ ...editRes, whale_watching: v === "yes" })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="yes">Sí</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Monto (USD)</Label>
+              <Input type="number" min={0} step={0.01} value={editRes.amount} onChange={(e) => setEditRes({ ...editRes, amount: parseFloat(e.target.value) || 0 })} placeholder="0.00" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Canal</Label>
+              <Select value={editRes.channel} onValueChange={(v) => setEditRes({ ...editRes, channel: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="website">Website</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="phone">Teléfono</SelectItem>
+                  <SelectItem value="GetYourGuide">GetYourGuide</SelectItem>
+                  <SelectItem value="Viator">Viator</SelectItem>
+                  <SelectItem value="walk_in">Walk-in</SelectItem>
+                  <SelectItem value="seller">Representante</SelectItem>
+                  <SelectItem value="ota">OTA (Viator, GYG...)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Notas</Label>
+              <Input value={editRes.notes} onChange={(e) => setEditRes({ ...editRes, notes: e.target.value })} placeholder="Información adicional..." />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={savingEdit}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={saveEditReservation}
+              disabled={!editRes.customer_name || !editRes.date || savingEdit}
+            >
+              {savingEdit ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Guardando...</>
+              ) : (
+                <><Save className="w-4 h-4 mr-2" />Guardar Cambios</>
               )}
             </Button>
           </DialogFooter>
