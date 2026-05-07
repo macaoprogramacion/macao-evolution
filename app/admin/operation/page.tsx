@@ -27,7 +27,9 @@ import {
   Ticket,
   DollarSign,
   UserX,
+  FileSpreadsheet,
 } from "lucide-react"
+import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -156,6 +158,130 @@ export default function OperationPage() {
   const [timeslotFilter, setTimeslotFilter] = useState("all")
   const [transportFilter, setTransportFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+
+  // Modal exportar recogidas
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [exportDate, setExportDate] = useState(new Date().toISOString().slice(0, 10))
+  const [exportTurno, setExportTurno] = useState("all")
+
+  // Exportar recogidas a Excel
+  const exportRecogidas = () => {
+    const toExport = reservations
+      .filter((r) => {
+        const matchDate = r.date === exportDate
+        const matchTurno = exportTurno === "all" || r.timeslot === exportTurno
+        return matchDate && matchTurno
+      })
+      .sort((a, b) => {
+        const toMin = (t: string) => {
+          const m = t.match(/(\d{1,2})(?::(\d{2}))?\s*([AP]M)/i)
+          if (!m) return 9999
+          let h = Number(m[1])
+          const min = Number(m[2] || "0")
+          const ap = m[3].toUpperCase()
+          if (ap === "PM" && h !== 12) h += 12
+          if (ap === "AM" && h === 12) h = 0
+          return h * 60 + min
+        }
+        return toMin(a.pickupTime || a.timeslot) - toMin(b.pickupTime || b.timeslot)
+      })
+
+    const dateLabel = new Date(exportDate + "T12:00:00").toLocaleDateString("es-DO", {
+      day: "numeric",
+      month: "numeric",
+      year: "numeric",
+    })
+    const turnoLabel =
+      exportTurno === "all" ? "Todos los turnos" : `Turno ${exportTurno}`
+
+    // Build HTML table styled like the reference spreadsheet
+    const rows = toExport
+      .map((r) => {
+        const isGYG =
+          /getyourguide|gyg/i.test(r.channel) ||
+          /getyourguide|gyg/i.test(r.channelUrl)
+        const bg = isGYG ? "background:#ffff00" : ""
+        const totalPax = r.guests + r.children
+        const paxStr = totalPax > 0 ? String(totalPax) : ""
+        const agencia = r.channel || ""
+        // Build vehicle/experience notes column
+        const vehicleInfo = r.experience
+          ? r.experience
+          : r.transportType && r.transportType !== "included"
+          ? r.transportType
+          : ""
+        return `<tr style="${bg}">
+          <td style="border:1px solid #999;padding:4px 8px;font-weight:700">${r.pickupTime || r.timeslot}</td>
+          <td style="border:1px solid #999;padding:4px 8px;font-style:italic;font-weight:700">${r.customerName.toUpperCase()}</td>
+          <td style="border:1px solid #999;padding:4px 8px;font-style:italic;font-weight:700">${r.hotel.toUpperCase()}</td>
+          <td style="border:1px solid #999;padding:4px 8px;text-align:center">${r.notes.match(/hab[.:]?\s*(\S+)/i)?.[1] ?? ""}</td>
+          <td style="border:1px solid #999;padding:4px 8px;font-weight:700">${agencia.toUpperCase()}</td>
+          <td style="border:1px solid #999;padding:4px 8px;text-align:right;font-weight:700">${paxStr}</td>
+          <td style="border:1px solid #999;padding:4px 8px;background:${isGYG ? "#ffff00" : "transparent"}">${vehicleInfo}</td>
+        </tr>
+        <tr><td colspan="7" style="border:none;height:6px"></td></tr>
+        <tr><td colspan="7" style="border:none;height:6px"></td></tr>`
+      })
+      .join("")
+
+    const totalPaxAll = toExport.reduce((s, r) => s + r.guests + r.children, 0)
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:x="urn:schemas-microsoft-com:office:excel"
+  xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8">
+<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+<x:Name>Recogidas</x:Name>
+<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+</head>
+<body>
+<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11px;width:100%">
+  <!-- Logo row -->
+  <tr>
+    <td colspan="7" style="padding:12px 8px;text-align:center">
+      <span style="font-size:24px;font-weight:900;color:#cc0000;letter-spacing:2px;font-family:Impact,Arial">MACAO</span>
+      <span style="font-size:10px;color:#555;display:block">OFFROAD EXPERIENCE</span>
+    </td>
+  </tr>
+  <!-- Date + title -->
+  <tr>
+    <td colspan="2" style="padding:4px 8px;font-weight:700;font-size:11px">${dateLabel}</td>
+    <td colspan="5" style="padding:4px 8px;font-weight:700;font-size:13px;color:#333">ORDEN DE RECOGIDA — ${turnoLabel}</td>
+  </tr>
+  <!-- Empty row -->
+  <tr><td colspan="7" style="height:8px"></td></tr>
+  <!-- Header -->
+  <tr style="background:#e8a000;color:#000">
+    <th style="border:1px solid #999;padding:6px 8px;font-weight:700;text-align:left">HORARIO</th>
+    <th style="border:1px solid #999;padding:6px 8px;font-weight:700;text-align:left">NOMBRE</th>
+    <th style="border:1px solid #999;padding:6px 8px;font-weight:700;text-align:left">HOTEL</th>
+    <th style="border:1px solid #999;padding:6px 8px;font-weight:700;text-align:center">HAB.</th>
+    <th style="border:1px solid #999;padding:6px 8px;font-weight:700;text-align:left">AGENCIA</th>
+    <th style="border:1px solid #999;padding:6px 8px;font-weight:700;text-align:right">PAX</th>
+    <th style="border:1px solid #999;padding:6px 8px;font-weight:700;text-align:left">NOTAS</th>
+  </tr>
+  ${rows}
+  <!-- Footer -->
+  <tr><td colspan="7" style="height:12px"></td></tr>
+  <tr>
+    <td colspan="4" style="font-size:10px;color:#555;padding:4px 8px">(OPERACIONES)</td>
+    <td colspan="3" style="font-size:10px;color:#555;padding:4px 8px;text-align:right">Total PAX: <strong>${totalPaxAll}</strong></td>
+  </tr>
+</table>
+</body></html>`
+
+    const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `recogidas-${exportDate}-${exportTurno === "all" ? "todos" : exportTurno.replace(" ", "")}.xls`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    setExportDialogOpen(false)
+  }
 
   // Modal enviar a chofer
   const [sendDialogOpen, setSendDialogOpen] = useState(false)
@@ -655,9 +781,9 @@ export default function OperationPage() {
               <Plus className="w-4 h-4 mr-2" />
               Agregar Reserva
             </Button>
-            <Button variant="outline" className="flex-1 sm:flex-none">
-              <Download className="w-4 h-4 mr-2" />
-              Exportar
+            <Button variant="outline" className="flex-1 sm:flex-none border-green-600 text-green-700 hover:bg-green-50" onClick={() => setExportDialogOpen(true)}>
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Exportar Recogidas
             </Button>
           </div>
         </div>
@@ -969,6 +1095,91 @@ export default function OperationPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal: Exportar Recogidas */}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-green-600" />
+              Exportar Recogidas
+            </DialogTitle>
+            <DialogDescription>
+              Selecciona el día y turno para generar la hoja de recogidas en Excel.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Día</Label>
+              <Input
+                type="date"
+                value={exportDate}
+                onChange={(e) => setExportDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Turno</Label>
+              <Select value={exportTurno} onValueChange={setExportTurno}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar turno" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los turnos</SelectItem>
+                  <SelectItem value="8 AM">Turno 8:00 AM</SelectItem>
+                  <SelectItem value="11 AM">Turno 11:00 AM</SelectItem>
+                  <SelectItem value="3 PM">Turno 3:00 PM</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Preview count */}
+            {(() => {
+              const count = reservations.filter(
+                (r) =>
+                  r.date === exportDate &&
+                  (exportTurno === "all" || r.timeslot === exportTurno)
+              ).length
+              const totalPax = reservations
+                .filter(
+                  (r) =>
+                    r.date === exportDate &&
+                    (exportTurno === "all" || r.timeslot === exportTurno)
+                )
+                .reduce((s, r) => s + r.guests + r.children, 0)
+              return count > 0 ? (
+                <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
+                  <span className="font-semibold">{count} reserva{count !== 1 ? "s" : ""}</span> encontradas
+                  {" — "}<span className="font-semibold">{totalPax} PAX</span> en total
+                </div>
+              ) : (
+                <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-sm text-gray-500">
+                  No hay reservas para esta selección.
+                </div>
+              )
+            })()}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExportDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={exportRecogidas}
+              disabled={
+                reservations.filter(
+                  (r) =>
+                    r.date === exportDate &&
+                    (exportTurno === "all" || r.timeslot === exportTurno)
+                ).length === 0
+              }
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Descargar Excel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal: Confirmar NO SHOW */}
       <Dialog open={!!noShowConfirmId} onOpenChange={(open) => { if (!open) setNoShowConfirmId(null) }}>
