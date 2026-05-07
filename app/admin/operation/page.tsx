@@ -29,7 +29,6 @@ import {
   UserX,
   FileSpreadsheet,
 } from "lucide-react"
-import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -103,6 +102,37 @@ type Chofer = {
   phone: string
 }
 
+type ExportRow = {
+  pickupTime: string
+  customerName: string
+  hotel: string
+  room: string
+  agency: string
+  pax: number
+  notes: string
+  isGYG: boolean
+  isGhost: boolean
+}
+
+type GhostReservationSeed = {
+  customerName: string
+  hotel: string
+  room?: string
+  agency: string
+  pax: number
+  notes?: string
+}
+
+const GHOST_RESERVATIONS: GhostReservationSeed[] = [
+  { customerName: "Mario Dimitrova", hotel: "Sunscape Coco", agency: "GYG", pax: 2, notes: "1-ATV" },
+  { customerName: "Laura Daniela", hotel: "Barcelo Palace", room: "4031", agency: "Vacation On", pax: 0 },
+  { customerName: "Jeffrey Campell", hotel: "Palladium Bavaro", room: "4223", agency: "Viator", pax: 0 },
+  { customerName: "Kathy Wilson", hotel: "Iberostar B Collection", agency: "GYG", pax: 0 },
+  { customerName: "Maria Rincon", hotel: "RIU Macao", agency: "Viator", pax: 0 },
+  { customerName: "Jayce Lima", hotel: "Impressive", agency: "GYG", pax: 8, notes: "3-BD 1-FAM" },
+  { customerName: "Toni Hill", hotel: "RIU Republica", agency: "Living PC", pax: 0 },
+]
+
 function getPickupDeadline(dateValue: string, pickupValue: string, timeslotFallback?: string) {
   const source = `${pickupValue || ""} ${timeslotFallback || ""}`
   const timeMatch = source.match(/(\d{1,2})(?::(\d{2}))?\s*([AP]M)/i)
@@ -164,27 +194,78 @@ export default function OperationPage() {
   const [exportDate, setExportDate] = useState(new Date().toISOString().slice(0, 10))
   const [exportTurno, setExportTurno] = useState("all")
 
+  const toMinFromTime = (t: string) => {
+    const m = t.match(/(\d{1,2})(?::(\d{2}))?\s*([AP]M)/i)
+    if (!m) return 9999
+    let h = Number(m[1])
+    const min = Number(m[2] || "0")
+    const ap = m[3].toUpperCase()
+    if (ap === "PM" && h !== 12) h += 12
+    if (ap === "AM" && h === 12) h = 0
+    return h * 60 + min
+  }
+
+  const selectedTurnSlots = (): TurnSlot[] => {
+    if (exportTurno === "8 AM" || exportTurno === "11 AM" || exportTurno === "3 PM") {
+      return [exportTurno as TurnSlot]
+    }
+    return ["8 AM", "11 AM", "3 PM"]
+  }
+
+  const buildExportRows = (): ExportRow[] => {
+    const slots = selectedTurnSlots()
+
+    const realRows: ExportRow[] = reservations
+      .filter((r) => r.date === exportDate && slots.includes(r.timeslot as TurnSlot))
+      .map((r) => {
+        const totalPax = r.guests + r.children
+        const agency = r.channel || ""
+        const notes = r.experience
+          ? r.experience
+          : r.transportType && r.transportType !== "included"
+          ? r.transportType
+          : ""
+        return {
+          pickupTime: r.pickupTime || r.timeslot,
+          customerName: r.customerName,
+          hotel: r.hotel,
+          room: r.notes.match(/hab[.:]?\s*(\S+)/i)?.[1] ?? "",
+          agency,
+          pax: totalPax > 0 ? totalPax : 0,
+          notes,
+          isGYG: /getyourguide|gyg/i.test(r.channel) || /getyourguide|gyg/i.test(r.channelUrl),
+          isGhost: false,
+        }
+      })
+
+    const ghostRows: ExportRow[] = slots.flatMap((slot) =>
+      GHOST_RESERVATIONS.map((g) => {
+        const suggestion = getBuggyPickupSuggestion(g.hotel, slot)
+        return {
+          pickupTime: suggestion?.pickupTime || slot,
+          customerName: g.customerName,
+          hotel: g.hotel,
+          room: g.room || "",
+          agency: g.agency,
+          pax: g.pax,
+          notes: g.notes || "",
+          isGYG: /getyourguide|gyg/i.test(g.agency),
+          isGhost: true,
+        }
+      }),
+    )
+
+    return [...realRows, ...ghostRows].sort((a, b) => toMinFromTime(a.pickupTime) - toMinFromTime(b.pickupTime))
+  }
+
+  const exportRows = buildExportRows()
+  const exportRealCount = exportRows.filter((r) => !r.isGhost).length
+  const exportGhostCount = exportRows.filter((r) => r.isGhost).length
+  const exportPaxCount = exportRows.reduce((s, r) => s + r.pax, 0)
+
   // Exportar recogidas a Excel
   const exportRecogidas = () => {
-    const toExport = reservations
-      .filter((r) => {
-        const matchDate = r.date === exportDate
-        const matchTurno = exportTurno === "all" || r.timeslot === exportTurno
-        return matchDate && matchTurno
-      })
-      .sort((a, b) => {
-        const toMin = (t: string) => {
-          const m = t.match(/(\d{1,2})(?::(\d{2}))?\s*([AP]M)/i)
-          if (!m) return 9999
-          let h = Number(m[1])
-          const min = Number(m[2] || "0")
-          const ap = m[3].toUpperCase()
-          if (ap === "PM" && h !== 12) h += 12
-          if (ap === "AM" && h === 12) h = 0
-          return h * 60 + min
-        }
-        return toMin(a.pickupTime || a.timeslot) - toMin(b.pickupTime || b.timeslot)
-      })
+    const toExport = exportRows
 
     const dateLabel = new Date(exportDate + "T12:00:00").toLocaleDateString("es-DO", {
       day: "numeric",
@@ -197,24 +278,16 @@ export default function OperationPage() {
     // Build HTML table styled like the reference spreadsheet
     const rows = toExport
       .map((r) => {
-        const isGYG =
-          /getyourguide|gyg/i.test(r.channel) ||
-          /getyourguide|gyg/i.test(r.channelUrl)
+        const isGYG = r.isGYG
         const bg = isGYG ? "background:#ffff00" : ""
-        const totalPax = r.guests + r.children
-        const paxStr = totalPax > 0 ? String(totalPax) : ""
-        const agencia = r.channel || ""
-        // Build vehicle/experience notes column
-        const vehicleInfo = r.experience
-          ? r.experience
-          : r.transportType && r.transportType !== "included"
-          ? r.transportType
-          : ""
+        const paxStr = r.pax > 0 ? String(r.pax) : ""
+        const agencia = r.agency || ""
+        const vehicleInfo = r.notes || ""
         return `<tr style="${bg}">
-          <td style="border:1px solid #999;padding:4px 8px;font-weight:700">${r.pickupTime || r.timeslot}</td>
+          <td style="border:1px solid #999;padding:4px 8px;font-weight:700">${r.pickupTime}</td>
           <td style="border:1px solid #999;padding:4px 8px;font-style:italic;font-weight:700">${r.customerName.toUpperCase()}</td>
           <td style="border:1px solid #999;padding:4px 8px;font-style:italic;font-weight:700">${r.hotel.toUpperCase()}</td>
-          <td style="border:1px solid #999;padding:4px 8px;text-align:center">${r.notes.match(/hab[.:]?\s*(\S+)/i)?.[1] ?? ""}</td>
+          <td style="border:1px solid #999;padding:4px 8px;text-align:center">${r.room}</td>
           <td style="border:1px solid #999;padding:4px 8px;font-weight:700">${agencia.toUpperCase()}</td>
           <td style="border:1px solid #999;padding:4px 8px;text-align:right;font-weight:700">${paxStr}</td>
           <td style="border:1px solid #999;padding:4px 8px;background:${isGYG ? "#ffff00" : "transparent"}">${vehicleInfo}</td>
@@ -224,7 +297,7 @@ export default function OperationPage() {
       })
       .join("")
 
-    const totalPaxAll = toExport.reduce((s, r) => s + r.guests + r.children, 0)
+    const totalPaxAll = toExport.reduce((s, r) => s + r.pax, 0)
 
     const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
   xmlns:x="urn:schemas-microsoft-com:office:excel"
@@ -1134,26 +1207,17 @@ export default function OperationPage() {
             </div>
             {/* Preview count */}
             {(() => {
-              const count = reservations.filter(
-                (r) =>
-                  r.date === exportDate &&
-                  (exportTurno === "all" || r.timeslot === exportTurno)
-              ).length
-              const totalPax = reservations
-                .filter(
-                  (r) =>
-                    r.date === exportDate &&
-                    (exportTurno === "all" || r.timeslot === exportTurno)
-                )
-                .reduce((s, r) => s + r.guests + r.children, 0)
-              return count > 0 ? (
+              return exportRows.length > 0 ? (
                 <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
-                  <span className="font-semibold">{count} reserva{count !== 1 ? "s" : ""}</span> encontradas
-                  {" — "}<span className="font-semibold">{totalPax} PAX</span> en total
+                  <span className="font-semibold">{exportRows.length} fila{exportRows.length !== 1 ? "s" : ""}</span> para exportar
+                  {" — "}<span className="font-semibold">{exportPaxCount} PAX</span> en total
+                  <div className="mt-1 text-xs text-green-700">
+                    Reales: {exportRealCount} | Fantasma: {exportGhostCount}
+                  </div>
                 </div>
               ) : (
                 <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-sm text-gray-500">
-                  No hay reservas para esta selección.
+                  No hay filas disponibles para esta selección.
                 </div>
               )
             })()}
@@ -1166,13 +1230,7 @@ export default function OperationPage() {
             <Button
               className="bg-green-600 hover:bg-green-700 text-white"
               onClick={exportRecogidas}
-              disabled={
-                reservations.filter(
-                  (r) =>
-                    r.date === exportDate &&
-                    (exportTurno === "all" || r.timeslot === exportTurno)
-                ).length === 0
-              }
+              disabled={exportRows.length === 0}
             >
               <FileSpreadsheet className="w-4 h-4 mr-2" />
               Descargar Excel
