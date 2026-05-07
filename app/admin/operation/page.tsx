@@ -110,7 +110,6 @@ type ExportRow = {
   agency: string
   pax: number
   notes: string
-  isGYG: boolean
   isGhost: boolean
 }
 
@@ -233,7 +232,6 @@ export default function OperationPage() {
           agency,
           pax: totalPax > 0 ? totalPax : 0,
           notes,
-          isGYG: /getyourguide|gyg/i.test(r.channel) || /getyourguide|gyg/i.test(r.channelUrl),
           isGhost: false,
         }
       })
@@ -249,7 +247,6 @@ export default function OperationPage() {
           agency: g.agency,
           pax: g.pax,
           notes: g.notes || "",
-          isGYG: /getyourguide|gyg/i.test(g.agency),
           isGhost: true,
         }
       }),
@@ -278,8 +275,8 @@ export default function OperationPage() {
     // Build HTML table styled like the reference spreadsheet
     const rows = toExport
       .map((r) => {
-        const isGYG = r.isGYG
-        const bg = isGYG ? "background:#ffff00" : ""
+        const isReal = !r.isGhost
+        const bg = isReal ? "background:#ffff00" : ""
         const paxStr = r.pax > 0 ? String(r.pax) : ""
         const agencia = r.agency || ""
         const vehicleInfo = r.notes || ""
@@ -290,7 +287,7 @@ export default function OperationPage() {
           <td style="border:1px solid #999;padding:4px 8px;text-align:center">${r.room}</td>
           <td style="border:1px solid #999;padding:4px 8px;font-weight:700">${agencia.toUpperCase()}</td>
           <td style="border:1px solid #999;padding:4px 8px;text-align:right;font-weight:700">${paxStr}</td>
-          <td style="border:1px solid #999;padding:4px 8px;background:${isGYG ? "#ffff00" : "transparent"}">${vehicleInfo}</td>
+          <td style="border:1px solid #999;padding:4px 8px">${vehicleInfo}</td>
         </tr>
         <tr><td colspan="7" style="border:none;height:6px"></td></tr>
         <tr><td colspan="7" style="border:none;height:6px"></td></tr>`
