@@ -127,9 +127,7 @@ const GHOST_RESERVATIONS: GhostReservationSeed[] = [
   { customerName: "Laura Daniela", hotel: "Barcelo Palace", room: "4031", agency: "Vacation On", pax: 0 },
   { customerName: "Jeffrey Campell", hotel: "Palladium Bavaro", room: "4223", agency: "Viator", pax: 0 },
   { customerName: "Kathy Wilson", hotel: "Iberostar B Collection", agency: "GYG", pax: 0 },
-  { customerName: "Maria Rincon", hotel: "RIU Macao", agency: "Viator", pax: 0 },
   { customerName: "Jayce Lima", hotel: "Impressive", agency: "GYG", pax: 8, notes: "3-BD 1-FAM" },
-  { customerName: "Toni Hill", hotel: "RIU Republica", agency: "Living PC", pax: 0 },
 ]
 
 function getPickupDeadline(dateValue: string, pickupValue: string, timeslotFallback?: string) {
