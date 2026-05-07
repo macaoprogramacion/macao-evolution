@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { Search, Bell, Home, Workflow, BarChart3, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft, Ship, Mountain, Sun, Moon, Camera } from "lucide-react"
+import { Search, Bell, Home, Workflow, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft, Ship, Mountain, Sun, Moon, Camera } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -28,11 +28,7 @@ const navigation = [
   { name: "Representantes", href: "/admin/representatives", icon: Handshake },
   { name: "Products", href: "/admin/products", icon: Package },
   { name: "Fotografia", href: "/admin/photography", icon: Camera },
-  { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
-  { name: "Team", href: "/admin/team", icon: Users },
   { name: "Usuarios", href: "/admin/users", icon: UserCog },
-  { name: "Workflows", href: "/admin/workflows", icon: Workflow },
-  { name: "Templates", href: "/admin/templates", icon: FileText },
 ]
 
 // Role-based page access control
@@ -41,7 +37,7 @@ const navigation = [
 const rolePageAccess: Record<string, string[]> = {
   operaciones: ["/admin/operation", "/admin/operation-saona", "/admin/operation-samana"],
   chofer: ["/admin/chofer"],
-  contabilidad: ["/admin/analytics", "/admin/products"],
+  contabilidad: ["/admin/products"],
 }
 
 function hasAccess(role: string, href: string): boolean {

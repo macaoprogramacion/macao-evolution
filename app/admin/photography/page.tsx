@@ -25,9 +25,6 @@ import {
   AlertCircle,
   FolderOpen,
   CreditCard,
-  Tag,
-  Package,
-  Video,
   Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -109,20 +106,6 @@ interface Portfolio {
   photographerName?: string
   created_at?: string
   createdAt?: string
-}
-
-interface PricingItem {
-  id: number
-  code: string
-  name: string
-  price: number
-  description: string
-  category: string
-  min_photos: number | null
-  max_photos: number | null
-  sort_order: number
-  active: boolean
-  updated_at: string
 }
 
 interface DailyClosure {
@@ -289,8 +272,6 @@ export default function PhotographyPage() {
   const [searchReturn, setSearchReturn] = useState("")
   const [dateFilter, setDateFilter] = useState("all")
   const [detailInvoice, setDetailInvoice] = useState<Invoice | null>(null)
-  const [pricing, setPricing] = useState<PricingItem[]>([])
-  const [pricingLoading, setPricingLoading] = useState(true)
   const [processingReturnId, setProcessingReturnId] = useState<string | null>(null)
 
   // ─── Load data ──────────────────────────────────────────────────
@@ -410,7 +391,6 @@ export default function PhotographyPage() {
     loadLocalBillingInvoices()
     fetchSupabase()
     fetchPortfoliosFromApi()
-    fetchPricing()
 
     const portfoliosInterval = setInterval(fetchPortfoliosFromApi, 12000)
     const invoicesInterval = setInterval(() => {
@@ -423,22 +403,6 @@ export default function PhotographyPage() {
       clearInterval(invoicesInterval)
     }
   }, [])
-
-  async function fetchPricing() {
-    try {
-      setPricingLoading(true)
-      const { data, error } = await supabase
-        .from("photo_pricing")
-        .select("*")
-        .order("sort_order", { ascending: true })
-      if (error) throw error
-      if (data) setPricing(data)
-    } catch (err) {
-      console.error("[Admin Photography] Pricing fetch error:", err)
-    } finally {
-      setPricingLoading(false)
-    }
-  }
 
   async function handleReturnDecision(item: Return, decision: ReturnDecision) {
     const invoiceNumber = item.invoiceNumber?.trim()
@@ -801,7 +765,6 @@ export default function PhotographyPage() {
             <TabsTrigger value="returns">Devoluciones</TabsTrigger>
             <TabsTrigger value="portfolios">Portafolios</TabsTrigger>
             <TabsTrigger value="analytics">Analíticas</TabsTrigger>
-            <TabsTrigger value="pricing">Precios</TabsTrigger>
           </TabsList>
 
           {/* ═══════════ OVERVIEW TAB ═══════════ */}
@@ -1507,87 +1470,6 @@ export default function PhotographyPage() {
               </CardContent>
             </Card>
           </TabsContent>
-          {/* ═══════════ PRICING TAB ═══════════ */}
-          <TabsContent value="pricing" className="space-y-6 mt-6">
-            <Card className="border-gray-200 dark:border-gray-800">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Tag className="w-4 h-4" />
-                  Precios de Servicios de Fotografía
-                </CardTitle>
-                <CardDescription>
-                  Estos precios se aplican tanto en la caja (POS) como en la galería web del cliente.
-                  Solo lectura en admin. Los cambios de precio están bloqueados.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {pricingLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                  </div>
-                ) : pricing.length === 0 ? (
-                  <div className="text-center py-12 text-gray-400">
-                    <Tag className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No hay precios configurados.</p>
-                    <p className="text-xs mt-1">Ejecuta la migración <code>migration-photo-pricing.sql</code> en Supabase.</p>
-                  </div>
-                ) : (
-                  <div className="grid gap-4">
-                    {pricing.map((item) => (
-                      <div
-                        key={item.id}
-                        className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-xl border ${
-                          item.active
-                            ? "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
-                            : "border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 opacity-60"
-                        }`}
-                      >
-                        {/* Icon */}
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
-                          item.category === "video"
-                            ? "bg-blue-100 dark:bg-blue-950"
-                            : "bg-red-100 dark:bg-red-950"
-                        }`}>
-                          {item.category === "video" ? (
-                            <Video className="w-6 h-6 text-blue-600" />
-                          ) : (
-                            <Package className="w-6 h-6 text-red-600" />
-                          )}
-                        </div>
-
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{item.name}</h4>
-                            <Badge variant="outline" className="text-[10px]">{item.code}</Badge>
-                            {!item.active && <Badge className="bg-gray-200 text-gray-600 text-[10px]">Inactivo</Badge>}
-                          </div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{item.description}</p>
-                          {item.category === "package" && (
-                            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
-                              Fotos: {item.min_photos ?? "—"} – {item.max_photos ?? "∞"}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Price */}
-                        <div className="text-right shrink-0">
-                          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                            {fmtMoney(item.price)}
-                          </p>
-                          <p className="text-[10px] text-gray-400 mt-0.5">
-                            Actualizado: {fmtDate(item.updated_at)}
-                          </p>
-                        </div>
-
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
         </Tabs>
       </div>
       {/* ─── Invoice Detail Dialog ─────────────────────────────────── */}

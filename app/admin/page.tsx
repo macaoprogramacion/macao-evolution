@@ -107,8 +107,8 @@ const newUsers = [
 // Canales de venta
 const salesChannels = [
   { name: "Macao Off Road", url: "www.jonathanarache.com", sales: 145, revenue: 18920, color: "#dc2626" },
-  { name: "Caribe Buggy", url: "caribebuggy.com", sales: 98, revenue: 12740, color: "#ef4444" },
-  { name: "Saona Island", url: "saonaislandpuntacana.com", sales: 76, revenue: 9880, color: "#f87171" },
+  { name: "Caribe Buggy", url: "caribebuggy.com", sales: 98, revenue: 12740, color: "#ef4444", unlinked: true },
+  { name: "Saona Island", url: "saonaislandpuntacana.com", sales: 76, revenue: 9880, color: "#f87171", unlinked: true },
   { name: "Viator", url: "viator.com", sales: 124, revenue: 16120, color: "#fca5a5" },
   { name: "GetYourGuide", url: "getyourguide.com", sales: 89, revenue: 11580, color: "#fee2e2" },
 ]
@@ -563,25 +563,41 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2">
                         <Globe className="w-4 h-4" style={{ color: channel.color }} />
                         <span className="text-sm font-medium text-gray-900 dark:text-gray-100 dark:text-gray-100">{channel.name}</span>
+                        {channel.unlinked && (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400">web desvinculada</span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-red-600">{channel.sales}</span>
-                        <ExternalLink className="w-3 h-3 text-gray-400" />
+                        {channel.unlinked ? (
+                          <span className="text-xs text-gray-400 italic">—</span>
+                        ) : (
+                          <>
+                            <span className="text-sm font-semibold text-red-600">{channel.sales}</span>
+                            <ExternalLink className="w-3 h-3 text-gray-400" />
+                          </>
+                        )}
                       </div>
                     </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2">
-                      <div
-                        className="h-2 rounded-full transition-all"
-                        style={{
-                          width: `${(channel.sales / 532) * 100}%`,
-                          backgroundColor: channel.color,
-                        }}
-                      ></div>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-gray-600">
-                      <span>{channel.url}</span>
-                      <span>${channel.revenue.toLocaleString()}</span>
-                    </div>
+                    {!channel.unlinked && (
+                      <>
+                        <div className="w-full bg-gray-100 rounded-full h-2">
+                          <div
+                            className="h-2 rounded-full transition-all"
+                            style={{
+                              width: `${(channel.sales / 532) * 100}%`,
+                              backgroundColor: channel.color,
+                            }}
+                          ></div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-gray-600">
+                          <span>{channel.url}</span>
+                          <span>${channel.revenue.toLocaleString()}</span>
+                        </div>
+                      </>
+                    )}
+                    {channel.unlinked && (
+                      <div className="text-xs text-gray-400 italic">{channel.url} — sin datos conectados</div>
+                    )}
                   </div>
                 ))}
               </div>

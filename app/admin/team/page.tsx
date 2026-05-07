@@ -1,13 +1,23 @@
 "use client"
 
-import { useState } from "react"
-import {
-  Search,
-  MoreHorizontal,
-  Mail,
-  Phone,
-  UserPlus,
-  Edit,
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+
+export default function TeamPage() {
+  const router = useRouter()
+  useEffect(() => { router.replace("/admin") }, [router])
+  return null
+}
+
+// ---- original code below (disabled) ----
+// import { useState } from "react"
+// import {
+//   Search,
+//   MoreHorizontal,
+//   Mail,
+//   Phone,
+//   UserPlus,
+//   Edit,
   Trash2,
   X,
 } from "lucide-react"

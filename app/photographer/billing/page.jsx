@@ -932,6 +932,13 @@ function CierreDiaPanel({ invoices, pendingDays = [], dashboardUser, onCierreSen
           </div>
         )}
 
+        {pendingDays.length === 0 && (
+          <div className="mb-4 px-4 py-3 rounded-2xl text-sm font-medium flex items-center gap-2 bg-green-500/20 border border-green-500/30 text-green-300">
+            <CheckCircle className="w-4 h-4 flex-shrink-0" />
+            No hay cierres pendientes.
+          </div>
+        )}
+
         {/* Loading past invoices */}
         {loadingPastInvoices && (
           <div className="mb-4 text-white/60 text-sm text-center py-4">Cargando facturas del día...</div>
@@ -1188,7 +1195,7 @@ function CierreDiaPanel({ invoices, pendingDays = [], dashboardUser, onCierreSen
 }
 
 // Product Card Component
-function ProductCard({ product, onAdd, onEdit }) {
+function ProductCard({ product, onAdd, onEdit, currency = 'USD' }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -1222,7 +1229,7 @@ function ProductCard({ product, onAdd, onEdit }) {
           {product.name}
         </h3>
         <p className="text-[#DC2626] font-medium text-lg">
-          US$ {product.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          {currencyLabel(currency)} {product.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
         </p>
       </div>
     </motion.div>
@@ -1302,7 +1309,7 @@ function ProductEditModal({ product, onSave, onClose }) {
 }
 
 // Cart Item Component
-function CartItem({ item, onUpdateQuantity, onRemove }) {
+function CartItem({ item, onUpdateQuantity, onRemove, currency = 'USD' }) {
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
@@ -1316,7 +1323,7 @@ function CartItem({ item, onUpdateQuantity, onRemove }) {
       <div className="flex-1 min-w-0">
         <p className="text-white font-medium text-sm truncate">{item.name}</p>
         <p className="text-[#DC2626] text-xs">
-          US$ {item.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          {currencyLabel(currency)} {item.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
         </p>
       </div>
       <div className="flex items-center gap-2">
@@ -1403,235 +1410,129 @@ function CustomSelect({ label, value, onChange, options, placeholder }) {
   );
 }
 
+// ─── Receipt HTML builder (module-level, reused by print & Supabase upload) ──
+function buildReceiptHTML(inv) {
+  const sym = CURRENCY_SYMBOLS[inv.currency] || 'US$';
+  const itemsHTML = (inv.items || []).map(item => `
+    <tr>
+      <td style="text-align:left;padding:4px 0">${item.name}</td>
+      <td style="text-align:center;padding:4px 0">${item.quantity}</td>
+      <td style="text-align:right;padding:4px 0">${sym} ${item.price.toFixed(2)}</td>
+      <td style="text-align:right;padding:4px 0">${sym} ${(item.quantity * item.price).toFixed(2)}</td>
+    </tr>`).join('');
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<title>Factura ${inv.invoiceNumber}</title>
+<style>
+@page{size:80mm auto;margin:0}
+@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Courier New',Courier,monospace;font-size:11px;width:80mm;padding:3mm;background:#fff;color:#000;line-height:1.4}
+.header{text-align:center;padding-bottom:10px;margin-bottom:10px;border-bottom:1px dashed #000}
+.logo{width:140px;height:auto;margin-bottom:5px}
+.invoice-num{font-size:14px;font-weight:bold;margin:8px 0 4px 0}
+.date{font-size:10px;color:#333}
+.divider{border:none;border-top:1px dashed #000;margin:10px 0}
+.section-title{font-weight:bold;text-align:center;margin:8px 0;font-size:11px}
+.info-table{width:100%;margin-bottom:10px}
+.info-table td{padding:3px 0;vertical-align:top}
+.info-table td:first-child{font-weight:bold;width:40%}
+.info-table td:last-child{text-align:right}
+.items-table{width:100%;border-collapse:collapse;margin:10px 0}
+.items-table th{border-bottom:1px solid #000;border-top:1px solid #000;padding:5px 2px;font-size:10px;text-transform:uppercase}
+.items-table td{padding:4px 2px;font-size:10px;border-bottom:1px dotted #ccc}
+.totals-table{width:100%;margin-top:10px}
+.totals-table td{padding:4px 0}
+.totals-table td:last-child{text-align:right;font-weight:bold}
+.total-row{font-size:14px;font-weight:bold;border-top:2px solid #000}
+.total-row td{padding-top:8px!important}
+.footer{text-align:center;margin-top:15px;padding-top:10px;border-top:1px dashed #000}
+.thanks{font-size:12px;font-weight:bold;margin-bottom:5px}
+.footer-note{font-size:9px;color:#555;margin-top:3px}
+</style>
+</head>
+<body>
+<div class="receipt">
+  <div class="header">
+    <img src="https://www.jonathanarache.com/photographer/branding/macao-logo.png" class="logo" alt="Macao"/>
+    <div class="invoice-num">FACTURA No: ${inv.invoiceNumber}</div>
+    <div class="date">Fecha: ${new Date(inv.timestamp).toLocaleString('es-DO')}</div>
+  </div>
+  <div class="section-title">DATOS DEL CLIENTE</div>
+  <table class="info-table">
+    <tr><td>Cliente:</td><td>${inv.clientName || 'Cliente General'}</td></tr>
+    ${inv.clientPhone ? `<tr><td>Teléfono:</td><td>${inv.clientPhone}</td></tr>` : ''}
+    <tr><td>Turno:</td><td>${inv.turno || 'Turno 9:00'}</td></tr>
+  </table>
+  <hr class="divider"/>
+  <div class="section-title">DETALLE DE PRODUCTOS</div>
+  <table class="items-table">
+    <thead><tr>
+      <th style="text-align:left">Producto</th>
+      <th style="text-align:center">Cant</th>
+      <th style="text-align:right">Precio</th>
+      <th style="text-align:right">Total</th>
+    </tr></thead>
+    <tbody>${itemsHTML}</tbody>
+  </table>
+  <hr class="divider"/>
+  <table class="totals-table">
+    <tr><td>SUBTOTAL:</td><td>${sym} ${inv.subtotal.toFixed(2)}</td></tr>
+    <tr><td>ITBIS (18%):</td><td>${sym} ${inv.tax.toFixed(2)}</td></tr>
+    <tr class="total-row"><td>TOTAL A PAGAR:</td><td>${sym} ${inv.total.toFixed(2)}</td></tr>
+  </table>
+  <div class="footer">
+    <div class="thanks">¡GRACIAS POR SU COMPRA!</div>
+    <div style="font-size:11px;font-weight:bold;margin:8px 0;padding:6px;border:1px solid #000;text-align:center">
+      📅 Tiene 15 días para descargar sus fotos y videos
+    </div>
+    <div class="footer-note">Conserve este recibo para cualquier reclamación</div>
+    <div class="footer-note">www.jonathanarache.com</div>
+  </div>
+</div>
+</body>
+</html>`;
+}
+
+// Uploads receipt HTML to Supabase Storage and returns the public URL
+async function uploadReceiptToSupabase(inv) {
+  try {
+    const html = buildReceiptHTML(inv);
+    const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+    const fileName = `${inv.invoiceNumber}.html`;
+
+    // Ensure bucket exists (idempotent)
+    await supabase.storage.createBucket('photo-tickets', { public: true }).catch(() => {});
+
+    const { error: uploadError } = await supabase.storage
+      .from('photo-tickets')
+      .upload(fileName, blob, { contentType: 'text/html', upsert: true });
+
+    if (uploadError) {
+      console.warn('Ticket upload error:', uploadError.message);
+      return null;
+    }
+
+    const { data } = supabase.storage.from('photo-tickets').getPublicUrl(fileName);
+    return data?.publicUrl || null;
+  } catch (e) {
+    console.warn('uploadReceiptToSupabase failed:', e);
+    return null;
+  }
+}
+
 // POS Receipt Component for printing (80mm width)
-function POSReceipt({ invoice, onClose }) {
+function POSReceipt({ invoice, onClose, ticketUrl }) {
   const receiptRef = useRef(null);
   
   const handlePrint = () => {
     const printWindow = window.open('', '', 'width=302,height=600');
-    
-    // Generate items HTML
-    const itemsHTML = invoice.items.map(item => `
-      <tr>
-        <td style="text-align: left; padding: 4px 0;">${item.name}</td>
-        <td style="text-align: center; padding: 4px 0;">${item.quantity}</td>
-        <td style="text-align: right; padding: 4px 0;">$${item.price.toFixed(2)}</td>
-        <td style="text-align: right; padding: 4px 0;">$${(item.quantity * item.price).toFixed(2)}</td>
-      </tr>
-    `).join('');
-    
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Factura ${invoice.invoiceNumber}</title>
-          <style>
-            @page {
-              size: 80mm auto;
-              margin: 0;
-            }
-            @media print {
-              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            }
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
-            body {
-              font-family: 'Courier New', Courier, monospace;
-              font-size: 11px;
-              width: 80mm;
-              padding: 3mm;
-              background: white;
-              color: black;
-              line-height: 1.4;
-            }
-            .receipt {
-              width: 100%;
-            }
-            .header {
-              text-align: center;
-              padding-bottom: 10px;
-              margin-bottom: 10px;
-              border-bottom: 1px dashed #000;
-            }
-            .logo {
-              width: 140px;
-              height: auto;
-              margin-bottom: 5px;
-            }
-            .invoice-num {
-              font-size: 14px;
-              font-weight: bold;
-              margin: 8px 0 4px 0;
-            }
-            .date {
-              font-size: 10px;
-              color: #333;
-            }
-            .divider {
-              border: none;
-              border-top: 1px dashed #000;
-              margin: 10px 0;
-            }
-            .section-title {
-              font-weight: bold;
-              text-align: center;
-              margin: 8px 0;
-              font-size: 11px;
-            }
-            .info-table {
-              width: 100%;
-              margin-bottom: 10px;
-            }
-            .info-table td {
-              padding: 3px 0;
-              vertical-align: top;
-            }
-            .info-table td:first-child {
-              font-weight: bold;
-              width: 40%;
-            }
-            .info-table td:last-child {
-              text-align: right;
-            }
-            .items-table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 10px 0;
-            }
-            .items-table th {
-              border-bottom: 1px solid #000;
-              border-top: 1px solid #000;
-              padding: 5px 2px;
-              font-size: 10px;
-              text-transform: uppercase;
-            }
-            .items-table td {
-              padding: 4px 2px;
-              font-size: 10px;
-              border-bottom: 1px dotted #ccc;
-            }
-            .totals-table {
-              width: 100%;
-              margin-top: 10px;
-            }
-            .totals-table td {
-              padding: 4px 0;
-            }
-            .totals-table td:last-child {
-              text-align: right;
-              font-weight: bold;
-            }
-            .total-row {
-              font-size: 14px;
-              font-weight: bold;
-              border-top: 2px solid #000;
-            }
-            .total-row td {
-              padding-top: 8px !important;
-            }
-            .footer {
-              text-align: center;
-              margin-top: 15px;
-              padding-top: 10px;
-              border-top: 1px dashed #000;
-            }
-            .thanks {
-              font-size: 12px;
-              font-weight: bold;
-              margin-bottom: 5px;
-            }
-            .footer-note {
-              font-size: 9px;
-              color: #555;
-              margin-top: 3px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="receipt">
-            <!-- Header -->
-            <div class="header">
-              <img src="/photographer/branding/macao-logo.png" class="logo" alt="Macao" />
-              <div class="invoice-num">FACTURA No: ${invoice.invoiceNumber}</div>
-              <div class="date">Fecha: ${new Date(invoice.timestamp).toLocaleString('es-DO')}</div>
-            </div>
-            
-            <!-- Client Info -->
-            <div class="section-title">DATOS DEL CLIENTE</div>
-            <table class="info-table">
-              <tr>
-                <td>Cliente:</td>
-                <td>${invoice.clientName || 'Cliente General'}</td>
-              </tr>
-              ${invoice.clientPhone ? `
-              <tr>
-                <td>Teléfono:</td>
-                <td>${invoice.clientPhone}</td>
-              </tr>
-              ` : ''}
-              <tr>
-                <td>Turno:</td>
-                <td>${invoice.turno || 'Turno 9:00'}</td>
-              </tr>
-            </table>
-            
-            <hr class="divider" />
-            
-            <!-- Items -->
-            <div class="section-title">DETALLE DE PRODUCTOS</div>
-            <table class="items-table">
-              <thead>
-                <tr>
-                  <th style="text-align: left;">Producto</th>
-                  <th style="text-align: center;">Cant</th>
-                  <th style="text-align: right;">Precio</th>
-                  <th style="text-align: right;">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${itemsHTML}
-              </tbody>
-            </table>
-            
-            <hr class="divider" />
-            
-            <!-- Totals -->
-            <table class="totals-table">
-              <tr>
-                <td>SUBTOTAL:</td>
-                <td>US$ ${invoice.subtotal.toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td>ITBIS (18%):</td>
-                <td>US$ ${invoice.tax.toFixed(2)}</td>
-              </tr>
-              <tr class="total-row">
-                <td>TOTAL A PAGAR:</td>
-                <td>US$ ${invoice.total.toFixed(2)}</td>
-              </tr>
-            </table>
-            
-            <!-- Footer -->
-            <div class="footer">
-              <div class="thanks">¡GRACIAS POR SU COMPRA!</div>
-              <div style="font-size: 11px; font-weight: bold; margin: 8px 0; padding: 6px; border: 1px solid #000; text-align: center;">
-                📅 Tiene 15 días para descargar sus fotos y videos
-              </div>
-              <div class="footer-note">Conserve este recibo para cualquier reclamación</div>
-              <div class="footer-note">www.jonathanarache.com</div>
-            </div>
-          </div>
-        </body>
-      </html>
-    `);
-    
+    printWindow.document.write(buildReceiptHTML(invoice));
     printWindow.document.close();
     printWindow.focus();
-    
-    // Wait for image to load before printing
     setTimeout(() => {
       printWindow.print();
       printWindow.close();
@@ -1715,15 +1616,15 @@ function POSReceipt({ invoice, onClose }) {
             <tbody>
               <tr>
                 <td className="py-1">SUBTOTAL:</td>
-                <td className="py-1 text-right font-semibold">US$ {invoice.subtotal.toFixed(2)}</td>
+                <td className="py-1 text-right font-semibold">{CURRENCY_SYMBOLS[invoice.currency] || 'US$'} {invoice.subtotal.toFixed(2)}</td>
               </tr>
               <tr>
                 <td className="py-1">ITBIS (18%):</td>
-                <td className="py-1 text-right font-semibold">US$ {invoice.tax.toFixed(2)}</td>
+                <td className="py-1 text-right font-semibold">{CURRENCY_SYMBOLS[invoice.currency] || 'US$'} {invoice.tax.toFixed(2)}</td>
               </tr>
               <tr className="border-t-2 border-black">
                 <td className="py-2 text-sm font-bold">TOTAL A PAGAR:</td>
-                <td className="py-2 text-right text-sm font-bold">US$ {invoice.total.toFixed(2)}</td>
+                <td className="py-2 text-right text-sm font-bold">{CURRENCY_SYMBOLS[invoice.currency] || 'US$'} {invoice.total.toFixed(2)}</td>
               </tr>
             </tbody>
           </table>
@@ -1738,6 +1639,24 @@ function POSReceipt({ invoice, onClose }) {
             <div className="text-[9px] text-gray-500">www.jonathanarache.com</div>
           </div>
         </div>
+        
+        {/* Share Link */}
+        {ticketUrl && (
+          <div className="px-4 pt-2 pb-0">
+            <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl border border-green-200">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-green-700 mb-0.5">Enlace del ticket</p>
+                <p className="text-[10px] text-green-600 truncate">{ticketUrl}</p>
+              </div>
+              <button
+                onClick={() => { navigator.clipboard.writeText(ticketUrl); }}
+                className="flex-shrink-0 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Copiar
+              </button>
+            </div>
+          </div>
+        )}
         
         {/* Action Buttons */}
         <div className="flex gap-3 p-4 border-t border-gray-200">
@@ -1778,6 +1697,7 @@ export default function BillingPage() {
   const [dashboardUser, setDashboardUser] = useState(null);
   const [activityFeed, setActivityFeed] = useState([]);
   const [pendingClosureDays, setPendingClosureDays] = useState([]);
+  const [pendingClosuresLoaded, setPendingClosuresLoaded] = useState(false);
 
   useEffect(() => {
     getDashboardSession().then((session) => {
@@ -1828,6 +1748,7 @@ export default function BillingPage() {
 
   // Load pending closure days
   const loadPendingClosures = async () => {
+    setPendingClosuresLoaded(false);
     try {
       const todayKey = new Date().toISOString().slice(0, 10);
       const [{ data: invData }, { data: closureData }] = await Promise.all([
@@ -1845,9 +1766,14 @@ export default function BillingPage() {
           .filter(day => !closureSet.has(day))
           .sort((a, b) => b.localeCompare(a));
         setPendingClosureDays(pending);
+      } else {
+        setPendingClosureDays([]);
       }
     } catch (e) {
       console.error('Error checking pending closures:', e);
+      setPendingClosureDays([]);
+    } finally {
+      setPendingClosuresLoaded(true);
     }
   };
 
@@ -2007,12 +1933,21 @@ export default function BillingPage() {
     }
 
     // Log activity
-    logActivity('Factura generada', `${newInvoice.invoiceNumber} — US$ ${total.toFixed(2)} — ${clientName || 'Cliente General'}`);
+    logActivity('Factura generada', `${newInvoice.invoiceNumber} — ${currencyLabel(currency)} ${total.toFixed(2)} — ${clientName || 'Cliente General'}`);
     
     // Update invoice counter
     const newNum = nextInvoiceNum + 1;
     setNextInvoiceNum(newNum);
     saveInvoiceCounter(newNum);
+
+    // Upload ticket HTML to Supabase Storage and attach public URL
+    const ticketUrl = await uploadReceiptToSupabase(newInvoice);
+    if (ticketUrl) {
+      await supabase.from('photo_invoices')
+        .update({ ticket_url: ticketUrl })
+        .eq('invoice_number', invoiceNum);
+      newInvoice.ticket_url = ticketUrl;
+    }
     
     // Set current invoice and show print modal
     setCurrentInvoice(newInvoice);
@@ -2156,6 +2091,22 @@ export default function BillingPage() {
               </motion.div>
             )}
 
+            {pendingClosuresLoaded && pendingClosureDays.length === 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 bg-green-500/15 border border-green-500/40 rounded-2xl p-4 flex items-start gap-3"
+              >
+                <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-green-200 font-semibold text-sm">No hay cierres pendientes</p>
+                  <p className="text-green-300/80 text-xs mt-0.5">
+                    Ya puedes emitir nuevas facturas normalmente.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
             {/* Header with Search */}
             <div className="mb-6">
               <h1 className="font-title text-2xl lg:text-4xl text-white mb-3 lg:mb-4">
@@ -2194,7 +2145,7 @@ export default function BillingPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4">
                 <AnimatePresence mode="popLayout">
                   {filteredProducts.map((product) => (
-                    <ProductCard key={product.id} product={product} onAdd={addToCart} onEdit={setEditingProduct} />
+                    <ProductCard key={product.id} product={product} currency={currency} onAdd={addToCart} onEdit={setEditingProduct} />
                   ))}
                 </AnimatePresence>
               </div>
@@ -2355,6 +2306,7 @@ export default function BillingPage() {
                     <CartItem
                       key={item.id}
                       item={item}
+                      currency={currency}
                       onUpdateQuantity={updateQuantity}
                       onRemove={removeFromCart}
                     />
@@ -2369,19 +2321,19 @@ export default function BillingPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-white/60">Subtotal</span>
                   <span className="text-white">
-                    US$ {subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    {currencyLabel(currency)} {subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-white/60">ITBIS (18%)</span>
                   <span className="text-white">
-                    US$ {tax.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    {currencyLabel(currency)} {tax.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex justify-between text-lg font-semibold pt-2 border-t border-white/15">
                   <span className="text-white">Total</span>
                   <span className="text-[#DC2626]">
-                    US$ {total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    {currencyLabel(currency)} {total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
@@ -2464,7 +2416,7 @@ export default function BillingPage() {
       {/* Print Invoice Modal */}
       <AnimatePresence>
         {showPrintModal && currentInvoice && (
-          <POSReceipt invoice={currentInvoice} onClose={handleClosePrintModal} />
+          <POSReceipt invoice={currentInvoice} ticketUrl={currentInvoice.ticket_url} onClose={handleClosePrintModal} />
         )}
       </AnimatePresence>
 

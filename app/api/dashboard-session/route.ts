@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 const COOKIE_NAME = "macao_dashboard_session";
-const MAX_AGE_SECONDS = 60 * 60 * 24;
+const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 type DashboardSession = {
   id: string;
@@ -70,7 +70,22 @@ export async function GET() {
     return response;
   }
 
-  return NextResponse.json({ session });
+  // Sliding expiry: refresh the cookie on every valid read
+  const issuedAt = new Date(session.issuedAt);
+  const newExpiresAt = new Date(Date.now() + MAX_AGE_SECONDS * 1000);
+  const response = NextResponse.json({ session });
+  response.cookies.set(
+    COOKIE_NAME,
+    encodeSession({ ...session, issuedAt: issuedAt.toISOString(), expiresAt: newExpiresAt.toISOString() }),
+    {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: MAX_AGE_SECONDS,
+    },
+  );
+  return response;
 }
 
 export async function POST(request: Request) {

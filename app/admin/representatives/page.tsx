@@ -185,6 +185,19 @@ export default function RepresentativesAnalyticsPage() {
           </p>
         </div>
 
+        {/* Demo data notice */}
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center mt-0.5">
+            <span className="text-amber-600 dark:text-amber-400 text-base font-bold">!</span>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Datos de demostración</p>
+            <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+              Las métricas y rankings mostrados en esta página son datos de ejemplo. Aún no están vinculados con las reservas reales de los dashboards de operación. La integración con datos reales está en desarrollo.
+            </p>
+          </div>
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-gray-200">

@@ -1,13 +1,23 @@
 "use client"
 
-import { useState } from "react"
-import {
-  Plus,
-  Search,
-  Filter,
-  Star,
-  Download,
-  Eye,
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+
+export default function TemplatesPage() {
+  const router = useRouter()
+  useEffect(() => { router.replace("/admin") }, [router])
+  return null
+}
+
+// ---- original code below (disabled) ----
+// import { useState } from "react"
+// import {
+//   Plus,
+//   Search,
+//   Filter,
+//   Star,
+//   Download,
+//   Eye,
   Copy,
   MoreHorizontal,
   Zap,

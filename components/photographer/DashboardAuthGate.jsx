@@ -51,7 +51,7 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
           const roleDefaultPage = {
             operaciones: '/admin/operation',
             chofer: '/admin/chofer',
-            contabilidad: '/admin/analytics',
+            contabilidad: '/admin/products',
           }
           const defaultPage = roleDefaultPage[session.role]
           if (defaultPage && window.location.pathname === '/admin') {
@@ -139,7 +139,7 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
         photographer: '/photographer/dashboard',
         operaciones: '/admin/operation',
         chofer: '/admin/chofer',
-        contabilidad: '/admin/analytics',
+        contabilidad: '/admin/products',
       }
       router.push(roleRoutes[user.role] || '/admin')
       return
@@ -153,7 +153,7 @@ export default function DashboardAuthGate({ children, allowedRoles }) {
     const roleDefaultPage = {
       operaciones: '/admin/operation',
       chofer: '/admin/chofer',
-      contabilidad: '/admin/analytics',
+      contabilidad: '/admin/products',
     }
     const defaultPage = roleDefaultPage[user.role]
     if (defaultPage) {

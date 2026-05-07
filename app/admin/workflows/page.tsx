@@ -1,13 +1,23 @@
 "use client"
 
-import { useState } from "react"
-import { 
-  Play, 
-  Pause, 
-  MoreHorizontal, 
-  Filter, 
-  Plus, 
-  Search, 
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+
+export default function WorkflowsPage() {
+  const router = useRouter()
+  useEffect(() => { router.replace("/admin") }, [router])
+  return null
+}
+
+// ---- original code below (disabled) ----
+// import { useState } from "react"
+// import { 
+//   Play, 
+//   Pause, 
+//   MoreHorizontal, 
+//   Filter, 
+//   Plus, 
+//   Search, 
   CheckCircle, 
   XCircle, 
   Zap, 
