@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
+import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 import { useCart } from "@/context/cart-context";
 import { products } from "@/lib/products";
 import { getCustomerProfile, getCustomerById, upsertCustomerProfile } from "@/lib/customer-accounts";
@@ -14,7 +15,6 @@ import {
   User,
   Phone,
   Mail,
-  Lock,
   ChevronRight,
   ChevronLeft,
   Check,
@@ -27,7 +27,6 @@ import {
   Navigation,
   Clock,
   CalendarDays,
-  Calendar as CalendarIcon,
   Zap,
   ShoppingCart,
   Star,
@@ -52,12 +51,15 @@ interface CustomerInfo {
   email: string;
 }
 
-interface CardInfo {
-  number: string;
-  name: string;
-  expiry: string;
-  cvc: string;
-}
+const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "";
+const PAYPAL_OPTIONS = {
+  clientId: PAYPAL_CLIENT_ID,
+  currency: "USD",
+  intent: "capture",
+  enableFunding: "card",
+  disableFunding: "paylater,venmo",
+  locale: "es_DO",
+};
 
 const DEFAULT_TIMES = [
   { id: 0, label: "Mañana", time: "8:00 AM", hour: 8, minute: 0 },
@@ -245,12 +247,6 @@ export function CheckoutModal({
   });
   const [paymentOption, setPaymentOption] = useState<PaymentOption>("full");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
-  const [card, setCard] = useState<CardInfo>({
-    number: "",
-    name: "",
-    expiry: "",
-    cvc: "",
-  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isProcessing, setIsProcessing] = useState(false);
   const [customerAccountId, setCustomerAccountId] = useState<string | null>(null);
@@ -323,14 +319,6 @@ export function CheckoutModal({
 
       if (profile?.last_payment_option) setPaymentOption(profile.last_payment_option);
       if (profile?.last_payment_method) setPaymentMethod(profile.last_payment_method);
-      if (profile?.card_number || profile?.card_expiry || profile?.card_cvc || profile?.card_holder_name) {
-        setCard((prev) => ({
-          number: profile?.card_number || prev.number,
-          name: profile?.card_holder_name || prev.name,
-          expiry: profile?.card_expiry || prev.expiry,
-          cvc: profile?.card_cvc || prev.cvc,
-        }));
-      }
       if (profile?.pickup_mode) setPickupMode(profile.pickup_mode);
       if (profile?.pickup_hotel) setPickupHotel(profile.pickup_hotel);
       if (profile?.pickup_custom) setPickupCustom(profile.pickup_custom);
@@ -362,21 +350,9 @@ export function CheckoutModal({
   }
 
   function validateStep2() {
-    if (paymentMethod === "paypal") return true;
+    if (PAYPAL_CLIENT_ID) return true;
     const newErrors: Record<string, string> = {};
-    if (!card.number.trim())
-      newErrors.cardNumber = "El número de tarjeta es obligatorio";
-    else if (card.number.replace(/\s/g, "").length < 16)
-      newErrors.cardNumber = "Número de tarjeta inválido";
-    if (!card.name.trim())
-      newErrors.cardName = "El nombre del titular es obligatorio";
-    if (!card.expiry.trim())
-      newErrors.cardExpiry = "La fecha de expiración es obligatoria";
-    else if (!/^\d{2}\/\d{2}$/.test(card.expiry))
-      newErrors.cardExpiry = "Formato inválido (MM/AA)";
-    if (!card.cvc.trim()) newErrors.cardCvc = "El CVC es obligatorio";
-    else if (!/^\d{3,4}$/.test(card.cvc))
-      newErrors.cardCvc = "CVC inválido";
+    newErrors.paypal = "Falta configurar PayPal. Define NEXT_PUBLIC_PAYPAL_CLIENT_ID.";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -392,11 +368,11 @@ export function CheckoutModal({
     }
   }
 
-  function handlePay() {
+  async function finalizeReservation(finalPaymentMethod: PaymentMethod, paypalOrderId?: string) {
     if (!validateStep2()) return;
+
     setIsProcessing(true);
-    // Simulate payment processing
-    setTimeout(async () => {
+    try {
       const ownerEmail = customer.email.trim().toLowerCase();
       const reservationId = crypto.randomUUID();
 
@@ -406,12 +382,7 @@ export function CheckoutModal({
           fullName: customer.name,
           phone: customer.phone,
           paymentOption,
-          paymentMethod,
-          cardNumber: paymentMethod === "card" ? card.number : undefined,
-          cardExpiry: paymentMethod === "card" ? card.expiry : undefined,
-          cardCvc: paymentMethod === "card" ? card.cvc : undefined,
-          cardLast4: paymentMethod === "card" ? card.number.replace(/\s/g, "").slice(-4) : undefined,
-          cardHolderName: paymentMethod === "card" ? card.name : undefined,
+          paymentMethod: finalPaymentMethod,
           pickupMode,
           pickupHotel,
           pickupCustom,
@@ -439,7 +410,7 @@ export function CheckoutModal({
             totalPaid: amountToPay,
             remainingAmount: paymentOption === "partial" ? remainingAmount : 0,
             paymentOption,
-            paymentMethod,
+            paymentMethod: finalPaymentMethod,
           },
           pickup: !hasPrivateTransport
             ? {
@@ -462,7 +433,6 @@ export function CheckoutModal({
         });
       }
 
-      setIsProcessing(false);
       setStep(4);
 
       // Send confirmation email
@@ -475,9 +445,10 @@ export function CheckoutModal({
             items: items.map((i) => ({ name: i.name, price: i.price, quantity: i.quantity })),
             totalPaid: amountToPay,
             totalPrice,
-            paymentMethod,
+            paymentMethod: finalPaymentMethod,
             paymentOption,
             remainingAmount: paymentOption === "partial" ? remainingAmount : undefined,
+            paypalOrderId,
             pickup: !hasPrivateTransport
               ? {
                   hotel: pickupHotel || undefined,
@@ -492,14 +463,58 @@ export function CheckoutModal({
       } catch {
         // Email sending failed silently — reservation is still confirmed
       }
-    }, 2000);
+
+      setErrors({});
+    } catch (error) {
+      console.error("Error finalizando reserva:", error);
+      setErrors({ paypal: "No pudimos completar tu pago. Intenta nuevamente." });
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
+  async function createPayPalOrder() {
+    if (!validateStep2()) {
+      throw new Error("PayPal no configurado");
+    }
+
+    const response = await fetch("/api/paypal/create-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: amountToPay,
+        currency: "USD",
+        description: `Reserva Macao Evolution (${paymentOption === "full" ? "pago completo" : "depósito 20%"})`,
+      }),
+    });
+
+    const payload = await response.json();
+    if (!response.ok || !payload?.id) {
+      throw new Error(payload?.error || "No se pudo crear la orden en PayPal");
+    }
+
+    return payload.id as string;
+  }
+
+  async function capturePayPalOrder(orderId: string, method: PaymentMethod) {
+    const response = await fetch("/api/paypal/capture-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId }),
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error || "No se pudo capturar el pago");
+    }
+
+    await finalizeReservation(method, payload?.orderId || orderId);
   }
 
   function handleFinish() {
     clearCart();
     setStep(1);
     setCustomer({ name: "", phone: "", email: "" });
-    setCard({ number: "", name: "", expiry: "", cvc: "" });
     setPaymentOption("full");
     setPaymentMethod("card");
     setPickupMode("hotel");
@@ -531,19 +546,6 @@ export function CheckoutModal({
     if (Object.keys(newErrors).length === 0) {
       setStep(3);
     }
-  }
-
-  // Format card number with spaces
-  function formatCardNumber(value: string) {
-    const digits = value.replace(/\D/g, "").slice(0, 16);
-    return digits.replace(/(\d{4})(?=\d)/g, "$1 ");
-  }
-
-  // Format expiry as MM/YY
-  function formatExpiry(value: string) {
-    const digits = value.replace(/\D/g, "").slice(0, 4);
-    if (digits.length >= 3) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-    return digits;
   }
 
   if (!isOpen) return null;
@@ -1142,166 +1144,39 @@ export function CheckoutModal({
                 </div>
               </div>
 
-              {/* Card form */}
-              {paymentMethod === "card" && (
-                <div className="space-y-4 mb-6">
-                  {/* Card number */}
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-foreground">
-                      Número de tarjeta
-                    </label>
-                    <div className="relative">
-                      <CreditCard
-                        size={16}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                      />
-                      <input
-                        type="text"
-                        value={card.number}
-                        onChange={(e) =>
-                          setCard({
-                            ...card,
-                            number: formatCardNumber(e.target.value),
-                          })
-                        }
-                        placeholder="1234 5678 9012 3456"
-                        maxLength={19}
-                        className={`w-full rounded-xl border bg-background py-3 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
-                          errors.cardNumber ? "border-red-500" : "border-border"
-                        }`}
-                      />
-                    </div>
-                    {errors.cardNumber && (
-                      <p className="mt-1 text-xs text-red-500">
-                        {errors.cardNumber}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Card holder name */}
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-foreground">
-                      Nombre del titular
-                    </label>
-                    <div className="relative">
-                      <User
-                        size={16}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                      />
-                      <input
-                        type="text"
-                        value={card.name}
-                        onChange={(e) =>
-                          setCard({ ...card, name: e.target.value })
-                        }
-                        placeholder="JUAN PÉREZ"
-                        className={`w-full rounded-xl border bg-background py-3 pl-10 pr-4 text-sm uppercase text-foreground placeholder:text-muted-foreground/50 placeholder:normal-case outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
-                          errors.cardName ? "border-red-500" : "border-border"
-                        }`}
-                      />
-                    </div>
-                    {errors.cardName && (
-                      <p className="mt-1 text-xs text-red-500">
-                        {errors.cardName}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Expiry + CVC */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1.5 block text-sm font-medium text-foreground">
-                        Expiración
-                      </label>
-                      <div className="relative">
-                        <CalendarIcon
-                          size={16}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                        />
-                        <input
-                          type="text"
-                          value={card.expiry}
-                          onChange={(e) =>
-                            setCard({
-                              ...card,
-                              expiry: formatExpiry(e.target.value),
-                            })
-                          }
-                          placeholder="MM/AA"
-                          maxLength={5}
-                          className={`w-full rounded-xl border bg-background py-3 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
-                            errors.cardExpiry
-                              ? "border-red-500"
-                              : "border-border"
-                          }`}
-                        />
-                      </div>
-                      {errors.cardExpiry && (
-                        <p className="mt-1 text-xs text-red-500">
-                          {errors.cardExpiry}
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-sm font-medium text-foreground">
-                        CVC
-                      </label>
-                      <div className="relative">
-                        <Lock
-                          size={16}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                        />
-                        <input
-                          type="text"
-                          value={card.cvc}
-                          onChange={(e) =>
-                            setCard({
-                              ...card,
-                              cvc: e.target.value
-                                .replace(/\D/g, "")
-                                .slice(0, 4),
-                            })
-                          }
-                          placeholder="123"
-                          maxLength={4}
-                          className={`w-full rounded-xl border bg-background py-3 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors focus:ring-2 focus:ring-foreground/20 ${
-                            errors.cardCvc ? "border-red-500" : "border-border"
-                          }`}
-                        />
-                      </div>
-                      {errors.cardCvc && (
-                        <p className="mt-1 text-xs text-red-500">
-                          {errors.cardCvc}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* PayPal info */}
-              {paymentMethod === "paypal" && (
-                <div className="mb-6 rounded-xl border border-border bg-secondary/50 p-5 text-center">
-                  <CircleDollarSign
-                    size={32}
-                    className="mx-auto mb-2 text-foreground"
-                  />
-                  <p className="text-sm font-medium text-foreground">
-                    Serás redirigido a PayPal
+              <div className="mb-6 rounded-xl border border-border bg-secondary/50 p-5">
+                {!PAYPAL_CLIENT_ID ? (
+                  <p className="text-sm text-red-500">
+                    Falta configurar PayPal. Define NEXT_PUBLIC_PAYPAL_CLIENT_ID para habilitar los pagos.
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Completa el pago de forma segura con tu cuenta de PayPal
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handlePay}
-                    disabled={isProcessing}
-                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background transition-opacity hover:opacity-80 disabled:opacity-50"
-                  >
-                    {isProcessing ? "Procesando..." : `Pagar con PayPal — $${amountToPay.toFixed(2)}`}
-                  </button>
-                </div>
-              )}
+                ) : (
+                  <PayPalScriptProvider options={PAYPAL_OPTIONS}>
+                    <p className="mb-3 text-xs text-muted-foreground text-center">
+                      {paymentMethod === "paypal"
+                        ? "Paga con tu cuenta PayPal."
+                        : "Paga con tarjeta de crédito o débito, procesada por PayPal."}
+                    </p>
+                    <PayPalButtons
+                      fundingSource={paymentMethod === "paypal" ? "paypal" : "card"}
+                      style={{ layout: "vertical", shape: "pill", label: "pay" }}
+                      disabled={isProcessing}
+                      createOrder={async () => createPayPalOrder()}
+                      onApprove={async (data) => {
+                        if (!data.orderID) throw new Error("Orden de PayPal inválida");
+                        await capturePayPalOrder(data.orderID, paymentMethod);
+                      }}
+                      onError={(error) => {
+                        console.error("PayPal checkout error:", error);
+                        setErrors({ paypal: "No se pudo completar el pago. Intenta de nuevo." });
+                      }}
+                    />
+                  </PayPalScriptProvider>
+                )}
+
+                {errors.paypal && (
+                  <p className="mt-3 text-xs text-red-500 text-center">{errors.paypal}</p>
+                )}
+              </div>
 
               {/* Order summary */}
               <div className="mb-6 rounded-xl border border-border bg-secondary/30 p-4">
@@ -1347,28 +1222,6 @@ export function CheckoutModal({
                 cartItems={items}
                 addItem={addItem}
               />
-
-              {/* Pay button */}
-              <button
-                type="button"
-                onClick={handlePay}
-                disabled={isProcessing}
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-foreground py-3.5 text-sm font-semibold text-background transition-opacity hover:opacity-80 disabled:opacity-50"
-              >
-                {isProcessing ? (
-                  <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
-                    Procesando...
-                  </>
-                ) : (
-                  <>
-                    <Lock size={14} />
-                    {paymentMethod === "paypal"
-                      ? `Pagar con PayPal — $${amountToPay.toFixed(2)}`
-                      : `Pagar $${amountToPay.toFixed(2)}`}
-                  </>
-                )}
-              </button>
 
               <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
                 <Shield size={12} />
