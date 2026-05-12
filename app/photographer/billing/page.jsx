@@ -1481,7 +1481,6 @@ body{font-family:'Courier New',Courier,monospace;font-size:11px;width:80mm;paddi
   <hr class="divider"/>
   <table class="totals-table">
     <tr><td>SUBTOTAL:</td><td>${sym} ${inv.subtotal.toFixed(2)}</td></tr>
-    <tr><td>ITBIS (18%):</td><td>${sym} ${inv.tax.toFixed(2)}</td></tr>
     <tr class="total-row"><td>TOTAL A PAGAR:</td><td>${sym} ${inv.total.toFixed(2)}</td></tr>
   </table>
   <div class="footer">
@@ -1617,10 +1616,6 @@ function POSReceipt({ invoice, onClose, ticketUrl }) {
               <tr>
                 <td className="py-1">SUBTOTAL:</td>
                 <td className="py-1 text-right font-semibold">{CURRENCY_SYMBOLS[invoice.currency] || 'US$'} {invoice.subtotal.toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td className="py-1">ITBIS (18%):</td>
-                <td className="py-1 text-right font-semibold">{CURRENCY_SYMBOLS[invoice.currency] || 'US$'} {invoice.tax.toFixed(2)}</td>
               </tr>
               <tr className="border-t-2 border-black">
                 <td className="py-2 text-sm font-bold">TOTAL A PAGAR:</td>
@@ -1838,8 +1833,8 @@ export default function BillingPage() {
 
   // Calculate totals
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const tax = subtotal * 0.18; // 18% ITBIS
-  const total = subtotal + tax;
+  const tax = 0;
+  const total = subtotal;
 
   // Clear cart
   const clearCart = () => {
@@ -2322,12 +2317,6 @@ export default function BillingPage() {
                   <span className="text-white/60">Subtotal</span>
                   <span className="text-white">
                     {currencyLabel(currency)} {subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-white/60">ITBIS (18%)</span>
-                  <span className="text-white">
-                    {currencyLabel(currency)} {tax.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex justify-between text-lg font-semibold pt-2 border-t border-white/15">
