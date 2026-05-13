@@ -15,36 +15,50 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { hotelDirectory } from "@/lib/hotel-locations"
-import { getBuggyPickupSuggestion } from "@/lib/hotel-pickup-schedules"
+import { getBuggyPickupSuggestion, type TurnSlot } from "@/lib/hotel-pickup-schedules"
 
 interface PickupEntry {
   id: string
   hotel: string
+  shift: ShiftOption
   pickupTime: string
   agency: string
   customerName: string
   persons: number
   room: string
-  buggyType: string
+  serviceType: string
 }
 
-const BUGGY_TYPES = [
+type ShiftOption = "9 AM" | "12 PM" | "3 PM"
+
+const SHIFT_TO_SLOT: Record<ShiftOption, TurnSlot> = {
+  "9 AM": "8 AM",
+  "12 PM": "11 AM",
+  "3 PM": "3 PM",
+}
+
+const SERVICES = [
   "Single Buggy",
-  "Double Buggy",
-  "Triple Buggy",
-  "Quad Buggy",
-  "Moto",
+  "Doble Buggy",
+  "Family Buggy",
+  "Single Moto",
+  "Doble Moto",
+  "15 Min Caballos + Doble Buggy",
+  "15 Min Caballos + Family Buggy",
+  "Sunset Ride",
+  "Full Ride",
 ]
 
 export function DriverPickupSheet() {
   const [pickups, setPickups] = useState<PickupEntry[]>([])
   const [hotel, setHotel] = useState("")
+  const [shift, setShift] = useState<ShiftOption>("9 AM")
   const [time, setTime] = useState("")
   const [agency, setAgency] = useState("")
   const [customerName, setCustomerName] = useState("")
   const [persons, setPersons] = useState("1")
   const [room, setRoom] = useState("")
-  const [buggyType, setBuggyType] = useState("")
+  const [serviceType, setServiceType] = useState("")
 
   const hotelList = Object.keys(hotelDirectory).sort()
   const filteredHotels = useMemo(
@@ -54,12 +68,12 @@ export function DriverPickupSheet() {
 
   const suggestedTime = useMemo(() => {
     if (!hotel) return ""
-    const suggestion = getBuggyPickupSuggestion(hotel)
+    const suggestion = getBuggyPickupSuggestion(hotel, SHIFT_TO_SLOT[shift])
     return suggestion?.pickupTime || ""
-  }, [hotel])
+  }, [hotel, shift])
 
   const handleAddPickup = () => {
-    if (!hotel || !time || !agency || !customerName || !persons || !buggyType) {
+    if (!hotel || !time || !agency || !customerName || !persons || !serviceType) {
       alert("Por favor completa todos los campos")
       return
     }
@@ -67,22 +81,24 @@ export function DriverPickupSheet() {
     const newEntry: PickupEntry = {
       id: Date.now().toString(),
       hotel,
+      shift,
       pickupTime: time,
       agency,
       customerName,
       persons: parseInt(persons),
       room,
-      buggyType,
+      serviceType,
     }
 
     setPickups([...pickups, newEntry])
     setHotel("")
+    setShift("9 AM")
     setTime("")
     setAgency("")
     setCustomerName("")
     setPersons("1")
     setRoom("")
-    setBuggyType("")
+    setServiceType("")
   }
 
   const handleRemovePickup = (id: string) => {
@@ -133,7 +149,8 @@ export function DriverPickupSheet() {
                         key={h}
                         onClick={() => {
                           setHotel(h)
-                          setTime(suggestedTime)
+                          const nextSuggestion = getBuggyPickupSuggestion(h, SHIFT_TO_SLOT[shift])
+                          setTime(nextSuggestion?.pickupTime || "")
                         }}
                         className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm"
                       >
@@ -157,6 +174,31 @@ export function DriverPickupSheet() {
                 onChange={(e) => setTime(e.target.value)}
                 placeholder="07:30"
               />
+            </div>
+
+            {/* Shift */}
+            <div className="space-y-1.5">
+              <Label>Turno *</Label>
+              <Select
+                value={shift}
+                onValueChange={(val) => {
+                  const nextShift = val as ShiftOption
+                  setShift(nextShift)
+                  if (hotel) {
+                    const nextSuggestion = getBuggyPickupSuggestion(hotel, SHIFT_TO_SLOT[nextShift])
+                    setTime(nextSuggestion?.pickupTime || "")
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="9 AM">Turno 9:00 AM</SelectItem>
+                  <SelectItem value="12 PM">Turno 12:00 PM</SelectItem>
+                  <SelectItem value="3 PM">Turno 3:00 PM</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Agency */}
@@ -201,17 +243,17 @@ export function DriverPickupSheet() {
               />
             </div>
 
-            {/* Buggy Type */}
+            {/* Service Type */}
             <div className="space-y-1.5">
-              <Label>Tipo de Buggy *</Label>
-              <Select value={buggyType} onValueChange={setBuggyType}>
+              <Label>Servicios *</Label>
+              <Select value={serviceType} onValueChange={setServiceType}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {BUGGY_TYPES.map((bt) => (
-                    <SelectItem key={bt} value={bt}>
-                      {bt}
+                  {SERVICES.map((service) => (
+                    <SelectItem key={service} value={service}>
+                      {service}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -248,12 +290,13 @@ export function DriverPickupSheet() {
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-3 px-2 font-semibold">Hotel</th>
+                    <th className="text-left py-3 px-2 font-semibold">Turno</th>
                     <th className="text-left py-3 px-2 font-semibold">Hora</th>
                     <th className="text-left py-3 px-2 font-semibold">Agencia</th>
                     <th className="text-left py-3 px-2 font-semibold">Cliente</th>
                     <th className="text-center py-3 px-2 font-semibold">Personas</th>
                     <th className="text-left py-3 px-2 font-semibold">Hab.</th>
-                    <th className="text-left py-3 px-2 font-semibold">Buggy</th>
+                    <th className="text-left py-3 px-2 font-semibold">Servicio</th>
                     <th className="text-center py-3 px-2 font-semibold">Acciones</th>
                   </tr>
                 </thead>
@@ -268,6 +311,7 @@ export function DriverPickupSheet() {
                           {hotelDirectory[pickup.hotel]?.name || pickup.hotel}
                         </span>
                       </td>
+                      <td className="py-3 px-2">{pickup.shift}</td>
                       <td className="py-3 px-2">{pickup.pickupTime}</td>
                       <td className="py-3 px-2">{pickup.agency}</td>
                       <td className="py-3 px-2">{pickup.customerName}</td>
@@ -275,7 +319,7 @@ export function DriverPickupSheet() {
                         <Badge variant="outline">{pickup.persons}</Badge>
                       </td>
                       <td className="py-3 px-2">{pickup.room || "—"}</td>
-                      <td className="py-3 px-2">{pickup.buggyType}</td>
+                      <td className="py-3 px-2">{pickup.serviceType}</td>
                       <td className="py-3 px-2 text-center">
                         <button
                           onClick={() => handleRemovePickup(pickup.id)}
@@ -308,13 +352,14 @@ function generatePrintHTML(pickups: PickupEntry[]): string {
     .map(
       (p) => `
     <tr>
+      <td style="border: 1px solid #ddd; padding: 8px;">${p.shift}</td>
       <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${p.pickupTime}</td>
       <td style="border: 1px solid #ddd; padding: 8px;">${p.hotel}</td>
       <td style="border: 1px solid #ddd; padding: 8px;">${p.room || "—"}</td>
       <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${p.persons}</td>
       <td style="border: 1px solid #ddd; padding: 8px;">${p.agency}</td>
       <td style="border: 1px solid #ddd; padding: 8px;">${p.customerName}</td>
-      <td style="border: 1px solid #ddd; padding: 8px;">${p.buggyType}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">${p.serviceType}</td>
     </tr>
   `,
     )
@@ -432,13 +477,14 @@ function generatePrintHTML(pickups: PickupEntry[]): string {
     <table>
       <thead>
         <tr>
+          <th style="width: 10%;">TURNO</th>
           <th style="width: 10%;">HORARIO</th>
-          <th style="width: 25%;">HOTEL</th>
-          <th style="width: 10%;">HAB.</th>
+          <th style="width: 20%;">HOTEL</th>
+          <th style="width: 8%;">HAB.</th>
           <th style="width: 8%;">PAX</th>
-          <th style="width: 20%;">AGENCIA</th>
-          <th style="width: 17%;">CLIENTE</th>
-          <th style="width: 20%;">BUGGY</th>
+          <th style="width: 15%;">AGENCIA</th>
+          <th style="width: 14%;">CLIENTE</th>
+          <th style="width: 15%;">SERVICIO</th>
         </tr>
       </thead>
       <tbody>

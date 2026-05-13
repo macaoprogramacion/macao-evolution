@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, X, Edit2, Check, Trash2 } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -21,11 +21,40 @@ interface BillingRecord {
   type: "pago_al_llegar" | "credito_vendedor" | "venta_directa"
   clientName: string
   phone: string
+  currency: "USD" | "DOP" | "EUR" | "GBP"
   amount: number
+  paymentMethod: "tarjeta" | "paypal" | "efectivo"
+  courtesy: boolean
+  serviceType: string
   status: "pendiente" | "pagado" | "cancelado"
   date: string
   notes: string
   vendorName?: string
+}
+
+const SERVICE_OPTIONS = [
+  "Single Buggy",
+  "Doble Buggy",
+  "Family Buggy",
+  "Single Moto",
+  "Doble Moto",
+  "15 Min Caballos + Doble Buggy",
+  "15 Min Caballos + Family Buggy",
+  "Sunset Ride",
+  "Full Ride",
+]
+
+const CURRENCY_SYMBOLS: Record<"USD" | "DOP" | "EUR" | "GBP", string> = {
+  USD: "US$",
+  DOP: "RD$",
+  EUR: "EUR",
+  GBP: "GBP",
+}
+
+const PAYMENT_METHOD_LABELS: Record<"tarjeta" | "paypal" | "efectivo", string> = {
+  tarjeta: "Pago con Tarjeta",
+  paypal: "PayPal",
+  efectivo: "Efectivo",
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -42,28 +71,44 @@ const TYPE_COLORS: Record<string, string> = {
 
 export function BillingCollections() {
   const [records, setRecords] = useState<BillingRecord[]>([])
-  const [editingId, setEditingId] = useState<string | null>(null)
 
   // Form state
   const [type, setType] = useState<"pago_al_llegar" | "credito_vendedor" | "venta_directa">("pago_al_llegar")
   const [clientName, setClientName] = useState("")
   const [phone, setPhone] = useState("")
   const [vendorName, setVendorName] = useState("")
+  const [currency, setCurrency] = useState<"USD" | "DOP" | "EUR" | "GBP">("USD")
   const [amount, setAmount] = useState("")
+  const [paymentMethod, setPaymentMethod] = useState<"tarjeta" | "paypal" | "efectivo">("efectivo")
+  const [courtesy, setCourtesy] = useState(false)
+  const [serviceType, setServiceType] = useState("")
   const [notes, setNotes] = useState("")
 
+  const supportsMultiCurrency = type === "pago_al_llegar" || type === "venta_directa"
+
+  const formatMoney = (code: "USD" | "DOP" | "EUR" | "GBP", value: number) => {
+    const locale = code === "DOP" ? "es-DO" : "en-US"
+    return `${CURRENCY_SYMBOLS[code]} ${value.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  }
+
   const handleAddRecord = () => {
-    if (!clientName || !amount || (type === "credito_vendedor" && !vendorName)) {
+    if (!clientName || !amount || !serviceType || (type === "credito_vendedor" && !vendorName)) {
       alert("Por favor completa los campos requeridos")
       return
     }
+
+    const recordCurrency = supportsMultiCurrency ? currency : "USD"
 
     const newRecord: BillingRecord = {
       id: Date.now().toString(),
       type,
       clientName,
       phone,
+      currency: recordCurrency,
       amount: parseFloat(amount),
+      paymentMethod,
+      courtesy,
+      serviceType,
       status: "pendiente",
       date: new Date().toISOString().slice(0, 10),
       notes,
@@ -79,7 +124,11 @@ export function BillingCollections() {
     setClientName("")
     setPhone("")
     setVendorName("")
+    setCurrency("USD")
     setAmount("")
+    setPaymentMethod("efectivo")
+    setCourtesy(false)
+    setServiceType("")
     setNotes("")
   }
 
@@ -99,8 +148,18 @@ export function BillingCollections() {
     total: records.length,
     pending: records.filter((r) => r.status === "pendiente").length,
     paid: records.filter((r) => r.status === "pagado").length,
-    totalAmount: records.reduce((sum, r) => sum + r.amount, 0),
-    pendingAmount: records.filter((r) => r.status === "pendiente").reduce((sum, r) => sum + r.amount, 0),
+    totalByCurrency: {
+      USD: records.filter((r) => r.currency === "USD").reduce((sum, r) => sum + r.amount, 0),
+      DOP: records.filter((r) => r.currency === "DOP").reduce((sum, r) => sum + r.amount, 0),
+      EUR: records.filter((r) => r.currency === "EUR").reduce((sum, r) => sum + r.amount, 0),
+      GBP: records.filter((r) => r.currency === "GBP").reduce((sum, r) => sum + r.amount, 0),
+    },
+    pendingByCurrency: {
+      USD: records.filter((r) => r.status === "pendiente" && r.currency === "USD").reduce((sum, r) => sum + r.amount, 0),
+      DOP: records.filter((r) => r.status === "pendiente" && r.currency === "DOP").reduce((sum, r) => sum + r.amount, 0),
+      EUR: records.filter((r) => r.status === "pendiente" && r.currency === "EUR").reduce((sum, r) => sum + r.amount, 0),
+      GBP: records.filter((r) => r.status === "pendiente" && r.currency === "GBP").reduce((sum, r) => sum + r.amount, 0),
+    },
   }
 
   return (
@@ -127,18 +186,20 @@ export function BillingCollections() {
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Total Monto</p>
-            <p className="text-2xl font-bold">
-              US$ {stats.totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Total por Moneda</p>
+            <p className="text-sm font-semibold">{formatMoney("USD", stats.totalByCurrency.USD)}</p>
+            <p className="text-sm font-semibold">{formatMoney("DOP", stats.totalByCurrency.DOP)}</p>
+            <p className="text-sm font-semibold">{formatMoney("EUR", stats.totalByCurrency.EUR)}</p>
+            <p className="text-sm font-semibold">{formatMoney("GBP", stats.totalByCurrency.GBP)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Por Cobrar</p>
-            <p className="text-2xl font-bold text-red-600">
-              US$ {stats.pendingAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Por Cobrar por Moneda</p>
+            <p className="text-sm font-semibold text-red-600">{formatMoney("USD", stats.pendingByCurrency.USD)}</p>
+            <p className="text-sm font-semibold text-red-600">{formatMoney("DOP", stats.pendingByCurrency.DOP)}</p>
+            <p className="text-sm font-semibold text-red-600">{formatMoney("EUR", stats.pendingByCurrency.EUR)}</p>
+            <p className="text-sm font-semibold text-red-600">{formatMoney("GBP", stats.pendingByCurrency.GBP)}</p>
           </CardContent>
         </Card>
       </div>
@@ -165,6 +226,21 @@ export function BillingCollections() {
               </Select>
             </div>
 
+            {/* Service Type */}
+            <div className="space-y-1.5">
+              <Label>Servicios *</Label>
+              <Select value={serviceType} onValueChange={setServiceType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona servicio" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SERVICE_OPTIONS.map((service) => (
+                    <SelectItem key={service} value={service}>{service}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Client Name */}
             <div className="space-y-1.5">
               <Label>Nombre Cliente *</Label>
@@ -185,6 +261,38 @@ export function BillingCollections() {
               />
             </div>
 
+            {/* Payment Method */}
+            <div className="space-y-1.5">
+              <Label>Método de Pago *</Label>
+              <Select value={paymentMethod} onValueChange={(val: any) => setPaymentMethod(val)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tarjeta">Pago con Tarjeta</SelectItem>
+                  <SelectItem value="paypal">PayPal</SelectItem>
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Courtesy */}
+            <div className="space-y-1.5">
+              <Label>Cortesia (Opcional)</Label>
+              <Select
+                value={courtesy ? "si" : "no"}
+                onValueChange={(val) => setCourtesy(val === "si")}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no">No</SelectItem>
+                  <SelectItem value="si">Si, cubierta por el rancho</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Vendor Name (if credito_vendedor) */}
             {type === "credito_vendedor" && (
               <div className="space-y-1.5">
@@ -197,9 +305,27 @@ export function BillingCollections() {
               </div>
             )}
 
+            {/* Currency (only for pago_al_llegar and venta_directa) */}
+            {supportsMultiCurrency && (
+              <div className="space-y-1.5">
+                <Label>Moneda *</Label>
+                <Select value={currency} onValueChange={(val: any) => setCurrency(val)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">Dolar (USD)</SelectItem>
+                    <SelectItem value="DOP">Peso Dominicano (DOP)</SelectItem>
+                    <SelectItem value="EUR">Euro (EUR)</SelectItem>
+                    <SelectItem value="GBP">Libra Esterlina (GBP)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {/* Amount */}
             <div className="space-y-1.5">
-              <Label>Monto (USD) *</Label>
+              <Label>Monto ({supportsMultiCurrency ? currency : "USD"}) *</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -244,9 +370,12 @@ export function BillingCollections() {
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-3 px-2 font-semibold">Tipo</th>
+                    <th className="text-left py-3 px-2 font-semibold">Servicio</th>
                     <th className="text-left py-3 px-2 font-semibold">Cliente</th>
                     <th className="text-left py-3 px-2 font-semibold">Teléfono</th>
                     <th className="text-left py-3 px-2 font-semibold">Vendedor</th>
+                    <th className="text-left py-3 px-2 font-semibold">Pago</th>
+                    <th className="text-left py-3 px-2 font-semibold">Cortesia</th>
                     <th className="text-right py-3 px-2 font-semibold">Monto</th>
                     <th className="text-center py-3 px-2 font-semibold">Estado</th>
                     <th className="text-center py-3 px-2 font-semibold">Acciones</th>
@@ -263,6 +392,7 @@ export function BillingCollections() {
                           {TYPE_LABELS[record.type]}
                         </Badge>
                       </td>
+                      <td className="py-3 px-2">{record.serviceType}</td>
                       <td className="py-3 px-2">
                         <div>
                           <p className="font-medium">{record.clientName}</p>
@@ -271,8 +401,16 @@ export function BillingCollections() {
                       </td>
                       <td className="py-3 px-2">{record.phone || "—"}</td>
                       <td className="py-3 px-2">{record.vendorName || "—"}</td>
+                      <td className="py-3 px-2">{PAYMENT_METHOD_LABELS[record.paymentMethod]}</td>
+                      <td className="py-3 px-2">
+                        {record.courtesy ? (
+                          <Badge className="bg-emerald-100 text-emerald-800">Cortesia</Badge>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="py-3 px-2 text-right font-medium">
-                        US$ {record.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                        {formatMoney(record.currency, record.amount)}
                       </td>
                       <td className="py-3 px-2 text-center">
                         <Select
