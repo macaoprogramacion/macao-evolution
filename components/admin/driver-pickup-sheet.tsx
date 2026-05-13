@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { Fragment, useState, useMemo } from "react"
 import { Plus, X, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,6 +20,7 @@ import { getBuggyPickupSuggestion, type TurnSlot } from "@/lib/hotel-pickup-sche
 interface PickupEntry {
   id: string
   hotel: string
+  zoneId: PickupZoneId
   shift: ShiftOption
   pickupTime: string
   agency: string
@@ -30,6 +31,51 @@ interface PickupEntry {
 }
 
 type ShiftOption = "9 AM" | "12 PM" | "3 PM"
+type PickupZoneId = "zona4" | "zona3" | "zona2" | "zona1"
+
+const ZONE_ORDER: PickupZoneId[] = ["zona4", "zona3", "zona2", "zona1"]
+
+const ZONE_CONFIG: Record<PickupZoneId, {
+  label: string
+  subtitle: string
+  tableClass: string
+  badgeClass: string
+  printBg: string
+  printText: string
+}> = {
+  zona4: {
+    label: "Zona 4",
+    subtitle: "Cabeza de Toro y Cap Cana",
+    tableClass: "bg-rose-100 dark:bg-rose-900/30",
+    badgeClass: "bg-rose-100 text-rose-800",
+    printBg: "#fecaca",
+    printText: "#7f1d1d",
+  },
+  zona3: {
+    label: "Zona 3",
+    subtitle: "Bavaro",
+    tableClass: "bg-amber-100 dark:bg-amber-900/30",
+    badgeClass: "bg-amber-100 text-amber-800",
+    printBg: "#fde68a",
+    printText: "#78350f",
+  },
+  zona2: {
+    label: "Zona 2",
+    subtitle: "Centro y Machiplan",
+    tableClass: "bg-sky-100 dark:bg-sky-900/30",
+    badgeClass: "bg-sky-100 text-sky-800",
+    printBg: "#bae6fd",
+    printText: "#0c4a6e",
+  },
+  zona1: {
+    label: "Zona 1",
+    subtitle: "Macao y Uvero Alto",
+    tableClass: "bg-emerald-100 dark:bg-emerald-900/30",
+    badgeClass: "bg-emerald-100 text-emerald-800",
+    printBg: "#bbf7d0",
+    printText: "#14532d",
+  },
+}
 
 const SHIFT_TO_SLOT: Record<ShiftOption, TurnSlot> = {
   "9 AM": "8 AM",
@@ -49,9 +95,55 @@ const SERVICES = [
   "Full Ride",
 ]
 
+function normalizeText(value: string) {
+  return value.trim().toUpperCase()
+}
+
+function toMinutes(timeValue: string) {
+  const parts = timeValue.split(":")
+  if (parts.length !== 2) return 9999
+  const hh = Number(parts[0])
+  const mm = Number(parts[1])
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return 9999
+  return hh * 60 + mm
+}
+
+function resolveHotelInfo(hotelInput: string) {
+  const query = normalizeText(hotelInput)
+  const found = Object.entries(hotelDirectory).find(([key, value]) => {
+    const keyNorm = normalizeText(key)
+    const nameNorm = normalizeText(value.name)
+    return query === keyNorm || query === nameNorm
+  })
+
+  if (!found) {
+    return {
+      displayName: hotelInput,
+      zone: "Sin Zona",
+      section: 999,
+      defaultZoneId: "zona3" as PickupZoneId,
+    }
+  }
+
+  const section = found[1].section
+  let defaultZoneId: PickupZoneId = "zona3"
+  if (section >= 1 && section <= 3) defaultZoneId = "zona4"
+  else if (section >= 4 && section <= 5) defaultZoneId = "zona3"
+  else if (section >= 6 && section <= 8) defaultZoneId = "zona2"
+  else if (section >= 9 && section <= 10) defaultZoneId = "zona1"
+
+  return {
+    displayName: found[1].name,
+    zone: found[1].zone,
+    section,
+    defaultZoneId,
+  }
+}
+
 export function DriverPickupSheet() {
   const [pickups, setPickups] = useState<PickupEntry[]>([])
   const [hotel, setHotel] = useState("")
+  const [zoneId, setZoneId] = useState<PickupZoneId>("zona4")
   const [showHotelSuggestions, setShowHotelSuggestions] = useState(false)
   const [shift, setShift] = useState<ShiftOption>("9 AM")
   const [time, setTime] = useState("")
@@ -67,11 +159,10 @@ export function DriverPickupSheet() {
       hotelList.map((key) => ({
         key,
         label: hotelDirectory[key]?.name || key,
+        defaultZoneId: resolveHotelInfo(key).defaultZoneId,
       })),
     [hotelList],
   )
-
-  const normalize = (value: string) => value.trim().toUpperCase()
 
   const toTimeInputValue = (raw: string) => {
     const value = raw.trim()
@@ -103,7 +194,7 @@ export function DriverPickupSheet() {
     if (direct?.pickupTime) return toTimeInputValue(direct.pickupTime)
 
     const match = hotelOptions.find(
-      (opt) => normalize(opt.label) === normalize(hotelInput) || normalize(opt.key) === normalize(hotelInput),
+      (opt) => normalizeText(opt.label) === normalizeText(hotelInput) || normalizeText(opt.key) === normalizeText(hotelInput),
     )
     if (!match) return ""
 
@@ -119,18 +210,44 @@ export function DriverPickupSheet() {
   const filteredHotels = useMemo(
     () =>
       hotelOptions.filter((opt) => {
-        const query = normalize(hotel)
-        return normalize(opt.label).includes(query) || normalize(opt.key).includes(query)
+        const query = normalizeText(hotel)
+        const zoneMatch = opt.defaultZoneId === zoneId
+        const queryMatch = !query || normalizeText(opt.label).includes(query) || normalizeText(opt.key).includes(query)
+        return zoneMatch && queryMatch
       }),
-    [hotel, hotelOptions],
+    [hotel, hotelOptions, zoneId],
   )
+
+  const groupedPickups = useMemo(() => {
+    const map = new Map<PickupZoneId, { zoneId: PickupZoneId; items: PickupEntry[] }>()
+
+    for (const pickup of pickups) {
+      const key = pickup.zoneId
+      if (!map.has(key)) {
+        map.set(key, { zoneId: key, items: [] })
+      }
+      map.get(key)!.items.push(pickup)
+    }
+
+    return ZONE_ORDER
+      .filter((zone) => map.has(zone))
+      .map((zone) => map.get(zone)!)
+      .map((group) => ({
+        ...group,
+        items: [...group.items].sort((a, b) => {
+          const byTime = toMinutes(a.pickupTime) - toMinutes(b.pickupTime)
+          if (byTime !== 0) return byTime
+          return resolveHotelInfo(a.hotel).displayName.localeCompare(resolveHotelInfo(b.hotel).displayName)
+        }),
+      }))
+  }, [pickups])
 
   const suggestedTime = useMemo(() => {
     return getScheduledTime(hotel, shift)
   }, [hotel, shift])
 
   const handleAddPickup = () => {
-    if (!hotel || !time || !agency || !customerName || !persons || !serviceType) {
+    if (!hotel || !zoneId || !time || !agency || !customerName || !persons || !serviceType) {
       alert("Por favor completa todos los campos")
       return
     }
@@ -138,6 +255,7 @@ export function DriverPickupSheet() {
     const newEntry: PickupEntry = {
       id: Date.now().toString(),
       hotel,
+      zoneId,
       shift,
       pickupTime: time,
       agency,
@@ -149,6 +267,7 @@ export function DriverPickupSheet() {
 
     setPickups([...pickups, newEntry])
     setHotel("")
+    setZoneId("zona4")
     setShowHotelSuggestions(false)
     setShift("9 AM")
     setTime("")
@@ -190,6 +309,30 @@ export function DriverPickupSheet() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Zone */}
+            <div className="space-y-1.5">
+              <Label>Zona *</Label>
+              <Select
+                value={zoneId}
+                onValueChange={(value) => {
+                  setZoneId(value as PickupZoneId)
+                  setHotel("")
+                  setTime("")
+                  setShowHotelSuggestions(false)
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="zona4">Zona 4 - Cabeza de Toro y Cap Cana</SelectItem>
+                  <SelectItem value="zona3">Zona 3 - Bavaro</SelectItem>
+                  <SelectItem value="zona2">Zona 2 - Centro y Machiplan</SelectItem>
+                  <SelectItem value="zona1">Zona 1 - Macao y Uvero Alto</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Hotel */}
             <div className="space-y-1.5">
               <Label>Hotel *</Label>
@@ -210,7 +353,7 @@ export function DriverPickupSheet() {
                   placeholder="Busca el hotel..."
                   className="w-full"
                 />
-                {showHotelSuggestions && hotel && filteredHotels.length > 0 && (
+                {showHotelSuggestions && filteredHotels.length > 0 && (
                   <div className="absolute top-full left-0 right-0 border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-700 rounded-md mt-1 max-h-48 overflow-y-auto z-10">
                     {filteredHotels.map((opt) => (
                       <button
@@ -218,6 +361,7 @@ export function DriverPickupSheet() {
                         type="button"
                         onClick={() => {
                           setHotel(opt.label)
+                          setZoneId(opt.defaultZoneId)
                           setShowHotelSuggestions(false)
                           const nextSuggestion = getScheduledTime(opt.label, shift)
                           setTime(nextSuggestion)
@@ -230,6 +374,9 @@ export function DriverPickupSheet() {
                   </div>
                 )}
               </div>
+              <p className="text-xs text-gray-500">
+                Mostrando hoteles de {ZONE_CONFIG[zoneId].label}: {ZONE_CONFIG[zoneId].subtitle}
+              </p>
               {suggestedTime && hotel && (
                 <p className="text-xs text-blue-600">Horario del hotel para este turno: {suggestedTime}</p>
               )}
@@ -360,6 +507,7 @@ export function DriverPickupSheet() {
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-3 px-2 font-semibold">Hotel</th>
+                    <th className="text-left py-3 px-2 font-semibold">Zona</th>
                     <th className="text-left py-3 px-2 font-semibold">Turno</th>
                     <th className="text-left py-3 px-2 font-semibold">Hora</th>
                     <th className="text-left py-3 px-2 font-semibold">Agencia</th>
@@ -371,34 +519,47 @@ export function DriverPickupSheet() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pickups.map((pickup) => (
-                    <tr
-                      key={pickup.id}
-                      className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900"
-                    >
-                      <td className="py-3 px-2">
-                        <span className="font-medium">
-                          {hotelDirectory[pickup.hotel]?.name || pickup.hotel}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2">{pickup.shift}</td>
-                      <td className="py-3 px-2">{pickup.pickupTime}</td>
-                      <td className="py-3 px-2">{pickup.agency}</td>
-                      <td className="py-3 px-2">{pickup.customerName}</td>
-                      <td className="py-3 px-2 text-center">
-                        <Badge variant="outline">{pickup.persons}</Badge>
-                      </td>
-                      <td className="py-3 px-2">{pickup.room || "—"}</td>
-                      <td className="py-3 px-2">{pickup.serviceType}</td>
-                      <td className="py-3 px-2 text-center">
-                        <button
-                          onClick={() => handleRemovePickup(pickup.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
+                  {groupedPickups.map((group) => (
+                    <Fragment key={`zone-${group.zoneId}`}>
+                      <tr className={ZONE_CONFIG[group.zoneId].tableClass}>
+                        <td colSpan={10} className="py-2 px-2 font-semibold text-gray-800 dark:text-gray-100">
+                          {ZONE_CONFIG[group.zoneId].label} - {ZONE_CONFIG[group.zoneId].subtitle}
+                        </td>
+                      </tr>
+                      {group.items.map((pickup) => {
+                        const info = resolveHotelInfo(pickup.hotel)
+                        return (
+                          <tr
+                            key={pickup.id}
+                            className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900"
+                          >
+                            <td className="py-3 px-2">
+                              <span className="font-medium">{info.displayName}</span>
+                            </td>
+                            <td className="py-3 px-2">
+                              <Badge className={ZONE_CONFIG[pickup.zoneId].badgeClass}>{ZONE_CONFIG[pickup.zoneId].label}</Badge>
+                            </td>
+                            <td className="py-3 px-2">{pickup.shift}</td>
+                            <td className="py-3 px-2">{pickup.pickupTime}</td>
+                            <td className="py-3 px-2">{pickup.agency}</td>
+                            <td className="py-3 px-2">{pickup.customerName}</td>
+                            <td className="py-3 px-2 text-center">
+                              <Badge variant="outline">{pickup.persons}</Badge>
+                            </td>
+                            <td className="py-3 px-2">{pickup.room || "—"}</td>
+                            <td className="py-3 px-2">{pickup.serviceType}</td>
+                            <td className="py-3 px-2 text-center">
+                              <button
+                                onClick={() => handleRemovePickup(pickup.id)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -418,21 +579,53 @@ function generatePrintHTML(pickups: PickupEntry[]): string {
     year: "numeric",
   })
 
-  const rows = pickups
-    .map(
-      (p) => `
-    <tr>
-      <td style="border: 1px solid #ddd; padding: 8px;">${p.shift}</td>
-      <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${p.pickupTime}</td>
-      <td style="border: 1px solid #ddd; padding: 8px;">${p.hotel}</td>
-      <td style="border: 1px solid #ddd; padding: 8px;">${p.room || "—"}</td>
-      <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${p.persons}</td>
-      <td style="border: 1px solid #ddd; padding: 8px;">${p.agency}</td>
-      <td style="border: 1px solid #ddd; padding: 8px;">${p.customerName}</td>
-      <td style="border: 1px solid #ddd; padding: 8px;">${p.serviceType}</td>
-    </tr>
-  `,
-    )
+  const groupsMap = new Map<PickupZoneId, { zoneId: PickupZoneId; items: PickupEntry[] }>()
+  for (const pickup of pickups) {
+    const key = pickup.zoneId
+    if (!groupsMap.has(key)) {
+      groupsMap.set(key, { zoneId: key, items: [] })
+    }
+    groupsMap.get(key)!.items.push(pickup)
+  }
+
+  const groups = ZONE_ORDER
+    .filter((zone) => groupsMap.has(zone))
+    .map((zone) => groupsMap.get(zone)!)
+    .map((group) => ({
+      ...group,
+      items: [...group.items].sort((a, b) => toMinutes(a.pickupTime) - toMinutes(b.pickupTime)),
+    }))
+
+  const rows = groups
+    .map((group) => {
+      const zoneCfg = ZONE_CONFIG[group.zoneId]
+      const zoneHeader = `
+        <tr class="zone-row" style="background:${zoneCfg.printBg};color:${zoneCfg.printText};">
+          <td colspan="9">${zoneCfg.label} - ${zoneCfg.subtitle}</td>
+        </tr>
+      `
+
+      const zoneRows = group.items
+        .map((p) => {
+          const info = resolveHotelInfo(p.hotel)
+          return `
+            <tr>
+              <td style="border: 1px solid #ddd; padding: 8px;">${p.shift}</td>
+              <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${p.pickupTime}</td>
+              <td style="border: 1px solid #ddd; padding: 8px;">${info.displayName}</td>
+              <td style="border: 1px solid #ddd; padding: 8px;">${ZONE_CONFIG[p.zoneId].label}</td>
+              <td style="border: 1px solid #ddd; padding: 8px;">${p.room || "—"}</td>
+              <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${p.persons}</td>
+              <td style="border: 1px solid #ddd; padding: 8px;">${p.agency}</td>
+              <td style="border: 1px solid #ddd; padding: 8px;">${p.customerName}</td>
+              <td style="border: 1px solid #ddd; padding: 8px;">${p.serviceType}</td>
+            </tr>
+          `
+        })
+        .join("")
+
+      return `${zoneHeader}${zoneRows}`
+    })
     .join("")
 
   return `
@@ -508,6 +701,13 @@ function generatePrintHTML(pickups: PickupEntry[]): string {
       padding: 8px;
       font-size: 11px;
     }
+    .zone-row td {
+      background: #fee2e2;
+      color: #991b1b;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
     tr:nth-child(even) {
       background: #f9f9f9;
     }
@@ -549,12 +749,13 @@ function generatePrintHTML(pickups: PickupEntry[]): string {
         <tr>
           <th style="width: 10%;">TURNO</th>
           <th style="width: 10%;">HORARIO</th>
-          <th style="width: 20%;">HOTEL</th>
+          <th style="width: 17%;">HOTEL</th>
+          <th style="width: 10%;">ZONA</th>
           <th style="width: 8%;">HAB.</th>
-          <th style="width: 8%;">PAX</th>
-          <th style="width: 15%;">AGENCIA</th>
-          <th style="width: 14%;">CLIENTE</th>
-          <th style="width: 15%;">SERVICIO</th>
+          <th style="width: 7%;">PAX</th>
+          <th style="width: 13%;">AGENCIA</th>
+          <th style="width: 13%;">CLIENTE</th>
+          <th style="width: 12%;">SERVICIO</th>
         </tr>
       </thead>
       <tbody>
