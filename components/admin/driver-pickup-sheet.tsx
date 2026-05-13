@@ -52,6 +52,7 @@ const SERVICES = [
 export function DriverPickupSheet() {
   const [pickups, setPickups] = useState<PickupEntry[]>([])
   const [hotel, setHotel] = useState("")
+  const [showHotelSuggestions, setShowHotelSuggestions] = useState(false)
   const [shift, setShift] = useState<ShiftOption>("9 AM")
   const [time, setTime] = useState("")
   const [agency, setAgency] = useState("")
@@ -61,15 +62,71 @@ export function DriverPickupSheet() {
   const [serviceType, setServiceType] = useState("")
 
   const hotelList = Object.keys(hotelDirectory).sort()
+  const hotelOptions = useMemo(
+    () =>
+      hotelList.map((key) => ({
+        key,
+        label: hotelDirectory[key]?.name || key,
+      })),
+    [hotelList],
+  )
+
+  const normalize = (value: string) => value.trim().toUpperCase()
+
+  const toTimeInputValue = (raw: string) => {
+    const value = raw.trim()
+    const already24h = value.match(/^(\d{1,2}):(\d{2})$/)
+    if (already24h) {
+      const hh = Math.max(0, Math.min(23, Number(already24h[1])))
+      const mm = Math.max(0, Math.min(59, Number(already24h[2])))
+      return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`
+    }
+
+    const withMeridiem = value.match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i)
+    if (!withMeridiem) return ""
+
+    let hh = Number(withMeridiem[1])
+    const mm = Number(withMeridiem[2])
+    const meridiem = withMeridiem[3].toUpperCase()
+
+    if (meridiem === "PM" && hh !== 12) hh += 12
+    if (meridiem === "AM" && hh === 12) hh = 0
+
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`
+  }
+
+  const getScheduledTime = (hotelInput: string, shiftInput: ShiftOption) => {
+    if (!hotelInput) return ""
+    const slot = SHIFT_TO_SLOT[shiftInput]
+
+    const direct = getBuggyPickupSuggestion(hotelInput, slot)
+    if (direct?.pickupTime) return toTimeInputValue(direct.pickupTime)
+
+    const match = hotelOptions.find(
+      (opt) => normalize(opt.label) === normalize(hotelInput) || normalize(opt.key) === normalize(hotelInput),
+    )
+    if (!match) return ""
+
+    const byKey = getBuggyPickupSuggestion(match.key, slot)
+    if (byKey?.pickupTime) return toTimeInputValue(byKey.pickupTime)
+
+    const byLabel = getBuggyPickupSuggestion(match.label, slot)
+    if (byLabel?.pickupTime) return toTimeInputValue(byLabel.pickupTime)
+
+    return ""
+  }
+
   const filteredHotels = useMemo(
-    () => hotelList.filter((h) => h.toUpperCase().includes(hotel.toUpperCase())),
-    [hotel, hotelList],
+    () =>
+      hotelOptions.filter((opt) => {
+        const query = normalize(hotel)
+        return normalize(opt.label).includes(query) || normalize(opt.key).includes(query)
+      }),
+    [hotel, hotelOptions],
   )
 
   const suggestedTime = useMemo(() => {
-    if (!hotel) return ""
-    const suggestion = getBuggyPickupSuggestion(hotel, SHIFT_TO_SLOT[shift])
-    return suggestion?.pickupTime || ""
+    return getScheduledTime(hotel, shift)
   }, [hotel, shift])
 
   const handleAddPickup = () => {
@@ -92,6 +149,7 @@ export function DriverPickupSheet() {
 
     setPickups([...pickups, newEntry])
     setHotel("")
+    setShowHotelSuggestions(false)
     setShift("9 AM")
     setTime("")
     setAgency("")
@@ -138,30 +196,42 @@ export function DriverPickupSheet() {
               <div className="relative">
                 <Input
                   value={hotel}
-                  onChange={(e) => setHotel(e.target.value)}
+                  onFocus={() => setShowHotelSuggestions(true)}
+                  onBlur={() => {
+                    setTimeout(() => setShowHotelSuggestions(false), 120)
+                  }}
+                  onChange={(e) => {
+                    const nextHotel = e.target.value
+                    setHotel(nextHotel)
+                    setShowHotelSuggestions(true)
+                    const nextTime = getScheduledTime(nextHotel, shift)
+                    if (nextTime) setTime(nextTime)
+                  }}
                   placeholder="Busca el hotel..."
                   className="w-full"
                 />
-                {hotel && filteredHotels.length > 0 && (
+                {showHotelSuggestions && hotel && filteredHotels.length > 0 && (
                   <div className="absolute top-full left-0 right-0 border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-700 rounded-md mt-1 max-h-48 overflow-y-auto z-10">
-                    {filteredHotels.map((h) => (
+                    {filteredHotels.map((opt) => (
                       <button
-                        key={h}
+                        key={opt.key}
+                        type="button"
                         onClick={() => {
-                          setHotel(h)
-                          const nextSuggestion = getBuggyPickupSuggestion(h, SHIFT_TO_SLOT[shift])
-                          setTime(nextSuggestion?.pickupTime || "")
+                          setHotel(opt.label)
+                          setShowHotelSuggestions(false)
+                          const nextSuggestion = getScheduledTime(opt.label, shift)
+                          setTime(nextSuggestion)
                         }}
                         className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm"
                       >
-                        {hotelDirectory[h]?.name || h}
+                        {opt.label}
                       </button>
                     ))}
                   </div>
                 )}
               </div>
               {suggestedTime && hotel && (
-                <p className="text-xs text-blue-600">Sugerido: {suggestedTime}</p>
+                <p className="text-xs text-blue-600">Horario del hotel para este turno: {suggestedTime}</p>
               )}
             </div>
 
@@ -185,8 +255,8 @@ export function DriverPickupSheet() {
                   const nextShift = val as ShiftOption
                   setShift(nextShift)
                   if (hotel) {
-                    const nextSuggestion = getBuggyPickupSuggestion(hotel, SHIFT_TO_SLOT[nextShift])
-                    setTime(nextSuggestion?.pickupTime || "")
+                    const nextSuggestion = getScheduledTime(hotel, nextShift)
+                    setTime(nextSuggestion)
                   }
                 }}
               >
