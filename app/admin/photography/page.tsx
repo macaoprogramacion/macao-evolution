@@ -167,6 +167,16 @@ function buildAverageCurrencyTotals(totals: CurrencyTotals) {
   }, {})
 }
 
+function mergeCurrencyTotals(base: CurrencyTotals, extra: CurrencyTotals) {
+  const merged: CurrencyTotals = { ...base }
+  Object.entries(extra).forEach(([currency, data]) => {
+    if (!merged[currency]) merged[currency] = { total: 0, count: 0 }
+    merged[currency].total += Number(data?.total || 0)
+    merged[currency].count += Number(data?.count || 0)
+  })
+  return merged
+}
+
 function parseSafeDate(value?: string | null) {
   if (!value) return null
   const date = new Date(value)
@@ -512,6 +522,32 @@ export default function PhotographyPage() {
     return portfolios
   }, [portfolios, supabasePortfolios])
 
+  const closureAnalyticsByDay = useMemo(() => {
+    const byDay: Record<string, { byCurrency: CurrencyTotals; invoices: number }> = {}
+
+    dailyClosures.forEach((closure) => {
+      const dayKey = String(closure.closure_date || "").slice(0, 10)
+      if (!dayKey) return
+
+      const closureCurrency: CurrencyTotals = {}
+      Object.entries(closure.by_currency || {}).forEach(([rawCurrency, data]) => {
+        const currency = normalizeCurrencyCode(rawCurrency)
+        if (!closureCurrency[currency]) closureCurrency[currency] = { total: 0, count: 0 }
+        closureCurrency[currency].total += Number(data?.total || 0)
+        closureCurrency[currency].count += Number(data?.count || 0)
+      })
+
+      const inferredInvoices = Object.values(closureCurrency).reduce((sum, cur) => sum + (cur.count || 0), 0)
+      const closureInvoices = Number(closure.total_invoices || inferredInvoices || 0)
+
+      if (!byDay[dayKey]) byDay[dayKey] = { byCurrency: {}, invoices: 0 }
+      byDay[dayKey].byCurrency = mergeCurrencyTotals(byDay[dayKey].byCurrency, closureCurrency)
+      byDay[dayKey].invoices += closureInvoices
+    })
+
+    return byDay
+  }, [dailyClosures])
+
   // ─── Computed stats ───────────────────────────────────────────
   const stats = useMemo(() => {
     const now = new Date()
@@ -521,8 +557,14 @@ export default function PhotographyPage() {
     const monthAgo = new Date(now)
     monthAgo.setMonth(monthAgo.getMonth() - 1)
 
-    // Invoices
-    const activeInvoices = allInvoices.filter((i) => i.status !== "cancelled")
+    // Invoices + closures (avoid duplicating days that already have cierre)
+    const closedDays = new Set(Object.keys(closureAnalyticsByDay))
+    const activeInvoices = allInvoices.filter((i) => {
+      if (i.status === "cancelled") return false
+      const dayKey = dayKeyFromInvoice(i)
+      if (!dayKey) return true
+      return !closedDays.has(dayKey)
+    })
     const todayInvoices = activeInvoices.filter((i) => dayKeyFromInvoice(i) === todayKey)
     const weekInvoices = activeInvoices.filter((i) => {
       const date = parseSafeDate(i.timestamp)
@@ -532,9 +574,37 @@ export default function PhotographyPage() {
       const date = parseSafeDate(i.timestamp)
       return !!date && date >= monthAgo
     })
-    const salesTodayByCurrency = accumulateCurrencyTotals(todayInvoices, (i) => i.total, (i) => i.currency)
-    const salesWeekByCurrency = accumulateCurrencyTotals(weekInvoices, (i) => i.total, (i) => i.currency)
-    const salesMonthByCurrency = accumulateCurrencyTotals(monthInvoices, (i) => i.total, (i) => i.currency)
+    const invoiceSalesTodayByCurrency = accumulateCurrencyTotals(todayInvoices, (i) => i.total, (i) => i.currency)
+    const invoiceSalesWeekByCurrency = accumulateCurrencyTotals(weekInvoices, (i) => i.total, (i) => i.currency)
+    const invoiceSalesMonthByCurrency = accumulateCurrencyTotals(monthInvoices, (i) => i.total, (i) => i.currency)
+
+    const closureEntries = Object.entries(closureAnalyticsByDay)
+    const closureToday = closureEntries.filter(([dayKey]) => dayKey === todayKey)
+    const closureWeek = closureEntries.filter(([dayKey]) => {
+      const date = parseSafeDate(`${dayKey}T12:00:00`)
+      return !!date && date >= weekAgo
+    })
+    const closureMonth = closureEntries.filter(([dayKey]) => {
+      const date = parseSafeDate(`${dayKey}T12:00:00`)
+      return !!date && date >= monthAgo
+    })
+
+    const closureTodayByCurrency = closureToday.reduce<CurrencyTotals>(
+      (acc, [, value]) => mergeCurrencyTotals(acc, value.byCurrency),
+      {},
+    )
+    const closureWeekByCurrency = closureWeek.reduce<CurrencyTotals>(
+      (acc, [, value]) => mergeCurrencyTotals(acc, value.byCurrency),
+      {},
+    )
+    const closureMonthByCurrency = closureMonth.reduce<CurrencyTotals>(
+      (acc, [, value]) => mergeCurrencyTotals(acc, value.byCurrency),
+      {},
+    )
+
+    const salesTodayByCurrency = mergeCurrencyTotals(invoiceSalesTodayByCurrency, closureTodayByCurrency)
+    const salesWeekByCurrency = mergeCurrencyTotals(invoiceSalesWeekByCurrency, closureWeekByCurrency)
+    const salesMonthByCurrency = mergeCurrencyTotals(invoiceSalesMonthByCurrency, closureMonthByCurrency)
 
     // Returns
     const approvedReturns = allReturns.filter(
@@ -565,13 +635,20 @@ export default function PhotographyPage() {
     const pendingPortfolios = allPortfolios.filter((p) => p.status === "Pendiente").length
 
     // By currency
-    const byCurrency: Record<string, { total: number; count: number }> = {}
+    let byCurrency: Record<string, { total: number; count: number }> = {}
     activeInvoices.forEach((inv) => {
       const cur = inv.currency || "USD"
       if (!byCurrency[cur]) byCurrency[cur] = { total: 0, count: 0 }
       byCurrency[cur].total += inv.total
       byCurrency[cur].count++
     })
+    byCurrency = Object.values(closureAnalyticsByDay).reduce(
+      (acc, closure) => mergeCurrencyTotals(acc, closure.byCurrency),
+      byCurrency,
+    )
+
+    const closureInvoicesToday = closureToday.reduce((sum, [, value]) => sum + (value.invoices || 0), 0)
+    const closureInvoicesAll = closureEntries.reduce((sum, [, value]) => sum + (value.invoices || 0), 0)
 
     // By turno (today)
     const turnoData = ["Turno 9:00", "Turno 12:00", "Turno 3:00"].map((shift) => {
@@ -590,8 +667,8 @@ export default function PhotographyPage() {
       salesTodayByCurrency,
       salesWeekByCurrency,
       salesMonthByCurrency,
-      invoicesToday: todayInvoices.length,
-      totalInvoices: activeInvoices.length,
+      invoicesToday: todayInvoices.length + closureInvoicesToday,
+      totalInvoices: activeInvoices.length + closureInvoicesAll,
       returnsTotal,
       pendingReturnsCount: pendingReturns.length,
       totalReturnsCount: allReturns.length,
@@ -607,7 +684,7 @@ export default function PhotographyPage() {
       turnoData,
       ticketPromedioByCurrency,
     }
-  }, [allInvoices, allReturns, photoSales, allPortfolios])
+  }, [allInvoices, allReturns, photoSales, allPortfolios, closureAnalyticsByDay])
 
   // ─── Filtered invoices ────────────────────────────────────────
   const filteredInvoices = useMemo(() => {
@@ -674,12 +751,15 @@ export default function PhotographyPage() {
       map[key] = { date: label, cashier: {}, online: {}, cashierCount: 0, onlineCount: 0 }
     }
 
+    const closedDays = new Set(Object.keys(closureAnalyticsByDay))
+
     allInvoices
       .filter((i) => i.status !== "cancelled")
       .forEach((inv) => {
         const date = parseSafeDate(inv.timestamp)
         if (!date) return
         const key = toDayKey(date)
+        if (closedDays.has(key)) return
         if (!map[key]) return
         const currency = normalizeCurrencyCode(inv.currency)
         if (!map[key].cashier[currency]) map[key].cashier[currency] = { total: 0, count: 0 }
@@ -687,6 +767,16 @@ export default function PhotographyPage() {
         map[key].cashier[currency].count += 1
         map[key].cashierCount += 1
       })
+
+    Object.entries(closureAnalyticsByDay).forEach(([dayKey, closureData]) => {
+      if (!map[dayKey]) return
+      Object.entries(closureData.byCurrency).forEach(([currency, totals]) => {
+        if (!map[dayKey].cashier[currency]) map[dayKey].cashier[currency] = { total: 0, count: 0 }
+        map[dayKey].cashier[currency].total += Number(totals.total || 0)
+        map[dayKey].cashier[currency].count += Number(totals.count || 0)
+      })
+      map[dayKey].cashierCount += Number(closureData.invoices || 0)
+    })
 
     const chartEvents = photoSales.filter((ps) => ps.source === "online" || ps.source === "paypal")
     chartEvents.forEach((ps) => {
@@ -702,7 +792,7 @@ export default function PhotographyPage() {
     })
 
     return Object.values(map)
-  }, [allInvoices, photoSales])
+  }, [allInvoices, photoSales, closureAnalyticsByDay])
 
   const pendingClosureDays = useMemo(() => {
     const todayKey = toDayKey(new Date())
