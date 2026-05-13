@@ -114,6 +114,7 @@ interface DailyClosure {
   closed_at?: string
   closed_by?: string
   total_invoices?: number
+  by_currency?: Record<string, { total: number; subtotal: number; tax: number; count: number }>
 }
 
 type ReturnDecision = "aprobada" | "rechazada"
@@ -350,12 +351,19 @@ export default function PhotographyPage() {
 
         const { data: sbClosures } = await supabase
           .from("photo_daily_closures")
-          .select("id, closure_date, closed_at, closed_by, total_invoices")
+          .select("*")
           .order("closure_date", { ascending: false })
           .limit(120)
 
         if (sbClosures) {
-          setDailyClosures(sbClosures)
+          setDailyClosures(sbClosures.map((c: any) => ({
+            id: c.id,
+            closure_date: c.closure_date,
+            closed_at: c.closed_at,
+            closed_by: c.closed_by,
+            total_invoices: c.total_invoices,
+            by_currency: c.by_currency || {},
+          })))
         }
 
         const events = await getPhotoSalesEvents()
@@ -765,6 +773,7 @@ export default function PhotographyPage() {
             <TabsTrigger value="returns">Devoluciones</TabsTrigger>
             <TabsTrigger value="portfolios">Portafolios</TabsTrigger>
             <TabsTrigger value="analytics">Analíticas</TabsTrigger>
+            <TabsTrigger value="closures">Cierres Diarios</TabsTrigger>
           </TabsList>
 
           {/* ═══════════ OVERVIEW TAB ═══════════ */}
@@ -1469,6 +1478,134 @@ export default function PhotographyPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ═══════════ CLOSURES TAB ═══════════ */}
+          <TabsContent value="closures" className="space-y-4 mt-6">
+            <Card className="border-gray-200 dark:border-gray-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold">Cierres Diarios Enviados</CardTitle>
+                <CardDescription>Historial de cierres enviados por los fotógrafos al administrador</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50 dark:bg-gray-900">
+                        <TableHead className="text-xs font-semibold">Fecha Cierre</TableHead>
+                        <TableHead className="text-xs font-semibold text-center">Facturas</TableHead>
+                        <TableHead className="text-xs font-semibold">Monedas</TableHead>
+                        <TableHead className="text-xs font-semibold text-right">Total Ventas</TableHead>
+                        <TableHead className="text-xs font-semibold">Cerrado por</TableHead>
+                        <TableHead className="text-xs font-semibold">Enviado</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dailyClosures.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-12 text-gray-400">
+                            <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            No hay cierres registrados
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        dailyClosures.map((closure) => {
+                          const byCur = closure.by_currency || {}
+                          const currencyCodes = Object.keys(byCur)
+                          const totalAllCurrencies = Object.entries(byCur)
+                            .map(([_, data]) => data.total || 0)
+                            .reduce((a, b) => a + b, 0)
+
+                          return (
+                            <TableRow key={closure.id} className="hover:bg-gray-50 dark:hover:bg-gray-900">
+                              <TableCell className="text-sm font-medium">{fmtDate(closure.closure_date)}</TableCell>
+                              <TableCell className="text-sm text-center font-semibold text-blue-600 dark:text-blue-400">
+                                {closure.total_invoices || 0}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                <div className="flex flex-wrap gap-1">
+                                  {currencyCodes.length === 0 ? (
+                                    <span className="text-gray-400">—</span>
+                                  ) : (
+                                    currencyCodes.map((cur) => (
+                                      <Badge key={cur} variant="outline" className="text-xs">
+                                        {cur}: {byCur[cur]?.count || 0}
+                                      </Badge>
+                                    ))
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm text-right font-medium">
+                                {currencyCodes.length === 0 ? (
+                                  "US$ 0.00"
+                                ) : (
+                                  <div className="space-y-0.5">
+                                    {currencyCodes.map((cur) => (
+                                      <div key={cur} className="text-xs">
+                                        {fmtMoney(byCur[cur]?.total || 0, cur)}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+                                {closure.closed_by || "—"}
+                              </TableCell>
+                              <TableCell className="text-xs text-gray-500">
+                                {closure.closed_at ? fmtDate(closure.closed_at) : "—"}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Summary Cards */}
+            {dailyClosures.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="border-gray-200 dark:border-gray-800">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Total Cierres</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{dailyClosures.length}</p>
+                      </div>
+                      <FileText className="w-5 h-5 text-blue-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="border-gray-200 dark:border-gray-800">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Total Facturas</p>
+                        <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                          {dailyClosures.reduce((sum, c) => sum + (c.total_invoices || 0), 0)}
+                        </p>
+                      </div>
+                      <FileText className="w-5 h-5 text-green-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="border-gray-200 dark:border-gray-800">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Período Cubierto</p>
+                        <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                          {fmtDate(dailyClosures[dailyClosures.length - 1]?.closure_date || "")} — {fmtDate(dailyClosures[0]?.closure_date || "")}
+                        </p>
+                      </div>
+                      <Calendar className="w-5 h-5 text-purple-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
