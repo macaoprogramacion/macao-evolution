@@ -22,6 +22,7 @@ interface PickupEntry {
   hotel: string
   pickupTime: string
   agency: string
+  customerName: string
   persons: number
   room: string
   buggyType: string
@@ -32,6 +33,7 @@ const BUGGY_TYPES = [
   "Double Buggy",
   "Triple Buggy",
   "Quad Buggy",
+  "Moto",
 ]
 
 export function DriverPickupSheet() {
@@ -39,6 +41,7 @@ export function DriverPickupSheet() {
   const [hotel, setHotel] = useState("")
   const [time, setTime] = useState("")
   const [agency, setAgency] = useState("")
+  const [customerName, setCustomerName] = useState("")
   const [persons, setPersons] = useState("1")
   const [room, setRoom] = useState("")
   const [buggyType, setBuggyType] = useState("")
@@ -56,7 +59,7 @@ export function DriverPickupSheet() {
   }, [hotel])
 
   const handleAddPickup = () => {
-    if (!hotel || !time || !agency || !persons || !buggyType) {
+    if (!hotel || !time || !agency || !customerName || !persons || !buggyType) {
       alert("Por favor completa todos los campos")
       return
     }
@@ -66,6 +69,7 @@ export function DriverPickupSheet() {
       hotel,
       pickupTime: time,
       agency,
+      customerName,
       persons: parseInt(persons),
       room,
       buggyType,
@@ -75,6 +79,7 @@ export function DriverPickupSheet() {
     setHotel("")
     setTime("")
     setAgency("")
+    setCustomerName("")
     setPersons("1")
     setRoom("")
     setBuggyType("")
@@ -164,6 +169,16 @@ export function DriverPickupSheet() {
               />
             </div>
 
+            {/* Client Name */}
+            <div className="space-y-1.5">
+              <Label>Nombre del Cliente *</Label>
+              <Input
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Nombre del cliente"
+              />
+            </div>
+
             {/* Persons */}
             <div className="space-y-1.5">
               <Label>Cantidad de Personas *</Label>
@@ -235,6 +250,7 @@ export function DriverPickupSheet() {
                     <th className="text-left py-3 px-2 font-semibold">Hotel</th>
                     <th className="text-left py-3 px-2 font-semibold">Hora</th>
                     <th className="text-left py-3 px-2 font-semibold">Agencia</th>
+                    <th className="text-left py-3 px-2 font-semibold">Cliente</th>
                     <th className="text-center py-3 px-2 font-semibold">Personas</th>
                     <th className="text-left py-3 px-2 font-semibold">Hab.</th>
                     <th className="text-left py-3 px-2 font-semibold">Buggy</th>
@@ -254,6 +270,7 @@ export function DriverPickupSheet() {
                       </td>
                       <td className="py-3 px-2">{pickup.pickupTime}</td>
                       <td className="py-3 px-2">{pickup.agency}</td>
+                      <td className="py-3 px-2">{pickup.customerName}</td>
                       <td className="py-3 px-2 text-center">
                         <Badge variant="outline">{pickup.persons}</Badge>
                       </td>
@@ -296,6 +313,7 @@ function generatePrintHTML(pickups: PickupEntry[]): string {
       <td style="border: 1px solid #ddd; padding: 8px;">${p.room || "—"}</td>
       <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${p.persons}</td>
       <td style="border: 1px solid #ddd; padding: 8px;">${p.agency}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">${p.customerName}</td>
       <td style="border: 1px solid #ddd; padding: 8px;">${p.buggyType}</td>
     </tr>
   `,
@@ -418,8 +436,9 @@ function generatePrintHTML(pickups: PickupEntry[]): string {
           <th style="width: 25%;">HOTEL</th>
           <th style="width: 10%;">HAB.</th>
           <th style="width: 8%;">PAX</th>
-          <th style="width: 25%;">AGENCIA</th>
-          <th style="width: 22%;">BUGGY</th>
+          <th style="width: 20%;">AGENCIA</th>
+          <th style="width: 17%;">CLIENTE</th>
+          <th style="width: 20%;">BUGGY</th>
         </tr>
       </thead>
       <tbody>
