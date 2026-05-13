@@ -832,11 +832,30 @@ function CierreDiaPanel({ invoices, pendingDays = [], dashboardUser, onCierreSen
   };
 
   // Exchange rates state — cashier can edit
+  // Stored format: how many units of currency equal 1 USD (USD base)
   const [rates, setRates] = useState(() => {
     try {
       const stored = localStorage.getItem('macao_exchange_rates');
-      return stored ? JSON.parse(stored) : { USD: 1, EUR: 1.08, DOP: 0.0167 };
-    } catch { return { USD: 1, EUR: 1.08, DOP: 0.0167 }; }
+      if (!stored) return { USD: 1, EUR: 0.93, DOP: 58 };
+
+      const parsed = JSON.parse(stored);
+      const normalized = {
+        USD: Number(parsed?.USD) > 0 ? Number(parsed.USD) : 1,
+        EUR: Number(parsed?.EUR) > 0 ? Number(parsed.EUR) : 0.93,
+        DOP: Number(parsed?.DOP) > 0 ? Number(parsed.DOP) : 58,
+      };
+
+      // Backward compatibility: old format stored "1 CUR = X USD".
+      // Detect it via DOP < 1 (e.g. 0.0167) and convert to USD-base format.
+      if (normalized.DOP < 1) {
+        normalized.EUR = normalized.EUR > 0 ? 1 / normalized.EUR : 0.93;
+        normalized.DOP = normalized.DOP > 0 ? 1 / normalized.DOP : 58;
+      }
+
+      return normalized;
+    } catch {
+      return { USD: 1, EUR: 0.93, DOP: 58 };
+    }
   });
   const [editingRates, setEditingRates] = useState(false);
   const [convertToDOP, setConvertToDOP] = useState(false);
@@ -879,14 +898,15 @@ function CierreDiaPanel({ invoices, pendingDays = [], dashboardUser, onCierreSen
   });
   const returnsTotal = todayReturns.reduce((s, r) => s + (r.amount || 0), 0);
 
-  // Convert to DOP
+  // Convert any currency total to DOP using USD-base rates (1 USD = X CUR)
   const toDOP = (amount, cur) => {
     if (cur === 'DOP') return amount;
-    // rates store how much 1 unit of currency = in USD. DOP rate = how much 1 DOP = USD
-    // To convert to DOP: amount_in_cur * (rate_cur_to_usd / rate_dop_to_usd)
-    const rateToUSD = rates[cur] || 1;
-    const dopToUSD = rates['DOP'] || 0.0167;
-    return amount * rateToUSD / dopToUSD;
+    const curPerUSD = rates[cur] || 1;
+    const dopPerUSD = rates['DOP'] || 58;
+
+    // amount CUR -> USD -> DOP
+    const amountInUSD = amount / curPerUSD;
+    return amountInUSD * dopPerUSD;
   };
 
   const totalAllInDOP = Object.entries(byCurrency).reduce((sum, [cur, data]) => sum + toDOP(data.total, cur), 0);
@@ -989,10 +1009,7 @@ function CierreDiaPanel({ invoices, pendingDays = [], dashboardUser, onCierreSen
                 )}
                 {cur !== 'USD' && (
                   <p className="text-white/40 text-[10px] mt-1">
-                    1 {cur} = {cur === 'DOP'
-                      ? `${(rates['DOP'] || 0.0167).toFixed(4)} USD`
-                      : `${(rates[cur] || 1).toFixed(4)} USD`
-                    }
+                    1 USD = {(rates[cur] || 0).toFixed(4)} {cur}
                   </p>
                 )}
               </div>
