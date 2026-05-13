@@ -49,7 +49,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
+import { DriverPickupSheet } from "@/components/admin/driver-pickup-sheet"
+import { BillingCollections } from "@/components/admin/billing-collections"
 import { supabase } from "@/lib/supabase"
 import { parseExternalReservationText } from "@/lib/external-reservation-parser"
 import { getBuggyPickupSuggestion, type TurnSlot } from "@/lib/hotel-pickup-schedules"
@@ -178,6 +181,7 @@ function mapRow(r: any): Reservation {
 }
 
 export default function OperationPage() {
+  const [activeTab, setActiveTab] = useState("reservas")
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -842,22 +846,33 @@ export default function OperationPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl md:text-3xl font-title text-gray-900 dark:text-gray-100">Operacion Buggy</h1>
-            <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">Gestión de reservas de todas las plataformas</p>
-          </div>
-          <div className="flex gap-2 w-full sm:w-auto">
-            <Button className="bg-red-600 hover:bg-red-700 text-white flex-1 sm:flex-none" onClick={() => setAddDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Agregar Reserva
-            </Button>
-            <Button variant="outline" className="flex-1 sm:flex-none border-green-600 text-green-700 hover:bg-green-50" onClick={() => setExportDialogOpen(true)}>
-              <FileSpreadsheet className="w-4 h-4 mr-2" />
-              Exportar Recogidas
-            </Button>
+            <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">Gestión de reservas, recogidas y cobros</p>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="bg-gray-100 dark:bg-gray-800">
+            <TabsTrigger value="reservas">Reservas</TabsTrigger>
+            <TabsTrigger value="recogidas">Hoja de Recogida</TabsTrigger>
+            <TabsTrigger value="cobros">Cobros y Facturación</TabsTrigger>
+          </TabsList>
+
+          {/* Reservas Tab */}
+          <TabsContent value="reservas" className="space-y-4">
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button className="bg-red-600 hover:bg-red-700 text-white flex-1 sm:flex-none" onClick={() => setAddDialogOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Agregar Reserva
+              </Button>
+              <Button variant="outline" className="flex-1 sm:flex-none border-green-600 text-green-700 hover:bg-green-50" onClick={() => setExportDialogOpen(true)}>
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                Exportar Recogidas
+              </Button>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-gray-200">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
@@ -913,10 +928,10 @@ export default function OperationPage() {
               </div>
             </CardContent>
           </Card>
-        </div>
+            </div>
 
-        {/* Filters */}
-        <Card className="border-gray-200">
+            {/* Filters */}
+            <Card className="border-gray-200">
           <CardHeader>
             <CardTitle className="text-lg">Filtros</CardTitle>
           </CardHeader>
@@ -983,35 +998,35 @@ export default function OperationPage() {
                 </SelectContent>
               </Select>
             </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+            </Card>
 
-        {/* Reservations */}
-        <Card className="border-gray-200">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Reservas</CardTitle>
-                <CardDescription>
-                  Mostrando {filteredReservations.length} de {reservations.length} reservas
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Más filtros
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {filteredReservations.map((reservation) => (
-                <div key={reservation.id} className={`border rounded-lg p-4 space-y-3 transition-colors ${reservation.status === "no_show" ? "bg-red-50 border-red-300 dark:bg-red-900/20 dark:border-red-700" : "hover:border-red-200"}`}>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {getStatusButton(reservation)}
-                    <Badge
-                      className="flex items-center gap-1"
+            {/* Reservations */}
+            <Card className="border-gray-200">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Reservas</CardTitle>
+                    <CardDescription>
+                      Mostrando {filteredReservations.length} de {reservations.length} reservas
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm">
+                      <Filter className="w-4 h-4 mr-2" />
+                      Más filtros
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {filteredReservations.map((reservation) => (
+                    <div key={reservation.id} className={`border rounded-lg p-4 space-y-3 transition-colors ${reservation.status === "no_show" ? "bg-red-50 border-red-300 dark:bg-red-900/20 dark:border-red-700" : "hover:border-red-200"}`}>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {getStatusButton(reservation)}
+                        <Badge
+                          className="flex items-center gap-1"
                       style={{
                         backgroundColor: `${reservation.channelColor}20`,
                         color: reservation.channelColor,
@@ -1160,8 +1175,20 @@ export default function OperationPage() {
                 <p className="text-gray-600">No se encontraron reservas con los filtros aplicados</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+            </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Recogidas Tab */}
+          <TabsContent value="recogidas" className="mt-6">
+            <DriverPickupSheet />
+          </TabsContent>
+
+          {/* Cobros y Facturación Tab */}
+          <TabsContent value="cobros" className="mt-6">
+            <BillingCollections />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Modal: Exportar Recogidas */}
