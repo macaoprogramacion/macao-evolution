@@ -101,12 +101,13 @@ export default function AnaliticasPage() {
   const [saona, setSaona] = useState<SaonaReservation[]>([])
   const [samana, setSamana] = useState<SamanaReservation[]>([])
   const [photoClosures, setPhotoClosures] = useState<PhotoClosure[]>([])
+  const [billingRecords, setBillingRecords] = useState<Array<{ date: string; amount: number; currency: string }>>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const load = async () => {
       setLoading(true)
-      const [buggyRes, saonaRes, samanaRes, photoRes] = await Promise.allSettled([
+      const [buggyRes, saonaRes, samanaRes, photoRes, billingRes] = await Promise.allSettled([
         supabase
           .from("reservations")
           .select("id, date, status, guests, children, amount")
@@ -127,6 +128,11 @@ export default function AnaliticasPage() {
           .select("closure_date, total_invoices, by_currency, closed_at")
           .order("closure_date", { ascending: false })
           .limit(500),
+        supabase
+          .from("billing_records")
+          .select("date, amount, currency")
+          .order("date", { ascending: false })
+          .limit(2000),
       ])
 
       if (buggyRes.status === "fulfilled" && buggyRes.value.data) {
@@ -173,6 +179,16 @@ export default function AnaliticasPage() {
             total_invoices: Number(r.total_invoices || 0),
             by_currency: r.by_currency || null,
             closed_at: r.closed_at || r.closure_date,
+          })),
+        )
+      }
+
+      if (billingRes.status === "fulfilled" && billingRes.value.data) {
+        setBillingRecords(
+          billingRes.value.data.map((r: any) => ({
+            date: r.date,
+            amount: Number(r.amount || 0),
+            currency: r.currency,
           })),
         )
       }
@@ -228,6 +244,19 @@ export default function AnaliticasPage() {
   const photoMonthInvoices = useMemo(
     () => photoMonth.reduce((s, c) => s + c.total_invoices, 0),
     [photoMonth],
+  )
+
+  // Billing records (cobros y facturación)
+  const billingToday = useMemo(() => billingRecords.filter((r) => r.date === todayISO), [billingRecords])
+  const billingMonth = useMemo(() => billingRecords.filter((r) => inRange(r.date, monthStart)), [billingRecords, monthStart])
+
+  const billingTodayUSD = useMemo(
+    () => billingToday.filter((r) => r.currency === "USD").reduce((sum, r) => sum + r.amount, 0),
+    [billingToday],
+  )
+  const billingMonthUSD = useMemo(
+    () => billingMonth.filter((r) => r.currency === "USD").reduce((sum, r) => sum + r.amount, 0),
+    [billingMonth],
   )
 
   // Combined guests today
@@ -292,9 +321,10 @@ export default function AnaliticasPage() {
         {/* KPI cards – Today */}
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">Hoy</p>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             {statCard("Pax Hoy (Ops)", totalGuestsToday, `${buggyToday.length} buggy · ${saonaToday.length} saona · ${samanaToday.length} samaná`, Users, "bg-blue-500")}
             {statCard("Facturas Foto Hoy", photoTodayInvoices, "cierres enviados hoy", Camera, "bg-violet-500")}
+            {statCard("Ingresos Cobros Hoy", fmtCurrency(billingTodayUSD), `${billingToday.length} registros`, DollarSign, "bg-red-500")}
             {statCard("Res. Buggy Hoy", buggyToday.length, `${buggyToday.filter((r) => r.status === "confirmed").length} confirmadas`, Car, "bg-orange-500")}
             {statCard("Res. Saona Hoy", saonaToday.length, `${saonaToday.filter((r) => r.status === "confirmed").length} confirmadas`, Ship, "bg-cyan-500")}
           </div>
@@ -303,8 +333,10 @@ export default function AnaliticasPage() {
         {/* KPI cards – Month */}
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">Este mes</p>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
             {statCard("Pax Mes (Ops)", totalGuestsMonth, "buggy + saona + samaná", Users, "bg-blue-600")}
+            {statCard("Ingresos Buggy USD", fmtCurrency(sumAmounts(buggyMonth)), "ventas de buggy del mes", Car, "bg-orange-600")}
+            {statCard("Ingresos Cobros USD", fmtCurrency(billingMonthUSD), "cobros y facturación del mes", DollarSign, "bg-red-600")}
             {statCard("Ingresos Ops (USD)", fmtCurrency(operationsRevenueMonth), "suma de importes registrados", DollarSign, "bg-green-600")}
             {statCard("Facturas Foto Mes", photoMonthInvoices, "total de cierres del mes", Camera, "bg-violet-600")}
             {statCard("Ingresos Foto USD", fmtCurrency(photoMonthUSD), "ventas en USD del mes", DollarSign, "bg-emerald-600")}
