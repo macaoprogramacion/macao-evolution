@@ -1,4 +1,26 @@
 -- Fix billing_records RLS policies to avoid auth.users dependency and allow dashboard usage
+-- This migration is resilient: it creates the table if it does not exist.
+
+CREATE TABLE IF NOT EXISTS billing_records (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL CHECK (type IN ('pago_al_llegar', 'credito_vendedor', 'venta_directa')),
+  client_name TEXT NOT NULL,
+  phone TEXT,
+  vendor_name TEXT,
+  currency TEXT NOT NULL CHECK (currency IN ('USD', 'DOP', 'EUR', 'GBP')),
+  amount NUMERIC NOT NULL DEFAULT 0,
+  payment_method TEXT NOT NULL CHECK (payment_method IN ('tarjeta', 'paypal', 'efectivo')),
+  courtesy BOOLEAN DEFAULT FALSE,
+  service_type TEXT,
+  status TEXT NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente', 'pagado', 'cancelado')),
+  date DATE NOT NULL,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_billing_records_date_status ON billing_records(date, status);
+CREATE INDEX IF NOT EXISTS idx_billing_records_client_phone ON billing_records(phone);
 
 ALTER TABLE billing_records ENABLE ROW LEVEL SECURITY;
 
