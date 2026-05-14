@@ -48,7 +48,10 @@ function hasAccess(role: string, href: string, email?: string): boolean {
   if (role === "admin" || role === "both") return true
   const allowed = rolePageAccess[role]
   if (!allowed) return false
-  return allowed.some((path) => href === path || href.startsWith(path + "/"))
+  return allowed.some((path) => {
+    if (path === "/admin") return href === "/admin"
+    return href === path || href.startsWith(path + "/")
+  })
 }
 
 interface DashboardLayoutProps {
