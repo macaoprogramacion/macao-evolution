@@ -40,7 +40,7 @@ const navigation = [
 const rolePageAccess: Record<string, string[]> = {
   operaciones: ["/admin/operation", "/admin/operation-saona", "/admin/operation-samana", "/admin/chofer"],
   chofer: ["/admin/chofer"],
-  contabilidad: ["/admin", "/admin/photography", "/admin/analiticas"],
+  contabilidad: ["/admin", "/admin/photography", "/admin/analiticas", "/admin/users"],
 }
 
 function hasAccess(role: string, href: string, email?: string): boolean {
