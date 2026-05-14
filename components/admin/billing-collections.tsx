@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Trash2, Loader2 } from "lucide-react"
+import { Plus, Trash2, Loader2, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,9 +14,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { insertBillingRecord, getTodayBillingRecords, updateBillingRecord, deleteBillingRecord } from "@/lib/billing-records"
+import { sendNotificationToDriver } from "@/lib/driver-notifications"
 import type { BillingRecord as DBBillingRecord } from "@/lib/billing-records"
+import { supabase } from "@/lib/supabase"
 
 interface BillingRecord {
   id: string
@@ -76,6 +86,11 @@ export function BillingCollections() {
   const [closureFeedback, setClosureFeedback] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [drivers, setDrivers] = useState<Array<{ id: string; name: string }>>([])
+  const [sendDialogOpen, setSendDialogOpen] = useState(false)
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null)
+  const [selectedDriverId, setSelectedDriverId] = useState<string>("")
+  const [isSendingToDriver, setIsSendingToDriver] = useState(false)
 
   // Form state
   const [type, setType] = useState<"pago_al_llegar" | "credito_vendedor" | "venta_directa">("pago_al_llegar")
@@ -119,6 +134,27 @@ export function BillingCollections() {
     }
 
     void loadRecords()
+  }, [])
+
+  // Load available drivers on mount
+  useEffect(() => {
+    const loadDrivers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("dashboard_users")
+          .select("id, name")
+          .eq("role", "chofer")
+          .eq("active", true)
+          .order("name");
+        
+        if (error) throw error;
+        setDrivers(data || []);
+      } catch (err) {
+        console.error("Error loading drivers:", err);
+      }
+    }
+
+    void loadDrivers()
   }, [])
 
   const supportsMultiCurrency = type === "pago_al_llegar" || type === "venta_directa"
@@ -224,6 +260,48 @@ export function BillingCollections() {
       alert("No se pudo eliminar el registro")
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleSendToDriver = async () => {
+    if (!selectedRecordId || !selectedDriverId) {
+      alert("Selecciona un chofer")
+      return
+    }
+
+    const record = records.find((r) => r.id === selectedRecordId)
+    if (!record) return
+
+    setIsSendingToDriver(true)
+    try {
+      const notificationType =
+        record.type === "pago_al_llegar"
+          ? "payment_received"
+          : record.type === "credito_vendedor"
+          ? "credit_issued"
+          : "direct_sale"
+
+      await sendNotificationToDriver(
+        selectedDriverId,
+        selectedRecordId,
+        notificationType as any,
+        record.clientName,
+        record.amount,
+        record.currency,
+        record.phone,
+        record.serviceType,
+        record.notes
+      )
+
+      setSendDialogOpen(false)
+      setSelectedRecordId(null)
+      setSelectedDriverId("")
+      alert("Notificación enviada al chofer exitosamente")
+    } catch (err) {
+      console.error("Error sending notification to driver:", err)
+      alert("No se pudo enviar la notificación al chofer")
+    } finally {
+      setIsSendingToDriver(false)
     }
   }
 
@@ -569,12 +647,82 @@ export function BillingCollections() {
                         </Select>
                       </td>
                       <td className="py-3 px-2 text-center">
-                        <button
-                          onClick={() => handleDelete(record.id)}
-                          className="text-red-600 hover:text-red-700 inline-flex"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex gap-2 justify-center">
+                          <Dialog open={sendDialogOpen && selectedRecordId === record.id} onOpenChange={(open) => {
+                            setSendDialogOpen(open)
+                            if (open) {
+                              setSelectedRecordId(record.id)
+                              setSelectedDriverId("")
+                            }
+                          }}>
+                            <DialogTrigger asChild>
+                              <button
+                                onClick={() => {
+                                  setSelectedRecordId(record.id)
+                                  setSendDialogOpen(true)
+                                }}
+                                className="text-blue-600 hover:text-blue-700 inline-flex"
+                                title="Enviar a chofer"
+                              >
+                                <Send className="w-4 h-4" />
+                              </button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Enviar a Chofer</DialogTitle>
+                                <DialogDescription>
+                                  Selecciona un chofer para enviarle la información de este cobro
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div>
+                                  <p className="text-sm font-medium">Cobro: {record.clientName}</p>
+                                  <p className="text-sm text-gray-600">
+                                    {formatMoney(record.currency, record.amount)} - {record.serviceType}
+                                  </p>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label>Selecciona Chofer *</Label>
+                                  <Select value={selectedDriverId} onValueChange={setSelectedDriverId}>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Elige un chofer..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {drivers.map((driver) => (
+                                        <SelectItem key={driver.id} value={driver.id}>
+                                          {driver.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <Button
+                                  onClick={handleSendToDriver}
+                                  disabled={isSendingToDriver || !selectedDriverId}
+                                  className="w-full bg-blue-600 hover:bg-blue-700"
+                                >
+                                  {isSendingToDriver ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                      Enviando...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Send className="w-4 h-4 mr-2" />
+                                      Enviar Notificación
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                          <button
+                            onClick={() => handleDelete(record.id)}
+                            className="text-red-600 hover:text-red-700 inline-flex"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
