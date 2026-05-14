@@ -305,7 +305,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative shrink-0">
                 <Bell className="w-4 h-4" />
-                {((userRole === "contabilidad" && closureNotifications.length > 0) || userRole !== "contabilidad") && (
+                {closureNotifications.length > 0 && (
                   <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
                 )}
               </Button>
@@ -317,8 +317,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 {userRole === "contabilidad" ? (
                   closureNotifications.length > 0 ? (
                     closureNotifications.map((notification) => (
-                      <DropdownMenuItem key={notification.id} onClick={() => router.push(notification.href)}>
-                        {notification.message}
+                      <DropdownMenuItem 
+                        key={notification.id} 
+                        onClick={() => router.push(notification.href)}
+                        className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                      >
+                        <div className="flex flex-col gap-1">
+                          <p className="text-sm font-medium">{notification.message}</p>
+                          <p className="text-xs text-gray-500">{new Date(notification.createdAt).toLocaleTimeString()}</p>
+                        </div>
                       </DropdownMenuItem>
                     ))
                   ) : (
