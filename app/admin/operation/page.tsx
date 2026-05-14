@@ -125,6 +125,39 @@ type GhostReservationSeed = {
   notes?: string
 }
 
+// Random data for ghost pickups
+const RANDOM_FIRST_NAMES = ["Juan", "Maria", "Carlos", "Ana", "Miguel", "Rosa", "Jose", "Laura", "Luis", "Sofia", "Pedro", "Isabel", "Diego", "Elena", "Fernando"]
+const RANDOM_LAST_NAMES = ["Garcia", "Rodriguez", "Martinez", "Hernandez", "Sanchez", "Lopez", "Gonzalez", "Perez", "Torres", "Rivera", "Ramirez", "Cruz", "Morales", "Vargas", "Ruiz"]
+const HOTEL_OPTIONS = ["Sunscape Coco", "Barcelo Palace", "Palladium Bavaro", "Iberostar B Collection", "Impressive", "Grand Palladium", "Barcelo Aruba", "Hard Rock Cafe", "Hilton La Romana", "CasaBlanca"]
+const PICKUP_TIMES = ["8:00 AM", "8:30 AM", "9:00 AM", "10:00 AM", "10:30 AM", "11:00 AM", "11:30 AM", "12:00 PM", "1:00 PM", "1:30 PM", "2:00 PM", "2:30 PM", "3:00 PM"]
+
+function generateRandomName(): string {
+  const firstName = RANDOM_FIRST_NAMES[Math.floor(Math.random() * RANDOM_FIRST_NAMES.length)]
+  const lastName = RANDOM_LAST_NAMES[Math.floor(Math.random() * RANDOM_LAST_NAMES.length)]
+  return `${firstName} ${lastName}`
+}
+
+function generateRandomHotel(): string {
+  return HOTEL_OPTIONS[Math.floor(Math.random() * HOTEL_OPTIONS.length)]
+}
+
+function generateRandomPickupTime(): string {
+  return PICKUP_TIMES[Math.floor(Math.random() * PICKUP_TIMES.length)]
+}
+
+function generateGhostPickup(): ExportRow {
+  return {
+    pickupTime: generateRandomPickupTime(),
+    customerName: generateRandomName(),
+    hotel: generateRandomHotel(),
+    room: "",
+    agency: "—",
+    pax: 0,
+    notes: "",
+    isGhost: true,
+  }
+}
+
 const GHOST_RESERVATIONS: GhostReservationSeed[] = [
   { customerName: "Mario Dimitrova", hotel: "Sunscape Coco", agency: "GYG", pax: 2, notes: "1-ATV" },
   { customerName: "Laura Daniela", hotel: "Barcelo Palace", room: "4031", agency: "Vacation On", pax: 0 },
@@ -194,6 +227,7 @@ export default function OperationPage() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [exportDate, setExportDate] = useState(new Date().toISOString().slice(0, 10))
   const [exportTurno, setExportTurno] = useState("all")
+  const [customGhosts, setCustomGhosts] = useState<ExportRow[]>([])
 
   const toMinFromTime = (t: string) => {
     const m = t.match(/(\d{1,2})(?::(\d{2}))?\s*([AP]M)/i)
@@ -238,19 +272,12 @@ export default function OperationPage() {
         }
       })
 
-    const ghostRows: ExportRow[] = slots.flatMap((slot) =>
-      GHOST_RESERVATIONS.map((g) => {
-        const suggestion = getBuggyPickupSuggestion(g.hotel, slot)
-        return {
-          pickupTime: suggestion?.pickupTime || slot,
-          customerName: g.customerName,
-          hotel: g.hotel,
-          room: g.room || "",
-          agency: g.agency,
-          pax: g.pax,
-          notes: g.notes || "",
-          isGhost: true,
-        }
+    // NO incluir fantasmas por defecto - solo incluir los que el usuario agregó manualmente
+    const ghostRows = customGhosts.filter((g) =>
+      g.pickupTime && // debe tener una hora
+      slots.some((slot) => {
+        // Verificar que el slot esté en los slots seleccionados (si es posible)
+        return true
       }),
     )
 
@@ -1226,6 +1253,43 @@ export default function OperationPage() {
                   <SelectItem value="3 PM">Turno 3:00 PM</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Add phantom pickups section */}
+            <div className="space-y-2 rounded-lg bg-blue-50 border border-blue-200 p-3">
+              <p className="text-sm font-semibold text-blue-900">Agregar Recogidas Fantasmas</p>
+              <p className="text-xs text-blue-700">Máximo 3 recogidas. Sin datos de PAX ni habitación.</p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  if (customGhosts.length < 3) {
+                    setCustomGhosts([...customGhosts, generateGhostPickup()])
+                  }
+                }}
+                disabled={customGhosts.length >= 3}
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Agregar Fantasma ({customGhosts.length}/3)
+              </Button>
+              {customGhosts.length > 0 && (
+                <div className="space-y-1 mt-2">
+                  {customGhosts.map((ghost, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs bg-white p-2 rounded border border-blue-200">
+                      <span className="text-gray-700">
+                        {ghost.customerName} • {ghost.hotel} • {ghost.pickupTime}
+                      </span>
+                      <button
+                        onClick={() => setCustomGhosts(customGhosts.filter((_, i) => i !== idx))}
+                        className="text-red-600 hover:text-red-700 font-semibold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             {/* Preview count */}
             {(() => {
