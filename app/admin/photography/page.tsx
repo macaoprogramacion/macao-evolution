@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import { useSearchParams } from "next/navigation"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import {
   Camera,
@@ -269,6 +270,7 @@ const portfolioStatusBadge = (status: string) => {
 }
 
 export default function PhotographyPage() {
+  const searchParams = useSearchParams()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [returns, setReturns] = useState<Return[]>([])
   const [photoSales, setPhotoSales] = useState<PhotoSale[]>([])
@@ -284,6 +286,13 @@ export default function PhotographyPage() {
   const [dateFilter, setDateFilter] = useState("all")
   const [detailInvoice, setDetailInvoice] = useState<Invoice | null>(null)
   const [processingReturnId, setProcessingReturnId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const tab = searchParams.get("tab")
+    if (tab === "analytics" || tab === "closures" || tab === "overview" || tab === "invoices" || tab === "returns" || tab === "portfolios") {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
 
   // ─── Load data ──────────────────────────────────────────────────
   useEffect(() => {

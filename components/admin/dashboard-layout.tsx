@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { Search, Bell, Home, Workflow, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft, Ship, Mountain, Sun, Moon, Camera } from "lucide-react"
+import { Search, Bell, Home, Workflow, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft, Ship, Mountain, Sun, Moon, Camera, BarChart3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -30,6 +30,7 @@ const navigation = [
   { name: "Representantes", href: "/admin/representatives", icon: Handshake },
   { name: "Products", href: "/admin/products", icon: Package },
   { name: "Fotografia", href: "/admin/photography", icon: Camera },
+  { name: "Analíticas", href: "/admin/analiticas", icon: BarChart3 },
   { name: "Usuarios", href: "/admin/users", icon: UserCog },
 ]
 
@@ -39,7 +40,7 @@ const navigation = [
 const rolePageAccess: Record<string, string[]> = {
   operaciones: ["/admin/operation", "/admin/operation-saona", "/admin/operation-samana", "/admin/chofer"],
   chofer: ["/admin/chofer"],
-  contabilidad: ["/admin", "/admin/photography"],
+  contabilidad: ["/admin", "/admin/photography", "/admin/analiticas"],
 }
 
 function hasAccess(role: string, href: string, email?: string): boolean {
