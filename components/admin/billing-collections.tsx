@@ -210,7 +210,8 @@ export function BillingCollections() {
       resetForm()
     } catch (err) {
       console.error("Error saving record:", err)
-      alert("No se pudo guardar el registro")
+      const message = err instanceof Error ? err.message : "Error desconocido"
+      alert(`No se pudo guardar el registro: ${message}`)
     } finally {
       setIsSaving(false)
     }
