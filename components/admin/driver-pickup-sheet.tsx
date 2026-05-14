@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select"
 import { hotelDirectory } from "@/lib/hotel-locations"
 import { getBuggyPickupSuggestion, type TurnSlot } from "@/lib/hotel-pickup-schedules"
+import { parsePickupReservationCode } from "@/lib/pickup-reservation-code"
 import {
   createPickupSheet,
   getPickupSheetByDate,
@@ -165,6 +166,8 @@ export function DriverPickupSheet() {
   const [persons, setPersons] = useState("1")
   const [room, setRoom] = useState("")
   const [serviceType, setServiceType] = useState("")
+  const [reservationCode, setReservationCode] = useState("")
+  const [codeFeedback, setCodeFeedback] = useState("")
 
   // Load pickup sheet for today on mount
   useEffect(() => {
@@ -192,7 +195,7 @@ export function DriverPickupSheet() {
               customerName: row.customer_name || "",
               persons: row.pax || 1,
               room: row.room || "",
-              serviceType: "",
+              serviceType: row.notes || "",
             }))
             setPickups(entries)
           }
@@ -334,8 +337,11 @@ export function DriverPickupSheet() {
             {
               pickup_time: time,
               customer_name: customerName,
-              hotel: agency,
+              hotel,
               room: room || null,
+              agency: agency || null,
+              pax: parseInt(persons) || 1,
+              notes: serviceType || null,
               is_ghost: false,
               ghost_hotel_random: null,
               ghost_name_random: null,
@@ -362,6 +368,62 @@ export function DriverPickupSheet() {
     }
 
     handleAddAsync()
+  }
+
+  const handleImportReservationCode = async () => {
+    if (sheetStatus !== "draft") {
+      alert("La hoja esta bloqueada. No se puede agregar nuevas recogidas")
+      return
+    }
+    if (!reservationCode.trim()) {
+      alert("Pega un codigo de reserva primero")
+      return
+    }
+
+    try {
+      const parsed = parsePickupReservationCode(reservationCode)
+      const normalizedTime = toTimeInputValue(parsed.pickupTime) || "08:00"
+      const detectedZone = resolveHotelInfo(parsed.hotel).defaultZoneId
+
+      const newEntry: PickupEntry = {
+        id: Date.now().toString(),
+        hotel: parsed.hotel,
+        zoneId: detectedZone,
+        shift: shift,
+        pickupTime: normalizedTime,
+        agency: parsed.agency || "—",
+        customerName: parsed.customerName,
+        persons: parsed.persons > 0 ? parsed.persons : 1,
+        room: parsed.room || "",
+        serviceType: parsed.serviceType || "Buggy",
+      }
+
+      if (sheetId) {
+        await addPickupSheetRows(sheetId, [
+          {
+            pickup_time: normalizedTime,
+            customer_name: parsed.customerName,
+            hotel: parsed.hotel,
+            room: parsed.room || null,
+            agency: parsed.agency || null,
+            pax: parsed.persons > 0 ? parsed.persons : 1,
+            notes: parsed.serviceType || null,
+            is_ghost: false,
+            ghost_hotel_random: null,
+            ghost_name_random: null,
+            reservation_id: parsed.reservationId || null,
+          },
+        ])
+      }
+
+      setPickups((prev) => [...prev, newEntry])
+      setReservationCode("")
+      setCodeFeedback(`Recogida agregada automaticamente para ${parsed.customerName}`)
+      window.setTimeout(() => setCodeFeedback(""), 3000)
+    } catch (error) {
+      console.error("Error importing reservation code:", error)
+      alert(error instanceof Error ? error.message : "No se pudo importar el codigo")
+    }
   }
 
   const handleRemovePickup = (id: string) => {
@@ -443,6 +505,27 @@ export function DriverPickupSheet() {
               <CardTitle className="text-base">Agregar Recogida</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-2 rounded-lg border border-indigo-200 bg-indigo-50/60 p-3">
+                <Label>Codigo de Reserva (MRC1)</Label>
+                <div className="flex flex-col md:flex-row gap-2">
+                  <Input
+                    value={reservationCode}
+                    onChange={(e) => setReservationCode(e.target.value)}
+                    placeholder="Pega aqui el codigo de la reserva"
+                    disabled={sheetStatus !== "draft"}
+                  />
+                  <Button
+                    type="button"
+                    onClick={handleImportReservationCode}
+                    disabled={sheetStatus !== "draft"}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                  >
+                    Pegar y Agregar
+                  </Button>
+                </div>
+                {codeFeedback ? <p className="text-xs text-indigo-700">{codeFeedback}</p> : null}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Zone */}
                 <div className="space-y-1.5">

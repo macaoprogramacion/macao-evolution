@@ -56,6 +56,7 @@ import { BillingCollections } from "@/components/admin/billing-collections"
 import { supabase } from "@/lib/supabase"
 import { parseExternalReservationText } from "@/lib/external-reservation-parser"
 import { getBuggyPickupSuggestion, type TurnSlot } from "@/lib/hotel-pickup-schedules"
+import { createPickupReservationCode } from "@/lib/pickup-reservation-code"
 import { Label } from "@/components/ui/label"
 
 function inferTimeslotFromPickup(pickupValue: string) {
@@ -729,6 +730,20 @@ export default function OperationPage() {
     }
   }
 
+  const buildPickupCode = (res: Reservation) => {
+    const roomMatch = (res.notes || "").match(/hab[.:]?\s*(\S+)/i)
+    return createPickupReservationCode({
+      reservationId: res.id,
+      customerName: res.customerName,
+      hotel: res.hotel,
+      pickupTime: res.pickupTime || res.timeslot,
+      agency: res.channel || "",
+      persons: res.guests + res.children,
+      room: roomMatch?.[1] || "",
+      serviceType: res.experience || "Buggy",
+    })
+  }
+
   const openEditDialog = (reservation: Reservation) => {
     setEditingReservation(reservation)
     setEditRes({
@@ -1312,6 +1327,19 @@ export default function OperationPage() {
                         Enviar a Chofer
                       </Button>
                     )}
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={copiedMsg === `pickup-${reservation.id}` ? "border-green-500 bg-green-50 text-green-700" : "border-indigo-300 text-indigo-700 hover:bg-indigo-50"}
+                      onClick={() => copyToClipboard(buildPickupCode(reservation), `pickup-${reservation.id}`)}
+                    >
+                      {copiedMsg === `pickup-${reservation.id}` ? (
+                        <><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Codigo copiado</>
+                      ) : (
+                        <><Copy className="w-3.5 h-3.5 mr-1" />Codigo Recogida</>
+                      )}
+                    </Button>
 
                     <Button
                       size="sm"
