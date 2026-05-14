@@ -222,6 +222,7 @@ export default function OperationPage() {
   const [timeslotFilter, setTimeslotFilter] = useState("all")
   const [transportFilter, setTransportFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [closureFeedback, setClosureFeedback] = useState<string>("")
 
   // Modal exportar recogidas
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
@@ -245,6 +246,37 @@ export default function OperationPage() {
       return [exportTurno as TurnSlot]
     }
     return ["8 AM", "11 AM", "3 PM"]
+  }
+
+  const handleSendOperationsClosure = () => {
+    if (reservations.length === 0) {
+      alert("No hay reservas para enviar en el cierre de operaciones")
+      return
+    }
+
+    const summary = {
+      id: `buggy-ops-${Date.now()}`,
+      sentAt: new Date().toISOString(),
+      totalReservations: reservations.length,
+      confirmed: reservations.filter((r) => r.status === "confirmed").length,
+      pending: reservations.filter((r) => r.status === "pending").length,
+      cancelled: reservations.filter((r) => r.status === "cancelled").length,
+      totalPax: reservations.reduce((sum, r) => sum + (r.guests + r.children), 0),
+      totalRevenue: reservations.reduce((sum, r) => sum + (r.amount || 0), 0),
+      channels: [...new Set(reservations.map((r) => r.channel))].join(", "),
+    }
+
+    try {
+      const currentRaw = typeof window !== "undefined" ? localStorage.getItem("macao_operation_closures") : "[]"
+      const current = currentRaw ? JSON.parse(currentRaw) : []
+      const next = Array.isArray(current) ? [summary, ...current].slice(0, 50) : [summary]
+      localStorage.setItem("macao_operation_closures", JSON.stringify(next))
+      window.dispatchEvent(new CustomEvent("macao-operation-closure-sent", { detail: summary }))
+      setClosureFeedback("Cierre de operaciones enviado a contabilidad.")
+      window.setTimeout(() => setClosureFeedback(""), 5000)
+    } catch {
+      alert("No se pudo enviar el cierre de operaciones")
+    }
   }
 
   const buildExportRows = (): ExportRow[] => {
@@ -876,6 +908,23 @@ export default function OperationPage() {
             <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">Gestión de reservas, recogidas y cobros</p>
           </div>
         </div>
+
+        {/* Cierre de operaciones card */}
+        <Card className="border-gray-200 dark:border-gray-800 bg-amber-50 dark:bg-amber-950">
+          <CardContent className="pt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-medium text-amber-900">Cierre de operaciones</p>
+              <p className="text-xs text-amber-700 dark:text-amber-400">Envía un resumen para notificar al usuario de contabilidad.</p>
+            </div>
+            <Button onClick={handleSendOperationsClosure} className="bg-amber-600 hover:bg-amber-700 text-white">
+              Enviar cierre a contabilidad
+            </Button>
+          </CardContent>
+        </Card>
+
+        {closureFeedback ? (
+          <div className="text-sm text-green-700 dark:text-green-400">{closureFeedback}</div>
+        ) : null}
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
