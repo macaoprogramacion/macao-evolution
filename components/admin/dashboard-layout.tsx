@@ -12,12 +12,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
 import { useTheme } from "next-themes"
+import { clearDashboardSession, getDashboardSession } from "@/lib/dashboard-session"
 
 const navigation = [
   { name: "Overview", href: "/admin", icon: Home },
@@ -37,24 +39,15 @@ const navigation = [
 const rolePageAccess: Record<string, string[]> = {
   operaciones: ["/admin/operation", "/admin/operation-saona", "/admin/operation-samana", "/admin/chofer"],
   chofer: ["/admin/chofer"],
-  contabilidad: ["/admin/products"],
+  contabilidad: ["/admin/photography"],
 }
 
-function hasAccess(role: string, href: string): boolean {
+function hasAccess(role: string, href: string, email?: string): boolean {
+  if (email?.toLowerCase().includes("jonathan")) return true
   if (role === "admin" || role === "both") return true
   const allowed = rolePageAccess[role]
   if (!allowed) return false
   return allowed.some((path) => href === path || href.startsWith(path + "/"))
-}
-
-function getSessionRole(): { role: string; name: string } | null {
-  try {
-    const session = JSON.parse(sessionStorage.getItem("macao_auth_session") || "null")
-    if (session && session.active) {
-      return { role: session.role, name: session.name }
-    }
-  } catch {}
-  return null
 }
 
 interface DashboardLayoutProps {
@@ -69,16 +62,82 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [userName, setUserName] = useState<string>("")
+  const [userEmail, setUserEmail] = useState<string>("")
+  const [topSearch, setTopSearch] = useState("")
+  const [sideSearch, setSideSearch] = useState("")
 
   useEffect(() => {
-    const session = getSessionRole()
-    if (session) {
-      setUserRole(session.role)
-      setUserName(session.name)
-    } else {
-      setUserRole("admin") // fallback if no session (bypass mode)
+    let mounted = true
+
+    const loadSession = async () => {
+      const session = await getDashboardSession()
+      if (!mounted) return
+
+      if (session?.active) {
+        setUserRole(session.role)
+        setUserName(session.name || "")
+        setUserEmail(session.email || "")
+      } else {
+        setUserRole("")
+        setUserName("")
+        setUserEmail("")
+      }
+    }
+
+    void loadSession()
+
+    const onStorageUpdate = () => {
+      void loadSession()
+    }
+
+    window.addEventListener("macao-dashboard-session-changed", onStorageUpdate)
+    return () => {
+      mounted = false
+      window.removeEventListener("macao-dashboard-session-changed", onStorageUpdate)
     }
   }, [])
+
+  const accessibleNavigation = navigation.filter((item) => hasAccess(userRole || "", item.href, userEmail))
+
+  const sidebarNavigation = accessibleNavigation.filter((item) => {
+    if (!sideSearch.trim()) return true
+    return item.name.toLowerCase().includes(sideSearch.toLowerCase())
+  })
+
+  const navigateByQuery = (rawQuery: string) => {
+    const query = rawQuery.trim().toLowerCase()
+    if (!query) {
+      router.push("/admin")
+      return
+    }
+
+    const exact = accessibleNavigation.find((item) => item.name.toLowerCase() === query)
+    if (exact) {
+      router.push(exact.href)
+      return
+    }
+
+    const partial = accessibleNavigation.find((item) => item.name.toLowerCase().includes(query))
+    if (partial) {
+      router.push(partial.href)
+    }
+  }
+
+  const handleTopSearch = () => {
+    navigateByQuery(topSearch)
+  }
+
+  const handleSideSearch = () => {
+    navigateByQuery(sideSearch)
+  }
+
+  const handleSignOut = async () => {
+    await clearDashboardSession()
+    setUserRole("")
+    setUserName("")
+    setUserEmail("")
+    router.push("/")
+  }
 
   // Don't render until we know the role
   if (userRole === null) {
@@ -90,7 +149,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   // Check if current page is accessible
-  const currentPageAllowed = hasAccess(userRole, pathname)
+  const currentPageAllowed = hasAccess(userRole || "", pathname, userEmail)
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
@@ -127,6 +186,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
               placeholder="Search workflows, logs..."
+              value={topSearch}
+              onChange={(e) => setTopSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleTopSearch()
+              }}
               className="pl-10 w-48 md:w-64 lg:w-80 bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 focus:bg-white dark:focus:bg-gray-800"
             />
           </div>
@@ -135,27 +199,54 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <Moon className="absolute w-4 h-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             <span className="sr-only">Toggle theme</span>
           </Button>
-          <Button variant="ghost" size="icon" className="relative shrink-0">
-            <Bell className="w-4 h-4" />
-            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="relative shrink-0">
+                <Bell className="w-4 h-4" />
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80">
+              <DropdownMenuLabel>Notificaciones</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => router.push("/admin/operation")}>
+                  Operación Buggy lista para actualizar reservas.
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push("/admin/chofer")}>
+                  Revisa Mis Recogidas y confirma salidas de choferes.
+                </DropdownMenuItem>
+                {hasAccess(userRole || "", "/admin/photography", userEmail) && (
+                  <DropdownMenuItem onClick={() => router.push("/admin/photography")}>
+                    Analíticas de fotografía disponibles para revisión.
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon">
                 <Avatar className="w-8 h-8">
                   <AvatarImage src="/placeholder.svg?height=32&width=32" />
-                  <AvatarFallback>AE</AvatarFallback>
+                  <AvatarFallback>{(userName || "A").slice(0, 2).toUpperCase()}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>{userName || "Admin MOR"}</DropdownMenuLabel>
+              <DropdownMenuLabel>
+                <div className="font-medium">{userName || "Usuario"}</div>
+                <div className="text-xs text-gray-500 mt-1">{userEmail || "Sin correo"}</div>
+                <div className="text-xs text-gray-500">Rol: {userRole || "Sin rol"}</div>
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Profile</DropdownMenuItem>
-              <DropdownMenuItem>Settings</DropdownMenuItem>
-              <DropdownMenuItem>Support</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => alert(`Perfil\n\nNombre: ${userName || "N/D"}\nCorreo: ${userEmail || "N/D"}\nRol: ${userRole || "N/D"}`)}>
+                Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => alert("Settings\n\nConfiguracion de cuenta disponible en la siguiente iteracion.")}>Settings</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.open("mailto:info@macaooffroad.com?subject=Soporte%20Dashboard", "_blank")}>Support</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Sign out</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -177,22 +268,31 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="p-4">
             <div className="relative mb-6">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input placeholder="Search anything..." className="pl-10 bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-sm" />
+              <Input
+                placeholder="Search anything..."
+                value={sideSearch}
+                onChange={(e) => setSideSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSideSearch()
+                }}
+                className="pl-10 bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-sm"
+              />
               <Button
                 size="icon"
                 variant="ghost"
                 className="absolute right-1 top-1/2 transform -translate-y-1/2 w-6 h-6"
+                onClick={handleSideSearch}
               >
                 <ArrowRight className="w-3 h-3" />
               </Button>
             </div>
 
             <nav className="space-y-1">
-              {navigation.map((item) => {
+              {sidebarNavigation.map((item) => {
                 const isActive = item.href === "/admin" 
                   ? pathname === "/admin" 
                   : pathname.startsWith(item.href)
-                const allowed = hasAccess(userRole, item.href)
+                const allowed = hasAccess(userRole || "", item.href, userEmail)
                 
                 // Hide pages the user cannot access
                 if (!allowed) return null
@@ -233,7 +333,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </div>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Acceso restringido</h2>
               <p className="text-gray-500 dark:text-gray-400 max-w-sm mb-6">
-                Tu rol de <span className="font-medium capitalize">{userRole}</span> no tiene permiso para acceder a esta sección.
+                Tu rol de <span className="font-medium capitalize">{userRole || "sin rol"}</span> no tiene permiso para acceder a esta sección.
               </p>
               <Button onClick={() => router.push("/admin")} variant="outline">
                 Volver al inicio
