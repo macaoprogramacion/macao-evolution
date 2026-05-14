@@ -71,6 +71,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 export function BillingCollections() {
   const [records, setRecords] = useState<BillingRecord[]>([])
+  const [closureFeedback, setClosureFeedback] = useState<string>("")
 
   // Form state
   const [type, setType] = useState<"pago_al_llegar" | "credito_vendedor" | "venta_directa">("pago_al_llegar")
@@ -144,6 +145,40 @@ export function BillingCollections() {
     setRecords(records.filter((r) => r.id !== id))
   }
 
+  const handleSendOperationsClosure = () => {
+    if (records.length === 0) {
+      alert("No hay registros para enviar en el cierre de operaciones")
+      return
+    }
+
+    const summary = {
+      id: `ops-${Date.now()}`,
+      sentAt: new Date().toISOString(),
+      totalRecords: records.length,
+      paid: records.filter((r) => r.status === "pagado").length,
+      pending: records.filter((r) => r.status === "pendiente").length,
+      cancelled: records.filter((r) => r.status === "cancelado").length,
+      totalsByCurrency: {
+        USD: records.filter((r) => r.currency === "USD").reduce((sum, r) => sum + r.amount, 0),
+        DOP: records.filter((r) => r.currency === "DOP").reduce((sum, r) => sum + r.amount, 0),
+        EUR: records.filter((r) => r.currency === "EUR").reduce((sum, r) => sum + r.amount, 0),
+        GBP: records.filter((r) => r.currency === "GBP").reduce((sum, r) => sum + r.amount, 0),
+      },
+    }
+
+    try {
+      const currentRaw = typeof window !== "undefined" ? localStorage.getItem("macao_operation_closures") : "[]"
+      const current = currentRaw ? JSON.parse(currentRaw) : []
+      const next = Array.isArray(current) ? [summary, ...current].slice(0, 50) : [summary]
+      localStorage.setItem("macao_operation_closures", JSON.stringify(next))
+      window.dispatchEvent(new CustomEvent("macao-operation-closure-sent", { detail: summary }))
+      setClosureFeedback("Cierre de operaciones enviado a contabilidad.")
+      window.setTimeout(() => setClosureFeedback(""), 5000)
+    } catch {
+      alert("No se pudo enviar el cierre de operaciones")
+    }
+  }
+
   const stats = {
     total: records.length,
     pending: records.filter((r) => r.status === "pendiente").length,
@@ -203,6 +238,20 @@ export function BillingCollections() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-gray-200 dark:border-gray-800">
+        <CardContent className="pt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-medium">Cierre de operaciones</p>
+            <p className="text-xs text-gray-600 dark:text-gray-400">Envía un resumen para notificar al usuario de contabilidad.</p>
+          </div>
+          <Button onClick={handleSendOperationsClosure}>Enviar cierre a contabilidad</Button>
+        </CardContent>
+      </Card>
+
+      {closureFeedback ? (
+        <div className="text-sm text-green-700 dark:text-green-400">{closureFeedback}</div>
+      ) : null}
 
       {/* Form */}
       <Card className="border-gray-200 dark:border-gray-800">

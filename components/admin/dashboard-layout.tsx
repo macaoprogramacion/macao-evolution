@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useTheme } from "next-themes"
 import { clearDashboardSession, getDashboardSession } from "@/lib/dashboard-session"
+import { supabase } from "@/lib/supabase"
 
 const navigation = [
   { name: "Overview", href: "/admin", icon: Home },
@@ -58,6 +59,14 @@ interface DashboardLayoutProps {
   children: React.ReactNode
 }
 
+type ClosureNotification = {
+  id: string
+  source: "photography" | "operations"
+  href: string
+  message: string
+  createdAt: string
+}
+
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname() || "/admin"
   const router = useRouter()
@@ -69,6 +78,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [userEmail, setUserEmail] = useState<string>("")
   const [topSearch, setTopSearch] = useState("")
   const [sideSearch, setSideSearch] = useState("")
+  const [closureNotifications, setClosureNotifications] = useState<ClosureNotification[]>([])
 
   useEffect(() => {
     let mounted = true
@@ -100,6 +110,94 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       window.removeEventListener("macao-dashboard-session-changed", onStorageUpdate)
     }
   }, [])
+
+  useEffect(() => {
+    const isAccounting = userRole === "contabilidad"
+    if (!isAccounting) {
+      setClosureNotifications([])
+      return
+    }
+
+    let mounted = true
+
+    const parseOperationClosures = () => {
+      if (typeof window === "undefined") return [] as ClosureNotification[]
+      try {
+        const raw = localStorage.getItem("macao_operation_closures")
+        const parsed = raw ? JSON.parse(raw) : []
+        if (!Array.isArray(parsed)) return [] as ClosureNotification[]
+        return parsed
+          .slice(0, 10)
+          .map((entry: any) => ({
+            id: String(entry.id || `operation-${entry.sentAt || Math.random()}`),
+            source: "operations" as const,
+            href: "/admin/operation",
+            message: `Cierre de operaciones enviado (${Number(entry.totalRecords || 0)} registros).`,
+            createdAt: String(entry.sentAt || new Date().toISOString()),
+          }))
+      } catch {
+        return [] as ClosureNotification[]
+      }
+    }
+
+    const loadClosureNotifications = async () => {
+      const operationEntries = parseOperationClosures()
+
+      const { data } = await supabase
+        .from("photo_daily_closures")
+        .select("closure_date, closed_by, closed_at, total_invoices")
+        .order("closed_at", { ascending: false })
+        .limit(10)
+
+      const photographyEntries: ClosureNotification[] = (data || []).map((row: any) => ({
+        id: `photo-${row.closure_date}-${row.closed_at || ""}`,
+        source: "photography",
+        href: "/admin/photography?tab=closures",
+        message: `Caja de fotografía envió cierre (${Number(row.total_invoices || 0)} facturas).`,
+        createdAt: String(row.closed_at || `${row.closure_date}T00:00:00.000Z`),
+      }))
+
+      const merged = [...photographyEntries, ...operationEntries]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 8)
+
+      if (mounted) {
+        setClosureNotifications(merged)
+      }
+    }
+
+    void loadClosureNotifications()
+
+    const interval = window.setInterval(() => {
+      void loadClosureNotifications()
+    }, 45_000)
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === "macao_operation_closures") {
+        void loadClosureNotifications()
+      }
+    }
+
+    const onOpsClosure = () => {
+      void loadClosureNotifications()
+    }
+
+    const onPhotoClosure = () => {
+      void loadClosureNotifications()
+    }
+
+    window.addEventListener("storage", onStorage)
+    window.addEventListener("macao-operation-closure-sent", onOpsClosure)
+    window.addEventListener("macao-photo-closure-sent", onPhotoClosure)
+
+    return () => {
+      mounted = false
+      window.clearInterval(interval)
+      window.removeEventListener("storage", onStorage)
+      window.removeEventListener("macao-operation-closure-sent", onOpsClosure)
+      window.removeEventListener("macao-photo-closure-sent", onPhotoClosure)
+    }
+  }, [userRole])
 
   const accessibleNavigation = navigation.filter((item) => hasAccess(userRole || "", item.href, userEmail))
 
@@ -207,23 +305,45 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative shrink-0">
                 <Bell className="w-4 h-4" />
-                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                {((userRole === "contabilidad" && closureNotifications.length > 0) || userRole !== "contabilidad") && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80">
               <DropdownMenuLabel>Notificaciones</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => router.push("/admin/operation")}>
-                  Operación Buggy lista para actualizar reservas.
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push("/admin/chofer")}>
-                  Revisa Mis Recogidas y confirma salidas de choferes.
-                </DropdownMenuItem>
-                {hasAccess(userRole || "", "/admin/photography", userEmail) && (
-                  <DropdownMenuItem onClick={() => router.push("/admin/photography")}>
-                    Analíticas de fotografía disponibles para revisión.
-                  </DropdownMenuItem>
+                {userRole === "contabilidad" ? (
+                  closureNotifications.length > 0 ? (
+                    closureNotifications.map((notification) => (
+                      <DropdownMenuItem key={notification.id} onClick={() => router.push(notification.href)}>
+                        {notification.message}
+                      </DropdownMenuItem>
+                    ))
+                  ) : (
+                    <DropdownMenuItem disabled>
+                      No hay cierres nuevos.
+                    </DropdownMenuItem>
+                  )
+                ) : (
+                  <>
+                    {hasAccess(userRole || "", "/admin/operation", userEmail) && (
+                      <DropdownMenuItem onClick={() => router.push("/admin/operation")}>
+                        Operación Buggy lista para actualizar reservas.
+                      </DropdownMenuItem>
+                    )}
+                    {hasAccess(userRole || "", "/admin/chofer", userEmail) && (
+                      <DropdownMenuItem onClick={() => router.push("/admin/chofer")}>
+                        Revisa Mis Recogidas y confirma salidas de choferes.
+                      </DropdownMenuItem>
+                    )}
+                    {hasAccess(userRole || "", "/admin/photography", userEmail) && (
+                      <DropdownMenuItem onClick={() => router.push("/admin/photography")}>
+                        Analíticas de fotografía disponibles para revisión.
+                      </DropdownMenuItem>
+                    )}
+                  </>
                 )}
               </DropdownMenuGroup>
             </DropdownMenuContent>

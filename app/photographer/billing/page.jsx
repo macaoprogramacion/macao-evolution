@@ -818,6 +818,15 @@ function CierreDiaPanel({ invoices, pendingDays = [], dashboardUser, onCierreSen
       });
       if (success) {
         setCierreMessage({ type: 'ok', text: 'Cierre enviado exitosamente al administrador.' });
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('macao-photo-closure-sent', {
+            detail: {
+              closureDate: selectedDateISO,
+              closedBy: dashboardUser?.name || null,
+              totalInvoices: activeInvoices.length,
+            },
+          }));
+        }
         onCierreSent?.();
       } else {
         setCierreMessage({ type: 'err', text: 'Error al enviar cierre. Intente de nuevo.' });
