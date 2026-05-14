@@ -1,7 +1,7 @@
 "use client"
 
-import { Fragment, useState, useMemo } from "react"
-import { Plus, X, Printer } from "lucide-react"
+import { Fragment, useState, useMemo, useEffect } from "react"
+import { Plus, X, Printer, Lock, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,6 +16,16 @@ import {
 } from "@/components/ui/select"
 import { hotelDirectory } from "@/lib/hotel-locations"
 import { getBuggyPickupSuggestion, type TurnSlot } from "@/lib/hotel-pickup-schedules"
+import {
+  createPickupSheet,
+  getPickupSheetByDate,
+  getPickupSheetRows,
+  addPickupSheetRows,
+  removePickupSheetRow,
+  markPickupSheetPrinted,
+  type PickupSheet,
+  type PickupSheetRow,
+} from "@/lib/pickup-sheets"
 
 interface PickupEntry {
   id: string
@@ -142,6 +152,9 @@ function resolveHotelInfo(hotelInput: string) {
 
 export function DriverPickupSheet() {
   const [pickups, setPickups] = useState<PickupEntry[]>([])
+  const [sheetId, setSheetId] = useState<string | null>(null)
+  const [sheetStatus, setSheetStatus] = useState<"draft" | "locked" | "printed">("draft")
+  const [isLoading, setIsLoading] = useState(true)
   const [hotel, setHotel] = useState("")
   const [zoneId, setZoneId] = useState<PickupZoneId>("zona4")
   const [showHotelSuggestions, setShowHotelSuggestions] = useState(false)
@@ -152,6 +165,54 @@ export function DriverPickupSheet() {
   const [persons, setPersons] = useState("1")
   const [room, setRoom] = useState("")
   const [serviceType, setServiceType] = useState("")
+
+  // Load pickup sheet for today on mount
+  useEffect(() => {
+    const loadSheet = async () => {
+      try {
+        const today = new Date().toISOString().split("T")[0]
+        // Try to find existing sheet for today
+        const existingSheet = await getPickupSheetByDate(today)
+        
+        if (existingSheet?.id) {
+          setSheetId(existingSheet.id)
+          setSheetStatus(existingSheet.status as "draft" | "locked" | "printed")
+          
+          // Load rows
+          const rows = await getPickupSheetRows(existingSheet.id)
+          if (rows && rows.length > 0) {
+            // Convert DB rows to PickupEntry format
+            const entries: PickupEntry[] = rows.map((row: PickupSheetRow) => ({
+              id: row.id,
+              hotel: row.hotel || "",
+              zoneId: "zona3" as PickupZoneId,
+              shift: "9 AM" as ShiftOption,
+              pickupTime: row.pickup_time || "",
+              agency: row.agency || "",
+              customerName: row.customer_name || "",
+              persons: row.pax || 1,
+              room: row.room || "",
+              serviceType: "",
+            }))
+            setPickups(entries)
+          }
+        } else {
+          // Create new sheet for today
+          const newSheet = await createPickupSheet(today, "8 AM", "system")
+          if (newSheet?.id) {
+            setSheetId(newSheet.id)
+            setSheetStatus("draft")
+          }
+        }
+      } catch (error) {
+        console.error("Error loading pickup sheet:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadSheet()
+  }, [])
 
   const hotelList = Object.keys(hotelDirectory).sort()
   const hotelOptions = useMemo(
@@ -252,34 +313,70 @@ export function DriverPickupSheet() {
       return
     }
 
-    const newEntry: PickupEntry = {
-      id: Date.now().toString(),
-      hotel,
-      zoneId,
-      shift,
-      pickupTime: time,
-      agency,
-      customerName,
-      persons: parseInt(persons),
-      room,
-      serviceType,
+    const handleAddAsync = async () => {
+      try {
+        const newEntry: PickupEntry = {
+          id: Date.now().toString(),
+          hotel,
+          zoneId,
+          shift,
+          pickupTime: time,
+          agency,
+          customerName,
+          persons: parseInt(persons),
+          room,
+          serviceType,
+        }
+
+        // Save to BD
+        if (sheetId) {
+          await addPickupSheetRows(sheetId, [
+            {
+              pickup_time: time,
+              customer_name: customerName,
+              hotel: agency,
+              room: room || null,
+              is_ghost: false,
+              ghost_hotel_random: null,
+              ghost_name_random: null,
+              reservation_id: null,
+            },
+          ])
+        }
+
+        setPickups([...pickups, newEntry])
+        setHotel("")
+        setZoneId("zona4")
+        setShowHotelSuggestions(false)
+        setShift("9 AM")
+        setTime("")
+        setAgency("")
+        setCustomerName("")
+        setPersons("1")
+        setRoom("")
+        setServiceType("")
+      } catch (error) {
+        console.error("Error adding pickup:", error)
+        alert("No se pudo guardar la recogida")
+      }
     }
 
-    setPickups([...pickups, newEntry])
-    setHotel("")
-    setZoneId("zona4")
-    setShowHotelSuggestions(false)
-    setShift("9 AM")
-    setTime("")
-    setAgency("")
-    setCustomerName("")
-    setPersons("1")
-    setRoom("")
-    setServiceType("")
+    handleAddAsync()
   }
 
   const handleRemovePickup = (id: string) => {
-    setPickups(pickups.filter((p) => p.id !== id))
+    const handleRemoveAsync = async () => {
+      try {
+        // Remove from BD
+        await removePickupSheetRow(id)
+        setPickups(pickups.filter((p) => p.id !== id))
+      } catch (error) {
+        console.error("Error removing pickup:", error)
+        alert("No se pudo eliminar la recogida")
+      }
+    }
+
+    handleRemoveAsync()
   }
 
   const handlePrint = () => {
@@ -288,284 +385,335 @@ export function DriverPickupSheet() {
       return
     }
 
-    const printWindow = window.open("", "_blank")
-    if (!printWindow) return
+    const handlePrintAsync = async () => {
+      try {
+        const printWindow = window.open("", "_blank")
+        if (!printWindow) return
 
-    const html = generatePrintHTML(pickups)
-    printWindow.document.write(html)
-    printWindow.document.close()
+        const html = generatePrintHTML(pickups)
+        printWindow.document.write(html)
+        printWindow.document.close()
 
-    setTimeout(() => {
-      printWindow.print()
-    }, 250)
+        setTimeout(() => {
+          printWindow.print()
+        }, 250)
+
+        // Mark as printed in BD
+        if (sheetId) {
+          await markPickupSheetPrinted(sheetId)
+          setSheetStatus("printed")
+        }
+      } catch (error) {
+        console.error("Error printing:", error)
+        alert("No se pudo guardar la impresión")
+      }
+    }
+
+    handlePrintAsync()
   }
 
   return (
     <div className="space-y-6">
-      {/* Form */}
-      <Card className="border-gray-200 dark:border-gray-800">
-        <CardHeader>
-          <CardTitle className="text-base">Agregar Recogida</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Zone */}
-            <div className="space-y-1.5">
-              <Label>Zona *</Label>
-              <Select
-                value={zoneId}
-                onValueChange={(value) => {
-                  setZoneId(value as PickupZoneId)
-                  setHotel("")
-                  setTime("")
-                  setShowHotelSuggestions(false)
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="zona4">Zona 4 - Cabeza de Toro y Cap Cana</SelectItem>
-                  <SelectItem value="zona3">Zona 3 - Bavaro</SelectItem>
-                  <SelectItem value="zona2">Zona 2 - Centro y Machiplan</SelectItem>
-                  <SelectItem value="zona1">Zona 1 - Macao y Uvero Alto</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Hotel */}
-            <div className="space-y-1.5">
-              <Label>Hotel *</Label>
-              <div className="relative">
-                <Input
-                  value={hotel}
-                  onFocus={() => setShowHotelSuggestions(true)}
-                  onBlur={() => {
-                    setTimeout(() => setShowHotelSuggestions(false), 120)
-                  }}
-                  onChange={(e) => {
-                    const nextHotel = e.target.value
-                    setHotel(nextHotel)
-                    setShowHotelSuggestions(true)
-                    const nextTime = getScheduledTime(nextHotel, shift)
-                    if (nextTime) setTime(nextTime)
-                  }}
-                  placeholder="Busca el hotel..."
-                  className="w-full"
-                />
-                {showHotelSuggestions && filteredHotels.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-700 rounded-md mt-1 max-h-48 overflow-y-auto z-10">
-                    {filteredHotels.map((opt) => (
-                      <button
-                        key={opt.key}
-                        type="button"
-                        onClick={() => {
-                          setHotel(opt.label)
-                          setZoneId(opt.defaultZoneId)
-                          setShowHotelSuggestions(false)
-                          const nextSuggestion = getScheduledTime(opt.label, shift)
-                          setTime(nextSuggestion)
-                        }}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm"
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <p className="text-xs text-gray-500">
-                Mostrando hoteles de {ZONE_CONFIG[zoneId].label}: {ZONE_CONFIG[zoneId].subtitle}
-              </p>
-              {suggestedTime && hotel && (
-                <p className="text-xs text-blue-600">Horario del hotel para este turno: {suggestedTime}</p>
-              )}
-            </div>
-
-            {/* Pickup Time */}
-            <div className="space-y-1.5">
-              <Label>Hora de Recogida *</Label>
-              <Input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                placeholder="07:30"
-              />
-            </div>
-
-            {/* Shift */}
-            <div className="space-y-1.5">
-              <Label>Turno *</Label>
-              <Select
-                value={shift}
-                onValueChange={(val) => {
-                  const nextShift = val as ShiftOption
-                  setShift(nextShift)
-                  if (hotel) {
-                    const nextSuggestion = getScheduledTime(hotel, nextShift)
-                    setTime(nextSuggestion)
-                  }
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="9 AM">Turno 9:00 AM</SelectItem>
-                  <SelectItem value="12 PM">Turno 12:00 PM</SelectItem>
-                  <SelectItem value="3 PM">Turno 3:00 PM</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Agency */}
-            <div className="space-y-1.5">
-              <Label>Agencia *</Label>
-              <Input
-                value={agency}
-                onChange={(e) => setAgency(e.target.value)}
-                placeholder="Nombre de la agencia"
-              />
-            </div>
-
-            {/* Client Name */}
-            <div className="space-y-1.5">
-              <Label>Nombre del Cliente *</Label>
-              <Input
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Nombre del cliente"
-              />
-            </div>
-
-            {/* Persons */}
-            <div className="space-y-1.5">
-              <Label>Cantidad de Personas *</Label>
-              <Input
-                type="number"
-                min="1"
-                value={persons}
-                onChange={(e) => setPersons(e.target.value)}
-                placeholder="1"
-              />
-            </div>
-
-            {/* Room */}
-            <div className="space-y-1.5">
-              <Label>Número de Habitación</Label>
-              <Input
-                value={room}
-                onChange={(e) => setRoom(e.target.value)}
-                placeholder="Ej: 4231"
-              />
-            </div>
-
-            {/* Service Type */}
-            <div className="space-y-1.5">
-              <Label>Servicios *</Label>
-              <Select value={serviceType} onValueChange={setServiceType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {SERVICES.map((service) => (
-                    <SelectItem key={service} value={service}>
-                      {service}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <Button
-            onClick={handleAddPickup}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Agregar Recogida
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Pickups List */}
-      {pickups.length > 0 && (
+      {isLoading ? (
         <Card className="border-gray-200 dark:border-gray-800">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Recogidas del Día ({pickups.length})</CardTitle>
-            <Button
-              onClick={handlePrint}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              <Printer className="w-4 h-4 mr-2" />
-              Imprimir Hoja A4
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-3 px-2 font-semibold">Hotel</th>
-                    <th className="text-left py-3 px-2 font-semibold">Zona</th>
-                    <th className="text-left py-3 px-2 font-semibold">Turno</th>
-                    <th className="text-left py-3 px-2 font-semibold">Hora</th>
-                    <th className="text-left py-3 px-2 font-semibold">Agencia</th>
-                    <th className="text-left py-3 px-2 font-semibold">Cliente</th>
-                    <th className="text-center py-3 px-2 font-semibold">Personas</th>
-                    <th className="text-left py-3 px-2 font-semibold">Hab.</th>
-                    <th className="text-left py-3 px-2 font-semibold">Servicio</th>
-                    <th className="text-center py-3 px-2 font-semibold">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {groupedPickups.map((group) => (
-                    <Fragment key={`zone-${group.zoneId}`}>
-                      <tr className={ZONE_CONFIG[group.zoneId].tableClass}>
-                        <td colSpan={10} className="py-2 px-2 font-semibold text-gray-800 dark:text-gray-100">
-                          {ZONE_CONFIG[group.zoneId].label} - {ZONE_CONFIG[group.zoneId].subtitle}
-                        </td>
-                      </tr>
-                      {group.items.map((pickup) => {
-                        const info = resolveHotelInfo(pickup.hotel)
-                        return (
-                          <tr
-                            key={pickup.id}
-                            className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900"
-                          >
-                            <td className="py-3 px-2">
-                              <span className="font-medium">{info.displayName}</span>
-                            </td>
-                            <td className="py-3 px-2">
-                              <Badge className={ZONE_CONFIG[pickup.zoneId].badgeClass}>{ZONE_CONFIG[pickup.zoneId].label}</Badge>
-                            </td>
-                            <td className="py-3 px-2">{pickup.shift}</td>
-                            <td className="py-3 px-2">{pickup.pickupTime}</td>
-                            <td className="py-3 px-2">{pickup.agency}</td>
-                            <td className="py-3 px-2">{pickup.customerName}</td>
-                            <td className="py-3 px-2 text-center">
-                              <Badge variant="outline">{pickup.persons}</Badge>
-                            </td>
-                            <td className="py-3 px-2">{pickup.room || "—"}</td>
-                            <td className="py-3 px-2">{pickup.serviceType}</td>
-                            <td className="py-3 px-2 text-center">
-                              <button
-                                onClick={() => handleRemovePickup(pickup.id)}
-                                className="text-red-600 hover:text-red-700"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <CardContent className="pt-6">
+            <p className="text-center text-gray-600">Cargando hoja de recogida...</p>
           </CardContent>
         </Card>
+      ) : (
+        <>
+          {/* Status Badge */}
+          {sheetStatus !== "draft" && (
+            <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md p-4">
+              <Lock className="w-5 h-5 text-amber-600" />
+              <div>
+                <p className="font-medium text-amber-900 dark:text-amber-200">
+                  Hoja de recogida {sheetStatus === "printed" ? "impresa" : "bloqueada"}
+                </p>
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  No se pueden agregar o eliminar recogidas después de {sheetStatus === "printed" ? "imprimir" : "crear"}.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Form */}
+          <Card className={`border-gray-200 dark:border-gray-800 ${sheetStatus !== "draft" ? "opacity-50" : ""}`}>
+            <CardHeader>
+              <CardTitle className="text-base">Agregar Recogida</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Zone */}
+                <div className="space-y-1.5">
+                  <Label>Zona *</Label>
+                  <Select
+                    value={zoneId}
+                    onValueChange={(value) => {
+                      setZoneId(value as PickupZoneId)
+                      setHotel("")
+                      setTime("")
+                      setShowHotelSuggestions(false)
+                    }}
+                    disabled={sheetStatus !== "draft"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="zona4">Zona 4 - Cabeza de Toro y Cap Cana</SelectItem>
+                      <SelectItem value="zona3">Zona 3 - Bavaro</SelectItem>
+                      <SelectItem value="zona2">Zona 2 - Centro y Machiplan</SelectItem>
+                      <SelectItem value="zona1">Zona 1 - Macao y Uvero Alto</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Hotel */}
+                <div className="space-y-1.5">
+                  <Label>Hotel *</Label>
+                  <div className="relative">
+                    <Input
+                      value={hotel}
+                      onFocus={() => setShowHotelSuggestions(true)}
+                      onBlur={() => {
+                        setTimeout(() => setShowHotelSuggestions(false), 120)
+                      }}
+                      onChange={(e) => {
+                        const nextHotel = e.target.value
+                        setHotel(nextHotel)
+                        setShowHotelSuggestions(true)
+                        const nextTime = getScheduledTime(nextHotel, shift)
+                        if (nextTime) setTime(nextTime)
+                      }}
+                      placeholder="Busca el hotel..."
+                      className="w-full"
+                      disabled={sheetStatus !== "draft"}
+                    />
+                    {showHotelSuggestions && filteredHotels.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-700 rounded-md mt-1 max-h-48 overflow-y-auto z-10">
+                        {filteredHotels.map((opt) => (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            onClick={() => {
+                              setHotel(opt.label)
+                              setZoneId(opt.defaultZoneId)
+                              setShowHotelSuggestions(false)
+                              const nextSuggestion = getScheduledTime(opt.label, shift)
+                              setTime(nextSuggestion)
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm"
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Mostrando hoteles de {ZONE_CONFIG[zoneId].label}: {ZONE_CONFIG[zoneId].subtitle}
+                  </p>
+                  {suggestedTime && hotel && (
+                    <p className="text-xs text-blue-600">Horario del hotel para este turno: {suggestedTime}</p>
+                  )}
+                </div>
+
+                {/* Pickup Time */}
+                <div className="space-y-1.5">
+                  <Label>Hora de Recogida *</Label>
+                  <Input
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    placeholder="07:30"
+                    disabled={sheetStatus !== "draft"}
+                  />
+                </div>
+
+                {/* Shift */}
+                <div className="space-y-1.5">
+                  <Label>Turno *</Label>
+                  <Select
+                    value={shift}
+                    onValueChange={(val) => {
+                      const nextShift = val as ShiftOption
+                      setShift(nextShift)
+                      if (hotel) {
+                        const nextSuggestion = getScheduledTime(hotel, nextShift)
+                        setTime(nextSuggestion)
+                      }
+                    }}
+                    disabled={sheetStatus !== "draft"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="9 AM">Turno 9:00 AM</SelectItem>
+                      <SelectItem value="12 PM">Turno 12:00 PM</SelectItem>
+                      <SelectItem value="3 PM">Turno 3:00 PM</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Agency */}
+                <div className="space-y-1.5">
+                  <Label>Agencia *</Label>
+                  <Input
+                    value={agency}
+                    onChange={(e) => setAgency(e.target.value)}
+                    placeholder="Nombre de la agencia"
+                    disabled={sheetStatus !== "draft"}
+                  />
+                </div>
+
+                {/* Client Name */}
+                <div className="space-y-1.5">
+                  <Label>Nombre del Cliente *</Label>
+                  <Input
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    placeholder="Nombre del cliente"
+                    disabled={sheetStatus !== "draft"}
+                  />
+                </div>
+
+                {/* Persons */}
+                <div className="space-y-1.5">
+                  <Label>Cantidad de Personas *</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={persons}
+                    onChange={(e) => setPersons(e.target.value)}
+                    placeholder="1"
+                    disabled={sheetStatus !== "draft"}
+                  />
+                </div>
+
+                {/* Room */}
+                <div className="space-y-1.5">
+                  <Label>Número de Habitación</Label>
+                  <Input
+                    value={room}
+                    onChange={(e) => setRoom(e.target.value)}
+                    placeholder="Ej: 4231"
+                    disabled={sheetStatus !== "draft"}
+                  />
+                </div>
+
+                {/* Service Type */}
+                <div className="space-y-1.5">
+                  <Label>Servicios *</Label>
+                  <Select value={serviceType} onValueChange={setServiceType} disabled={sheetStatus !== "draft"}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SERVICES.map((service) => (
+                        <SelectItem key={service} value={service}>
+                          {service}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Button
+                onClick={handleAddPickup}
+                disabled={sheetStatus !== "draft"}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Agregar Recogida
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Pickups List */}
+          {pickups.length > 0 && (
+            <Card className="border-gray-200 dark:border-gray-800">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">Recogidas del Día ({pickups.length})</CardTitle>
+                <Button
+                  onClick={handlePrint}
+                  disabled={sheetStatus !== "draft"}
+                  className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Printer className="w-4 h-4 mr-2" />
+                  Imprimir Hoja A4
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-gray-700">
+                        <th className="text-left py-3 px-2 font-semibold">Hotel</th>
+                        <th className="text-left py-3 px-2 font-semibold">Zona</th>
+                        <th className="text-left py-3 px-2 font-semibold">Turno</th>
+                        <th className="text-left py-3 px-2 font-semibold">Hora</th>
+                        <th className="text-left py-3 px-2 font-semibold">Agencia</th>
+                        <th className="text-left py-3 px-2 font-semibold">Cliente</th>
+                        <th className="text-center py-3 px-2 font-semibold">Personas</th>
+                        <th className="text-left py-3 px-2 font-semibold">Hab.</th>
+                        <th className="text-left py-3 px-2 font-semibold">Servicio</th>
+                        <th className="text-center py-3 px-2 font-semibold">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groupedPickups.map((group) => (
+                        <Fragment key={`zone-${group.zoneId}`}>
+                          <tr className={ZONE_CONFIG[group.zoneId].tableClass}>
+                            <td colSpan={10} className="py-2 px-2 font-semibold text-gray-800 dark:text-gray-100">
+                              {ZONE_CONFIG[group.zoneId].label} - {ZONE_CONFIG[group.zoneId].subtitle}
+                            </td>
+                          </tr>
+                          {group.items.map((pickup) => {
+                            const info = resolveHotelInfo(pickup.hotel)
+                            return (
+                              <tr
+                                key={pickup.id}
+                                className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900"
+                              >
+                                <td className="py-3 px-2">
+                                  <span className="font-medium">{info.displayName}</span>
+                                </td>
+                                <td className="py-3 px-2">
+                                  <Badge className={ZONE_CONFIG[pickup.zoneId].badgeClass}>{ZONE_CONFIG[pickup.zoneId].label}</Badge>
+                                </td>
+                                <td className="py-3 px-2">{pickup.shift}</td>
+                                <td className="py-3 px-2">{pickup.pickupTime}</td>
+                                <td className="py-3 px-2">{pickup.agency}</td>
+                                <td className="py-3 px-2">{pickup.customerName}</td>
+                                <td className="py-3 px-2 text-center">
+                                  <Badge variant="outline">{pickup.persons}</Badge>
+                                </td>
+                                <td className="py-3 px-2">{pickup.room || "—"}</td>
+                                <td className="py-3 px-2">{pickup.serviceType}</td>
+                                <td className="py-3 px-2 text-center">
+                                  <button
+                                    onClick={() => handleRemovePickup(pickup.id)}
+                                    disabled={sheetStatus !== "draft"}
+                                    className="text-red-600 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
     </div>
   )

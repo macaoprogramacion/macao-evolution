@@ -80,6 +80,25 @@ export async function getPickupSheet(sheetId: string): Promise<PickupSheet | nul
 }
 
 /**
+ * Get pickup sheet by date
+ */
+export async function getPickupSheetByDate(date: string): Promise<PickupSheet | null> {
+  try {
+    const { data, error } = await supabase
+      .from('pickup_sheets')
+      .select('*')
+      .eq('date', date)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error; // 404 is expected
+    return data || null;
+  } catch (err) {
+    console.error('Error fetching pickup sheet by date:', err);
+    return null;
+  }
+}
+
+/**
  * Get pickup sheet rows
  */
 export async function getPickupSheetRows(sheetId: string): Promise<PickupSheetRow[]> {
