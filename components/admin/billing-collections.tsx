@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Plus, Trash2 } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Plus, Trash2, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,6 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { insertBillingRecord, getTodayBillingRecords, updateBillingRecord, deleteBillingRecord } from "@/lib/billing-records"
+import type { BillingRecord as DBBillingRecord } from "@/lib/billing-records"
 
 interface BillingRecord {
   id: string
@@ -72,6 +74,8 @@ const TYPE_COLORS: Record<string, string> = {
 export function BillingCollections() {
   const [records, setRecords] = useState<BillingRecord[]>([])
   const [closureFeedback, setClosureFeedback] = useState<string>("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   // Form state
   const [type, setType] = useState<"pago_al_llegar" | "credito_vendedor" | "venta_directa">("pago_al_llegar")
@@ -85,6 +89,38 @@ export function BillingCollections() {
   const [serviceType, setServiceType] = useState("")
   const [notes, setNotes] = useState("")
 
+  // Load records from Supabase on mount
+  useEffect(() => {
+    const loadRecords = async () => {
+      setIsLoading(true)
+      try {
+        const dbRecords = await getTodayBillingRecords()
+        const mapped = dbRecords.map((r: DBBillingRecord) => ({
+          id: r.id,
+          type: r.type,
+          clientName: r.client_name,
+          phone: r.phone || "",
+          currency: r.currency,
+          amount: r.amount,
+          paymentMethod: r.payment_method,
+          courtesy: r.courtesy,
+          serviceType: r.service_type,
+          status: r.status,
+          date: r.date,
+          notes: r.notes || "",
+          vendorName: r.vendor_name,
+        }))
+        setRecords(mapped)
+      } catch (err) {
+        console.error("Error loading billing records:", err)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    void loadRecords()
+  }, [])
+
   const supportsMultiCurrency = type === "pago_al_llegar" || type === "venta_directa"
 
   const formatMoney = (code: "USD" | "DOP" | "EUR" | "GBP", value: number) => {
@@ -92,32 +128,56 @@ export function BillingCollections() {
     return `${CURRENCY_SYMBOLS[code]} ${value.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 
-  const handleAddRecord = () => {
+  const handleAddRecord = async () => {
     if (!clientName || !amount || !serviceType || (type === "credito_vendedor" && !vendorName)) {
       alert("Por favor completa los campos requeridos")
       return
     }
 
-    const recordCurrency = supportsMultiCurrency ? currency : "USD"
+    setIsSaving(true)
+    try {
+      const recordCurrency = supportsMultiCurrency ? currency : "USD"
 
-    const newRecord: BillingRecord = {
-      id: Date.now().toString(),
-      type,
-      clientName,
-      phone,
-      currency: recordCurrency,
-      amount: parseFloat(amount),
-      paymentMethod,
-      courtesy,
-      serviceType,
-      status: "pendiente",
-      date: new Date().toISOString().slice(0, 10),
-      notes,
-      vendorName: type === "credito_vendedor" ? vendorName : undefined,
+      await insertBillingRecord({
+        type,
+        client_name: clientName,
+        phone: phone || null,
+        currency: recordCurrency,
+        amount: parseFloat(amount),
+        payment_method: paymentMethod,
+        courtesy,
+        service_type: serviceType,
+        status: "pendiente",
+        date: new Date().toISOString().slice(0, 10),
+        notes,
+        vendor_name: type === "credito_vendedor" ? vendorName : null,
+      })
+
+      // Reload records from DB
+      const updatedRecords = await getTodayBillingRecords()
+      const mapped = updatedRecords.map((r: DBBillingRecord) => ({
+        id: r.id,
+        type: r.type,
+        clientName: r.client_name,
+        phone: r.phone || "",
+        currency: r.currency,
+        amount: r.amount,
+        paymentMethod: r.payment_method,
+        courtesy: r.courtesy,
+        serviceType: r.service_type,
+        status: r.status,
+        date: r.date,
+        notes: r.notes || "",
+        vendorName: r.vendor_name,
+      }))
+      setRecords(mapped)
+      resetForm()
+    } catch (err) {
+      console.error("Error saving record:", err)
+      alert("No se pudo guardar el registro")
+    } finally {
+      setIsSaving(false)
     }
-
-    setRecords([newRecord, ...records])
-    resetForm()
   }
 
   const resetForm = () => {
@@ -133,16 +193,38 @@ export function BillingCollections() {
     setNotes("")
   }
 
-  const handleUpdateStatus = (id: string, newStatus: "pendiente" | "pagado" | "cancelado") => {
-    setRecords(
-      records.map((r) =>
-        r.id === id ? { ...r, status: newStatus } : r,
-      ),
-    )
+  const handleUpdateStatus = async (id: string, newStatus: "pendiente" | "pagado" | "cancelado") => {
+    setIsSaving(true)
+    try {
+      await updateBillingRecord(id, { status: newStatus })
+      setRecords(
+        records.map((r) =>
+          r.id === id ? { ...r, status: newStatus } : r,
+        ),
+      )
+    } catch (err) {
+      console.error("Error updating record:", err)
+      alert("No se pudo actualizar el estado")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleDelete = (id: string) => {
-    setRecords(records.filter((r) => r.id !== id))
+  const handleDelete = async (id: string) => {
+    if (!confirm("¿Estás seguro de que quieres eliminar este registro?")) {
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await deleteBillingRecord(id)
+      setRecords(records.filter((r) => r.id !== id))
+    } catch (err) {
+      console.error("Error deleting record:", err)
+      alert("No se pudo eliminar el registro")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleSendOperationsClosure = () => {
@@ -399,10 +481,20 @@ export function BillingCollections() {
 
           <Button
             onClick={handleAddRecord}
+            disabled={isSaving}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white"
           >
-            <Plus className="w-4 h-4 mr-2" />
-            Registrar
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Guardando...
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4 mr-2" />
+                Registrar
+              </>
+            )}
           </Button>
         </CardContent>
       </Card>
