@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { Search, Bell, Home, Workflow, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft, Ship, Mountain, Sun, Moon, Camera, BarChart3 } from "lucide-react"
+import { Search, Bell, Workflow, Package, Users, ClipboardList, ArrowRight, FileText, Handshake, UserCog, Menu, X, Lock, Navigation, PanelLeftClose, PanelLeft, Ship, Mountain, Sun, Moon, Camera, BarChart3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -23,7 +23,6 @@ import { clearDashboardSession, getDashboardSession } from "@/lib/dashboard-sess
 import { supabase } from "@/lib/supabase"
 
 const navigation = [
-  { name: "Overview", href: "/admin", icon: Home },
   { name: "Operacion Buggy", href: "/admin/operation", icon: ClipboardList },
   { name: "Operación Saona", href: "/admin/operation-saona", icon: Ship },
   { name: "Operación Samaná", href: "/admin/operation-samana", icon: Mountain },
@@ -279,7 +278,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </Link>
           <div className="text-sm text-gray-500 dark:text-gray-400 hidden md:block">
             <span>Dashboard</span> <span className="mx-1">/</span>
-            <span className="capitalize">{pathname === "/admin" ? "Overview" : pathname.replace("/admin/", "")}</span>
+            <span className="capitalize">{pathname === "/admin" ? "dashboard" : pathname.replace("/admin/", "")}</span>
           </div>
         </div>
 
@@ -420,9 +419,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
             <nav className="space-y-1">
               {sidebarNavigation.map((item) => {
-                const isActive = item.href === "/admin" 
-                  ? pathname === "/admin" 
-                  : pathname.startsWith(item.href)
+                const isActive = pathname.startsWith(item.href)
                 const allowed = hasAccess(userRole || "", item.href, userEmail)
                 
                 // Hide pages the user cannot access
