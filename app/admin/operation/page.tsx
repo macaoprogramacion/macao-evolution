@@ -28,6 +28,8 @@ import {
   DollarSign,
   UserX,
   FileSpreadsheet,
+  ScanLine,
+  ShieldCheck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -56,7 +58,7 @@ import { BillingCollections } from "@/components/admin/billing-collections"
 import { supabase } from "@/lib/supabase"
 import { parseExternalReservationText } from "@/lib/external-reservation-parser"
 import { getBuggyPickupSuggestion, type TurnSlot } from "@/lib/hotel-pickup-schedules"
-import { createPickupReservationCode } from "@/lib/pickup-reservation-code"
+import { createPickupReservationCode, parsePickupReservationCode } from "@/lib/pickup-reservation-code"
 import { Label } from "@/components/ui/label"
 
 function inferTimeslotFromPickup(pickupValue: string) {
@@ -71,6 +73,32 @@ function inferTimeslotFromPickup(pickupValue: string) {
   if (hour <= 9) return "8 AM"
   if (hour <= 12) return "11 AM"
   return "3 PM"
+}
+
+type ServiceRule = {
+  id: string
+  label: string
+  minPeople: number
+  maxPeople: number
+  horseRule: "none" | "range" | "equal_people"
+  horseMin?: number
+  horseMax?: number
+}
+
+const SERVICE_RULES: ServiceRule[] = [
+  { id: "buggy_single", label: "Buggy Single", minPeople: 1, maxPeople: 1, horseRule: "none" },
+  { id: "buggy_double", label: "Buggy Doble", minPeople: 1, maxPeople: 2, horseRule: "none" },
+  { id: "buggy_family", label: "Family Buggy", minPeople: 3, maxPeople: 4, horseRule: "none" },
+  { id: "moto_single", label: "Single Moto", minPeople: 1, maxPeople: 1, horseRule: "none" },
+  { id: "moto_double", label: "Doble Moto", minPeople: 1, maxPeople: 2, horseRule: "none" },
+  { id: "horse15_buggy_double", label: "15 Min Caballos + Buggy Doble", minPeople: 1, maxPeople: 2, horseRule: "range", horseMin: 1, horseMax: 2 },
+  { id: "horse15_buggy_family", label: "15 Min Caballos + Family Buggy", minPeople: 3, maxPeople: 4, horseRule: "range", horseMin: 3, horseMax: 4 },
+  { id: "sunset_ride", label: "Sunset Ride", minPeople: 1, maxPeople: 12, horseRule: "equal_people" },
+  { id: "full_ride", label: "Full Ride", minPeople: 1, maxPeople: 12, horseRule: "equal_people" },
+]
+
+function getServiceRule(experience: string) {
+  return SERVICE_RULES.find((rule) => rule.label === experience) || null
 }
 
 type Reservation = {
@@ -224,6 +252,8 @@ export default function OperationPage() {
   const [transportFilter, setTransportFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [closureFeedback, setClosureFeedback] = useState<string>("")
+  const [scanCodeInput, setScanCodeInput] = useState("")
+  const [scanResult, setScanResult] = useState<{ valid: boolean; message: string } | null>(null)
 
   // Modal exportar recogidas
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
@@ -441,6 +471,7 @@ export default function OperationPage() {
     pickup_point: "lobby",
     transport_type: "included",
     experience: "",
+    horses: 0,
     channel: "phone",
     channel_url: "",
     date: new Date().toISOString().slice(0, 10),
@@ -466,6 +497,7 @@ export default function OperationPage() {
     pickup_point: "lobby",
     transport_type: "included",
     experience: "",
+    horses: 0,
     channel: "phone",
     channel_url: "",
     channel_color: "#6b7280",
@@ -488,6 +520,7 @@ export default function OperationPage() {
       pickup_point: "lobby",
       transport_type: "included",
       experience: "",
+      horses: 0,
       channel: "phone",
       channel_url: "",
       channel_color: "#6b7280",
@@ -569,11 +602,19 @@ export default function OperationPage() {
   // Guardar nueva reserva
   const saveNewReservation = async () => {
     if (!newRes.customer_name || !newRes.date) return
+
+    const validationError = validateServiceCapacity(newRes)
+    if (validationError) {
+      alert(validationError)
+      return
+    }
+
     setSaving(true)
     try {
       console.log("Attempting to save reservation:", newRes)
       const insertPayload = {
         ...newRes,
+        notes: upsertHorseCountInNotes(newRes.notes, newRes.horses),
         channel_color: channelColors[newRes.channel] || "#6b7280",
       }
       console.log("Insert payload:", insertPayload)
@@ -730,6 +771,11 @@ export default function OperationPage() {
     }
   }
 
+  const buildConfirmationNumber = (res: Reservation) => {
+    const cleanId = String(res.id || "").replace(/-/g, "").toUpperCase()
+    return `MC-${cleanId.slice(0, 10)}`
+  }
+
   const buildPickupCode = (res: Reservation) => {
     const roomMatch = (res.notes || "").match(/hab[.:]?\s*(\S+)/i)
     return createPickupReservationCode({
@@ -742,6 +788,77 @@ export default function OperationPage() {
       room: roomMatch?.[1] || "",
       serviceType: res.experience || "Buggy",
     })
+  }
+
+  const parseHorseCountFromNotes = (notes: string) => {
+    const match = (notes || "").match(/caballos\s*:\s*(\d+)/i)
+    return match ? Number(match[1]) : 0
+  }
+
+  const upsertHorseCountInNotes = (notes: string, horses: number) => {
+    const base = (notes || "").replace(/\n?caballos\s*:\s*\d+/gi, "").trim()
+    if (!horses || horses <= 0) return base
+    return [base, `Caballos: ${horses}`].filter(Boolean).join(base ? "\n" : "")
+  }
+
+  const getTotalPeople = (draft: { guests: number; children: number }) => {
+    return Math.max(0, Number(draft.guests || 0) + Number(draft.children || 0))
+  }
+
+  const validateServiceCapacity = (draft: { experience: string; guests: number; children: number; horses: number }) => {
+    const rule = getServiceRule(draft.experience)
+    if (!rule) return null
+
+    const totalPeople = getTotalPeople(draft)
+    if (totalPeople < rule.minPeople || totalPeople > rule.maxPeople) {
+      return `${rule.label}: permitido ${rule.minPeople}-${rule.maxPeople} persona(s). Actual: ${totalPeople}.`
+    }
+
+    if (rule.horseRule === "range") {
+      const minHorse = rule.horseMin || rule.minPeople
+      const maxHorse = rule.horseMax || rule.maxPeople
+      if (draft.horses < minHorse || draft.horses > maxHorse) {
+        return `${rule.label}: la cantidad de caballos debe ser de ${minHorse} a ${maxHorse}.`
+      }
+    }
+
+    if (rule.horseRule === "equal_people" && draft.horses !== totalPeople) {
+      return `${rule.label}: la cantidad de caballos debe ser igual al total de personas (${totalPeople}).`
+    }
+
+    return null
+  }
+
+  const validateScannedTicket = () => {
+    const raw = scanCodeInput.trim()
+    if (!raw) {
+      setScanResult({ valid: false, message: "Ingresa o escanea un código de confirmación." })
+      return
+    }
+
+    try {
+      const parsed = parsePickupReservationCode(raw)
+      const found = reservations.find((r) => r.id === parsed.reservationId)
+      if (!found) {
+        setScanResult({ valid: false, message: "Código inválido: la reserva no existe en operación." })
+        return
+      }
+
+      if (found.status === "cancelled" || found.status === "no_show") {
+        setScanResult({ valid: false, message: `Código detectado, pero la reserva está ${found.status}.` })
+        return
+      }
+
+      const expectedCode = buildPickupCode(found)
+      if (expectedCode !== raw) {
+        setScanResult({ valid: false, message: "Código inválido: no coincide con los datos de la reserva." })
+        return
+      }
+
+      setScanResult({ valid: true, message: `Válido: ${found.customerName} (${buildConfirmationNumber(found)}) - ${found.date} ${found.timeslot}.` })
+    } catch (error) {
+      setScanResult({ valid: false, message: error instanceof Error ? error.message : "Código inválido." })
+    }
   }
 
   const openEditDialog = (reservation: Reservation) => {
@@ -759,6 +876,7 @@ export default function OperationPage() {
       pickup_point: reservation.pickupPoint || "lobby",
       transport_type: reservation.transportType || "included",
       experience: reservation.experience || "",
+      horses: parseHorseCountFromNotes(reservation.notes || ""),
       channel: reservation.channel || "phone",
       channel_url: reservation.channelUrl || "",
       date: reservation.date,
@@ -772,6 +890,12 @@ export default function OperationPage() {
     if (!editingReservation) return
     if (!editRes.customer_name || !editRes.date) {
       alert("Nombre y fecha son obligatorios")
+      return
+    }
+
+    const validationError = validateServiceCapacity(editRes)
+    if (validationError) {
+      alert(validationError)
       return
     }
 
@@ -795,7 +919,7 @@ export default function OperationPage() {
         channel_color: channelColors[editRes.channel] || "#6b7280",
         date: editRes.date,
         amount: editRes.amount || 0,
-        notes: editRes.notes || null,
+        notes: upsertHorseCountInNotes(editRes.notes, editRes.horses) || null,
       }
 
       const { error } = await supabase
@@ -830,6 +954,9 @@ export default function OperationPage() {
       self: "Transporte propio",
       hotel_shuttle: "Shuttle del hotel",
     }
+    const confirmationNumber = buildConfirmationNumber(res)
+    const validationCode = buildPickupCode(res)
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(validationCode)}`
 
     const amountBlock = res.amount != null && res.amount > 0
       ? '<div class="amount-box"><div class="label">MONTO A PAGAR</div><div class="amount">$' + res.amount.toFixed(2) + ' USD</div></div>'
@@ -861,6 +988,11 @@ export default function OperationPage() {
   .amount-box { background: #fef2f2; border: 2px solid #fecaca; border-radius: 12px; padding: 16px; text-align: center; margin: 16px 0; }
   .amount-box .label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
   .amount-box .amount { font-size: 32px; font-weight: 800; color: #dc2626; }
+  .confirm { margin-top: 10px; text-align: center; font-size: 12px; color: #374151; }
+  .confirm strong { font-size: 16px; letter-spacing: 1px; color: #111827; }
+  .qr-wrap { margin-top: 14px; border: 1px dashed #d1d5db; border-radius: 12px; padding: 12px; text-align: center; }
+  .qr-wrap img { width: 140px; height: 140px; object-fit: contain; }
+  .qr-wrap p { margin-top: 8px; font-size: 11px; color: #6b7280; word-break: break-all; }
   .footer { text-align: center; padding: 16px 24px 24px; color: #9ca3af; font-size: 11px; line-height: 1.5; }
   .divider { border: none; border-top: 2px dashed #e5e7eb; margin: 0; }
   @media print { body { background: #fff; padding: 0; } .ticket { box-shadow: none; } }
@@ -877,6 +1009,7 @@ export default function OperationPage() {
     <div class="guest-name">${res.customerName}</div>
     <div class="section">
       <div class="section-title">Detalles de la Experiencia</div>
+      <div class="row"><span class="label">Confirmación</span><span class="value">${confirmationNumber}</span></div>
       <div class="row"><span class="label">Experiencia</span><span class="value">${res.experience || "—"}</span></div>
       <div class="row"><span class="label">Fecha</span><span class="value">${formatDate(res.date)}</span></div>
       <div class="row"><span class="label">Horario</span><span class="value">${res.timeslot}</span></div>
@@ -891,6 +1024,11 @@ export default function OperationPage() {
       <div class="row"><span class="label">Transporte</span><span class="value">${transportLabel[res.transportType] || res.transportType}</span></div>
     </div>
     ${amountBlock}
+    <div class="confirm">Número de confirmación: <strong>${confirmationNumber}</strong></div>
+    <div class="qr-wrap">
+      <img src="${qrUrl}" alt="QR de validación" />
+      <p>${validationCode}</p>
+    </div>
   </div>
   <hr class="divider" />
   <div class="footer">
@@ -1057,6 +1195,31 @@ export default function OperationPage() {
                 Exportar Recogidas
               </Button>
             </div>
+
+            <Card className="border-gray-200 dark:border-gray-800">
+              <CardContent className="pt-6">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-gray-100 md:w-72">
+                    <ScanLine className="w-4 h-4 text-blue-600" />
+                    Escanear / validar ticket
+                  </div>
+                  <Input
+                    value={scanCodeInput}
+                    onChange={(e) => setScanCodeInput(e.target.value)}
+                    placeholder="Pega o escanea el código MRC1:..."
+                  />
+                  <Button type="button" onClick={validateScannedTicket} className="bg-blue-600 hover:bg-blue-700 text-white">
+                    Validar
+                  </Button>
+                </div>
+                {scanResult && (
+                  <div className={`mt-3 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${scanResult.valid ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                    <ShieldCheck className="w-4 h-4" />
+                    {scanResult.message}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1670,12 +1833,83 @@ export default function OperationPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Adultos</Label>
-              <Input type="number" min={1} value={editRes.guests} onChange={(e) => setEditRes({ ...editRes, guests: parseInt(e.target.value) || 1 })} />
+              <Input
+                type="number"
+                min={1}
+                value={editRes.guests}
+                onChange={(e) => {
+                  const nextGuests = parseInt(e.target.value) || 1
+                  const totalPeople = nextGuests + editRes.children
+                  const rule = getServiceRule(editRes.experience)
+                  setEditRes({
+                    ...editRes,
+                    guests: nextGuests,
+                    horses: rule?.horseRule === "equal_people" ? totalPeople : editRes.horses,
+                  })
+                }}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Niños</Label>
-              <Input type="number" min={0} value={editRes.children} onChange={(e) => setEditRes({ ...editRes, children: parseInt(e.target.value) || 0 })} />
+              <Input
+                type="number"
+                min={0}
+                value={editRes.children}
+                onChange={(e) => {
+                  const nextChildren = parseInt(e.target.value) || 0
+                  const totalPeople = editRes.guests + nextChildren
+                  const rule = getServiceRule(editRes.experience)
+                  setEditRes({
+                    ...editRes,
+                    children: nextChildren,
+                    horses: rule?.horseRule === "equal_people" ? totalPeople : editRes.horses,
+                  })
+                }}
+              />
             </div>
+            <div className="space-y-1.5">
+              <Label>Experiencia</Label>
+              <Select
+                value={editRes.experience || "custom"}
+                onValueChange={(v) => {
+                  if (v === "custom") {
+                    setEditRes({ ...editRes, experience: "" })
+                    return
+                  }
+                  const rule = getServiceRule(v)
+                  const totalPeople = editRes.guests + editRes.children
+                  let nextHorses = editRes.horses
+                  if (rule?.horseRule === "equal_people") nextHorses = totalPeople
+                  if (rule?.horseRule === "range") nextHorses = Math.min(Math.max(totalPeople, rule.horseMin || 1), rule.horseMax || totalPeople)
+                  setEditRes({ ...editRes, experience: v, horses: nextHorses })
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccionar experiencia" /></SelectTrigger>
+                <SelectContent>
+                  {SERVICE_RULES.map((rule) => (
+                    <SelectItem key={rule.id} value={rule.label}>{rule.label}</SelectItem>
+                  ))}
+                  <SelectItem value="custom">Otra (manual)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {(() => {
+              const rule = getServiceRule(editRes.experience)
+              if (!rule || rule.horseRule === "none") return null
+              return (
+                <div className="space-y-1.5">
+                  <Label>Cantidad de caballos</Label>
+                  <Input
+                    type="number"
+                    min={rule.horseRule === "equal_people" ? editRes.guests + editRes.children : (rule.horseMin || 1)}
+                    max={rule.horseRule === "equal_people" ? editRes.guests + editRes.children : (rule.horseMax || 30)}
+                    value={editRes.horses}
+                    onChange={(e) => setEditRes({ ...editRes, horses: parseInt(e.target.value) || 0 })}
+                    disabled={rule.horseRule === "equal_people"}
+                  />
+                </div>
+              )
+            })()}
             <div className="space-y-1.5">
               <Label>Monto (USD)</Label>
               <Input type="number" min={0} step={0.01} value={editRes.amount} onChange={(e) => setEditRes({ ...editRes, amount: parseFloat(e.target.value) || 0 })} />
@@ -1831,7 +2065,16 @@ export default function OperationPage() {
                 type="number"
                 min={1}
                 value={newRes.guests}
-                onChange={(e) => setNewRes({ ...newRes, guests: parseInt(e.target.value) || 1 })}
+                onChange={(e) => {
+                  const nextGuests = parseInt(e.target.value) || 1
+                  const totalPeople = nextGuests + newRes.children
+                  const rule = getServiceRule(newRes.experience)
+                  setNewRes({
+                    ...newRes,
+                    guests: nextGuests,
+                    horses: rule?.horseRule === "equal_people" ? totalPeople : newRes.horses,
+                  })
+                }}
               />
             </div>
 
@@ -1842,7 +2085,16 @@ export default function OperationPage() {
                 type="number"
                 min={0}
                 value={newRes.children}
-                onChange={(e) => setNewRes({ ...newRes, children: parseInt(e.target.value) || 0 })}
+                onChange={(e) => {
+                  const nextChildren = parseInt(e.target.value) || 0
+                  const totalPeople = newRes.guests + nextChildren
+                  const rule = getServiceRule(newRes.experience)
+                  setNewRes({
+                    ...newRes,
+                    children: nextChildren,
+                    horses: rule?.horseRule === "equal_people" ? totalPeople : newRes.horses,
+                  })
+                }}
               />
             </div>
 
@@ -1862,12 +2114,62 @@ export default function OperationPage() {
             {/* Experiencia */}
             <div className="space-y-1.5">
               <Label>Experiencia</Label>
-              <Input
-                value={newRes.experience}
-                onChange={(e) => setNewRes({ ...newRes, experience: e.target.value })}
-                placeholder="Elite Couple, Apex Predator..."
-              />
+              <Select
+                value={newRes.experience || "custom"}
+                onValueChange={(v) => {
+                  if (v === "custom") {
+                    setNewRes({ ...newRes, experience: "" })
+                    return
+                  }
+                  const rule = getServiceRule(v)
+                  const totalPeople = newRes.guests + newRes.children
+                  let nextHorses = newRes.horses
+                  if (rule?.horseRule === "equal_people") {
+                    nextHorses = totalPeople
+                  }
+                  if (rule?.horseRule === "range") {
+                    nextHorses = Math.min(Math.max(totalPeople, rule.horseMin || 1), rule.horseMax || totalPeople)
+                  }
+                  setNewRes({ ...newRes, experience: v, horses: nextHorses })
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccionar experiencia" /></SelectTrigger>
+                <SelectContent>
+                  {SERVICE_RULES.map((rule) => (
+                    <SelectItem key={rule.id} value={rule.label}>{rule.label}</SelectItem>
+                  ))}
+                  <SelectItem value="custom">Otra (manual)</SelectItem>
+                </SelectContent>
+              </Select>
+              {newRes.experience === "" && (
+                <Input
+                  value={newRes.experience}
+                  onChange={(e) => setNewRes({ ...newRes, experience: e.target.value })}
+                  placeholder="Escribe experiencia personalizada"
+                />
+              )}
             </div>
+
+            {(() => {
+              const rule = getServiceRule(newRes.experience)
+              if (!rule || rule.horseRule === "none") return null
+              return (
+                <div className="space-y-1.5">
+                  <Label>Cantidad de caballos</Label>
+                  <Input
+                    type="number"
+                    min={rule.horseRule === "equal_people" ? newRes.guests + newRes.children : (rule.horseMin || 1)}
+                    max={rule.horseRule === "equal_people" ? newRes.guests + newRes.children : (rule.horseMax || 30)}
+                    value={newRes.horses}
+                    onChange={(e) => setNewRes({ ...newRes, horses: parseInt(e.target.value) || 0 })}
+                    disabled={rule.horseRule === "equal_people"}
+                  />
+                  {rule.horseRule === "equal_people" && (
+                    <p className="text-xs text-muted-foreground">Se asigna automáticamente según la cantidad de personas.</p>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Monto */}
             <div className="space-y-1.5">

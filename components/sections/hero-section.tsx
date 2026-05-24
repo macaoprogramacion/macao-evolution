@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef } from "react";
 
-const word = "MACAO";
+const heroLogoSrc = "/Logo PNG/MACAO LOGO_Mesa de trabajo 1.png";
 
 const sideImages = [
   {
@@ -203,34 +203,32 @@ export function HeroSection() {
               {/* Dark overlay for text readability */}
               <div className="absolute inset-0 bg-black/40" />
 
-              {/* Mobile Text - centered, no animation */}
-              <div className="lg:hidden absolute inset-0 flex items-center justify-center overflow-hidden select-none pointer-events-none">
-                <h1 className="text-[22vw] font-medium leading-[0.8] tracking-tighter text-white text-center font-title select-none">
-                  {word.split("").map((letter, index) => (
-                    <span key={index} className="inline-block">{letter}</span>
-                  ))}
-                </h1>
+              {/* Mobile Logo - full screen */}
+              <div className="lg:hidden absolute inset-0 pointer-events-none">
+                <Image
+                  src={heroLogoSrc}
+                  alt="MACAO Logo"
+                  fill
+                  className="object-contain"
+                  sizes="100vw"
+                  priority
+                />
               </div>
 
-              {/* Desktop Text - bottom aligned, fades on scroll */}
+              {/* Desktop Logo - full screen, fades on scroll */}
               <div
                 ref={textRef}
-                className="hidden lg:flex absolute inset-0 items-end justify-center overflow-hidden select-none"
+                className="hidden lg:block absolute inset-0 pointer-events-none"
                 style={{ opacity: 1 }}
               >
-                <h1 className="text-[22vw] font-medium leading-[0.8] tracking-tighter text-white text-center font-title select-none pointer-events-none">
-                  {word.split("").map((letter, index) => (
-                    <span
-                      key={index}
-                      className="inline-block animate-[slideUp_0.8s_ease-out_forwards] opacity-0"
-                      style={{
-                        animationDelay: `${index * 0.08}s`,
-                      }}
-                    >
-                      {letter}
-                    </span>
-                  ))}
-                </h1>
+                <Image
+                  src={heroLogoSrc}
+                  alt="MACAO Logo"
+                  fill
+                  className="object-contain"
+                  sizes="100vw"
+                  priority
+                />
               </div>
 
               {/* Mobile hint: scroll down */}

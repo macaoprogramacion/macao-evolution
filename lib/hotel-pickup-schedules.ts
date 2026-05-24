@@ -1315,3 +1315,20 @@ export function getSaonaPickupSuggestion(hotelOrLocation: string, provider: Saon
     pickupPoint: classifyPickupPoint(best.schedule.pickupLabel),
   }
 }
+
+export function getSaonaPickupSuggestionAuto(hotelOrLocation: string) {
+  const best = findHotelScheduleMatch(hotelOrLocation)
+  if (!best) return null
+
+  const pickupTime = best.schedule.saona.daniel || best.schedule.saona.julio
+  if (!pickupTime) return null
+
+  return {
+    hotel: best.schedule.hotel,
+    matchedAlias: best.alias,
+    score: best.score,
+    pickupTime,
+    pickupLabel: best.schedule.pickupLabel,
+    pickupPoint: classifyPickupPoint(best.schedule.pickupLabel),
+  }
+}

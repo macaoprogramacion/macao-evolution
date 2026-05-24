@@ -68,7 +68,7 @@ import {
 } from "@/lib/supabase-users"
 import type { DashboardUser } from "@/lib/supabase-users"
 
-type UserRole = "billing" | "photographer" | "both" | "admin" | "operaciones" | "chofer" | "contabilidad"
+type UserRole = "billing" | "photographer" | "both" | "admin" | "operaciones" | "chofer" | "contabilidad" | "representante"
 
 const roleLabels: Record<UserRole, string> = {
   billing: "Billing (Cajero)",
@@ -78,6 +78,7 @@ const roleLabels: Record<UserRole, string> = {
   operaciones: "Operaciones",
   chofer: "Chofer",
   contabilidad: "Contabilidad",
+  representante: "Representante",
 }
 
 const roleIcons: Record<UserRole, typeof DollarSign> = {
@@ -88,6 +89,7 @@ const roleIcons: Record<UserRole, typeof DollarSign> = {
   operaciones: Settings,
   chofer: Car,
   contabilidad: Calculator,
+  representante: UserPlus,
 }
 
 const roleBadgeColors: Record<UserRole, string> = {
@@ -98,6 +100,7 @@ const roleBadgeColors: Record<UserRole, string> = {
   operaciones: "bg-blue-50 text-blue-700 border-blue-200",
   chofer: "bg-sky-50 text-sky-700 border-sky-200",
   contabilidad: "bg-orange-50 text-orange-700 border-orange-200",
+  representante: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200",
 }
 
 function generatePin(): string {
@@ -341,6 +344,7 @@ export default function UsersPage() {
                   <SelectItem value="operaciones">Operaciones</SelectItem>
                   <SelectItem value="chofer">Chofer</SelectItem>
                   <SelectItem value="contabilidad">Contabilidad</SelectItem>
+                  <SelectItem value="representante">Representante</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -592,6 +596,12 @@ export default function UsersPage() {
                       Contabilidad
                     </div>
                   </SelectItem>
+                  <SelectItem value="representante">
+                    <div className="flex items-center gap-2">
+                      <UserPlus className="w-4 h-4 text-fuchsia-600" />
+                      Representante
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -699,6 +709,7 @@ export default function UsersPage() {
                   <SelectItem value="operaciones">Operaciones</SelectItem>
                   <SelectItem value="chofer">Chofer</SelectItem>
                   <SelectItem value="contabilidad">Contabilidad</SelectItem>
+                  <SelectItem value="representante">Representante</SelectItem>
                 </SelectContent>
               </Select>
             </div>

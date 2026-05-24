@@ -56,7 +56,10 @@ import {
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { supabase } from "@/lib/supabase"
 import { parseExternalReservationText } from "@/lib/external-reservation-parser"
+import { getSaonaPickupSuggestionAuto } from "@/lib/hotel-pickup-schedules"
 import { Label } from "@/components/ui/label"
+
+const SAONA_DEFAULT_PICKUP_TIME = "7:30 AM"
 
 type SaonaReservation = {
   id: string
@@ -123,6 +126,7 @@ export default function OperationSaonaPage() {
   const [saving, setSaving] = useState(false)
   const [externalReservationText, setExternalReservationText] = useState("")
   const [externalParseSummary, setExternalParseSummary] = useState<string | null>(null)
+  const [pickupTimeNotice, setPickupTimeNotice] = useState<string | null>(null)
   const [newRes, setNewRes] = useState({
     customer_name: "",
     phone: "",
@@ -146,6 +150,7 @@ export default function OperationSaonaPage() {
   const resetNewRes = () => {
     setExternalReservationText("")
     setExternalParseSummary(null)
+    setPickupTimeNotice(null)
     setNewRes({
       customer_name: "",
       phone: "",
@@ -165,6 +170,23 @@ export default function OperationSaonaPage() {
       lunch_included: true,
       drink_package: "standard",
     })
+  }
+
+  const applySaonaAutoPickup = (reservation: typeof newRes) => {
+    const source = `${reservation.hotel || ""} ${reservation.location || ""}`.trim()
+    if (!source) {
+      setPickupTimeNotice(null)
+      return reservation
+    }
+
+    const suggestion = getSaonaPickupSuggestionAuto(source)
+    if (suggestion?.pickupTime) {
+      setPickupTimeNotice(null)
+      return { ...reservation, pickup_time: suggestion.pickupTime }
+    }
+
+    setPickupTimeNotice("La hora del hotel no esta registrada.")
+    return { ...reservation, pickup_time: SAONA_DEFAULT_PICKUP_TIME }
   }
 
   const channelColors: Record<string, string> = {
@@ -266,7 +288,7 @@ export default function OperationSaonaPage() {
       return
     }
 
-    setNewRes((prev) => ({ ...prev, ...updates }))
+    setNewRes((prev) => applySaonaAutoPickup({ ...prev, ...updates }))
     setExternalParseSummary(`Autocompletado: ${detected.join(" | ")}`)
   }
 
@@ -900,7 +922,7 @@ export default function OperationSaonaPage() {
               <Label>Hotel</Label>
               <Input
                 value={newRes.hotel}
-                onChange={(e) => setNewRes({ ...newRes, hotel: e.target.value })}
+                onChange={(e) => setNewRes((prev) => applySaonaAutoPickup({ ...prev, hotel: e.target.value }))}
                 placeholder="Hard Rock Hotel & Casino"
               />
             </div>
@@ -909,7 +931,7 @@ export default function OperationSaonaPage() {
               <Label>Ubicación</Label>
               <Input
                 value={newRes.location}
-                onChange={(e) => setNewRes({ ...newRes, location: e.target.value })}
+                onChange={(e) => setNewRes((prev) => applySaonaAutoPickup({ ...prev, location: e.target.value }))}
                 placeholder="Punta Cana"
               />
             </div>
@@ -930,6 +952,7 @@ export default function OperationSaonaPage() {
                 onChange={(e) => setNewRes({ ...newRes, pickup_time: e.target.value })}
                 placeholder="6:00 AM"
               />
+              {pickupTimeNotice && <p className="text-xs text-amber-700 dark:text-amber-300">{pickupTimeNotice}</p>}
             </div>
 
             <div className="space-y-1.5">

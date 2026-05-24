@@ -34,6 +34,7 @@ import {
 import { submitProductReview } from "@/lib/product-reviews";
 import { reportChoferIncident } from "@/lib/chofer-incidents";
 import { getCustomerSession } from "@/lib/customer-session";
+import { createPickupReservationCode } from "@/lib/pickup-reservation-code";
 
 function formatMoney(value: number) {
   return `$${value.toFixed(2)}`;
@@ -60,7 +61,30 @@ function formatDateTime(value: Date | null) {
   });
 }
 
+function buildCustomerConfirmationNumber(reservation: StoredCustomerReservation) {
+  const cleanId = String(reservation.id || "").replace(/-/g, "").toUpperCase();
+  return `MC-${cleanId.slice(0, 10)}`;
+}
+
+function buildCustomerValidationCode(reservation: StoredCustomerReservation) {
+  const totalPeople = reservation.items.reduce((sum, item) => sum + item.quantity, 0);
+  return createPickupReservationCode({
+    reservationId: reservation.id,
+    customerName: reservation.customer.name,
+    hotel: reservation.pickup?.hotel || reservation.pickup?.custom || "pendiente",
+    pickupTime: reservation.pickup?.time || "pendiente",
+    agency: "website",
+    persons: totalPeople,
+    room: "",
+    serviceType: reservation.items.map((item) => item.name).join(", "),
+  });
+}
+
 function buildTicketHTML(reservation: StoredCustomerReservation): string {
+  const confirmationNumber = buildCustomerConfirmationNumber(reservation);
+  const validationCode = buildCustomerValidationCode(reservation);
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${encodeURIComponent(validationCode)}`;
+
   const itemRows = reservation.items
     .map(
       (item) => `
@@ -183,6 +207,35 @@ function buildTicketHTML(reservation: StoredCustomerReservation): string {
       border: 1px dashed #ddd;
       border-radius: 6px;
     }
+    .confirm-number {
+      margin-top: 8px;
+      text-align: center;
+      font-size: 12px;
+      color: #374151;
+    }
+    .confirm-number strong {
+      color: #111;
+      font-size: 16px;
+      letter-spacing: 1px;
+    }
+    .qr-wrap {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px dashed #ddd;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .qr-wrap img {
+      width: 130px;
+      height: 130px;
+      object-fit: contain;
+    }
+    .qr-wrap p {
+      margin-top: 6px;
+      font-size: 10px;
+      color: #777;
+      word-break: break-all;
+    }
     @media print {
       body { padding: 16px; }
       @page { margin: 12mm 14mm; size: A4; }
@@ -198,6 +251,7 @@ function buildTicketHTML(reservation: StoredCustomerReservation): string {
     <div class="ticket-meta">
       <div class="badge">Ticket de Reserva</div>
       <div class="ticket-id">ID: ${reservation.id}</div>
+      <div class="ticket-id">Confirmación: ${confirmationNumber}</div>
       <div class="ticket-date">Emitido: ${formatDate(reservation.createdAt)}</div>
     </div>
   </div>
@@ -243,9 +297,100 @@ function buildTicketHTML(reservation: StoredCustomerReservation): string {
     <strong>Macao Evolution</strong> — Punta Cana, República Dominicana
   </div>
 
+  <div class="confirm-number">Número de confirmación: <strong>${confirmationNumber}</strong></div>
+
+  <div class="qr-wrap">
+    <img src="${qrUrl}" alt="QR de validación" />
+    <p>${validationCode}</p>
+  </div>
+
   <div class="footer">
     Generado por <strong>www.jonathanarache.com</strong> &nbsp;·&nbsp; Macao Memories &copy; ${new Date().getFullYear()}
   </div>
+</body>
+</html>`;
+}
+
+function buildInvoiceHTML(reservation: StoredCustomerReservation): string {
+  const confirmationNumber = buildCustomerConfirmationNumber(reservation);
+  const invoiceNumber = `FAC-${String(reservation.id).replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+  const lines = reservation.items
+    .map(
+      (item) => `
+      <tr>
+        <td>${item.name}</td>
+        <td style="text-align:center">${item.quantity}</td>
+        <td style="text-align:right">${formatMoney(item.price)}</td>
+        <td style="text-align:right">${formatMoney(item.price * item.quantity)}</td>
+      </tr>`,
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Factura ${invoiceNumber}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; color: #111; padding: 28px; max-width: 760px; margin: 0 auto; }
+    .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #111; padding-bottom:12px; margin-bottom:18px; }
+    .brand { font-size:22px; font-weight:800; letter-spacing:.04em; }
+    .meta { text-align:right; font-size:12px; color:#444; }
+    .block { margin-bottom:14px; }
+    .title { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:#666; margin-bottom:6px; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { border-bottom:1px solid #e5e5e5; padding:8px 6px; font-size:13px; }
+    th { text-transform:uppercase; font-size:10px; letter-spacing:.06em; color:#666; text-align:left; }
+    .totals td { border:none; padding:5px 0; }
+    .final td { border-top:2px solid #111; font-weight:700; font-size:15px; }
+    .note { margin-top:18px; font-size:11px; color:#666; text-align:center; }
+    @media print { body { padding: 10px; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="brand">MACAO OFFROAD EXPERIENCE</div>
+      <div style="font-size:12px;color:#666;">Factura para cliente</div>
+    </div>
+    <div class="meta">
+      <div><strong>Factura:</strong> ${invoiceNumber}</div>
+      <div><strong>Confirmación:</strong> ${confirmationNumber}</div>
+      <div><strong>Fecha:</strong> ${formatDate(reservation.createdAt)}</div>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="title">Cliente</div>
+    <div>${reservation.customer.name}</div>
+    <div style="font-size:12px;color:#666;">${reservation.customer.email} · ${reservation.customer.phone}</div>
+  </div>
+
+  <div class="block">
+    <div class="title">Detalle</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Descripción</th>
+          <th style="text-align:center">Cant.</th>
+          <th style="text-align:right">Precio</th>
+          <th style="text-align:right">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>${lines}</tbody>
+    </table>
+  </div>
+
+  <table class="totals">
+    <tr><td>Total reserva</td><td style="text-align:right">${formatMoney(reservation.totals.totalPrice)}</td></tr>
+    <tr><td>Pagado</td><td style="text-align:right">${formatMoney(reservation.totals.totalPaid)}</td></tr>
+    ${reservation.totals.remainingAmount > 0 ? `<tr><td>Pendiente</td><td style="text-align:right">${formatMoney(reservation.totals.remainingAmount)}</td></tr>` : ""}
+    <tr class="final"><td>Total</td><td style="text-align:right">${formatMoney(reservation.totals.totalPrice)}</td></tr>
+  </table>
+
+  <div class="note">Gracias por reservar con Macao Evolution.</div>
 </body>
 </html>`;
 }
@@ -563,6 +708,18 @@ export default function ReservasPage() {
     }, 400);
   };
 
+  const handleInvoicePrint = (reservation: StoredCustomerReservation) => {
+    const html = buildInvoiceHTML(reservation);
+    const win = window.open("", "_blank", "width=820,height=900");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => {
+      win.print();
+    }, 400);
+  };
+
   return (
     <>
     <main className="min-h-screen bg-background px-4 pb-16 pt-28 md:px-8">
@@ -678,6 +835,16 @@ export default function ReservasPage() {
                           <Download className="h-4 w-4" />
                           Descargar ticket
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => handleInvoicePrint(reservation)}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary/60"
+                        >
+                          <ReceiptText className="h-4 w-4" />
+                          Imprimir factura
+                        </button>
+                      </div>
+                      <div className="mb-4 grid gap-3 md:grid-cols-2">
                         {canCancelReservation(reservation, now) && (
                           <button
                             type="button"

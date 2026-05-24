@@ -163,6 +163,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             operaciones: '/admin/operation',
             chofer: '/admin/chofer',
             contabilidad: '/admin/photography',
+            representante: '/sellers/dashboard',
           };
           router.push(roleRoutes[user.role] || '/admin');
         } else {

@@ -42,6 +42,13 @@ interface BillingRecord {
   date: string
   notes: string
   vendorName?: string
+  serviceItems?: ServiceLine[]
+}
+
+interface ServiceLine {
+  serviceType: string
+  quantity: number
+  unitAmount: string
 }
 
 const SERVICE_OPTIONS = [
@@ -81,6 +88,35 @@ const TYPE_COLORS: Record<string, string> = {
   venta_directa: "bg-green-100 text-green-800",
 }
 
+const SERVICE_NOTES_TAG = "[SERVICES_JSON]"
+
+function parseServiceItemsFromNotes(rawNotes?: string) {
+  const notes = rawNotes || ""
+  const markerIndex = notes.indexOf(SERVICE_NOTES_TAG)
+  if (markerIndex < 0) {
+    return { cleanNotes: notes, serviceItems: [] as ServiceLine[] }
+  }
+
+  const cleanNotes = notes.slice(0, markerIndex).trim()
+  const encoded = notes.slice(markerIndex + SERVICE_NOTES_TAG.length).trim()
+
+  try {
+    const parsed = JSON.parse(encoded)
+    const items = Array.isArray(parsed?.items)
+      ? parsed.items
+          .map((item: any) => ({
+            serviceType: String(item?.serviceType || ""),
+            quantity: Math.max(1, Number(item?.quantity || 1)),
+            unitAmount: String(item?.unitAmount || ""),
+          }))
+          .filter((item: ServiceLine) => item.serviceType)
+      : []
+    return { cleanNotes, serviceItems: items }
+  } catch {
+    return { cleanNotes: notes, serviceItems: [] as ServiceLine[] }
+  }
+}
+
 export function BillingCollections() {
   const [records, setRecords] = useState<BillingRecord[]>([])
   const [closureFeedback, setClosureFeedback] = useState<string>("")
@@ -101,7 +137,7 @@ export function BillingCollections() {
   const [amount, setAmount] = useState("")
   const [paymentMethod, setPaymentMethod] = useState<"tarjeta" | "paypal" | "efectivo">("efectivo")
   const [courtesy, setCourtesy] = useState(false)
-  const [serviceType, setServiceType] = useState("")
+  const [serviceLines, setServiceLines] = useState<ServiceLine[]>([{ serviceType: "", quantity: 1, unitAmount: "" }])
   const [notes, setNotes] = useState("")
 
   // Load records from Supabase on mount
@@ -110,7 +146,9 @@ export function BillingCollections() {
       setIsLoading(true)
       try {
         const dbRecords = await getTodayBillingRecords()
-        const mapped = dbRecords.map((r: DBBillingRecord) => ({
+        const mapped = dbRecords.map((r: DBBillingRecord) => {
+          const { cleanNotes, serviceItems } = parseServiceItemsFromNotes(r.notes || "")
+          return {
           id: r.id,
           type: r.type,
           clientName: r.client_name,
@@ -122,9 +160,11 @@ export function BillingCollections() {
           serviceType: r.service_type,
           status: r.status,
           date: r.date,
-          notes: r.notes || "",
+          notes: cleanNotes,
           vendorName: r.vendor_name,
-        }))
+          serviceItems,
+        }
+        })
         setRecords(mapped)
       } catch (err) {
         console.error("Error loading billing records:", err)
@@ -165,7 +205,15 @@ export function BillingCollections() {
   }
 
   const handleAddRecord = async () => {
-    if (!clientName || !amount || !serviceType || (type === "credito_vendedor" && !vendorName)) {
+    const normalizedLines = serviceLines
+      .map((line) => ({
+        serviceType: line.serviceType.trim(),
+        quantity: Math.max(1, Number(line.quantity || 1)),
+        unitAmount: String(line.unitAmount || "").trim(),
+      }))
+      .filter((line) => line.serviceType && Number(line.unitAmount) > 0)
+
+    if (!clientName || normalizedLines.length === 0 || (type === "credito_vendedor" && !vendorName)) {
       alert("Por favor completa los campos requeridos")
       return
     }
@@ -173,25 +221,41 @@ export function BillingCollections() {
     setIsSaving(true)
     try {
       const recordCurrency = supportsMultiCurrency ? currency : "USD"
+      const totalAmount = normalizedLines.reduce(
+        (sum, line) => sum + Number(line.unitAmount) * line.quantity,
+        0,
+      )
+      const serviceSummary = normalizedLines
+        .map((line) => `${line.quantity}x ${line.serviceType}`)
+        .join(" + ")
+
+      const serializedServiceItems = `${SERVICE_NOTES_TAG}${JSON.stringify({
+        version: 1,
+        items: normalizedLines,
+      })}`
+
+      const finalNotes = [notes.trim(), serializedServiceItems].filter(Boolean).join("\n")
 
       await insertBillingRecord({
         type,
         client_name: clientName,
         phone: phone || null,
         currency: recordCurrency,
-        amount: parseFloat(amount),
+        amount: totalAmount,
         payment_method: paymentMethod,
         courtesy,
-        service_type: serviceType,
+        service_type: serviceSummary,
         status: "pendiente",
         date: new Date().toISOString().slice(0, 10),
-        notes,
+        notes: finalNotes,
         vendor_name: type === "credito_vendedor" ? vendorName : null,
       })
 
       // Reload records from DB
       const updatedRecords = await getTodayBillingRecords()
-      const mapped = updatedRecords.map((r: DBBillingRecord) => ({
+      const mapped = updatedRecords.map((r: DBBillingRecord) => {
+        const { cleanNotes, serviceItems } = parseServiceItemsFromNotes(r.notes || "")
+        return {
         id: r.id,
         type: r.type,
         clientName: r.client_name,
@@ -203,9 +267,11 @@ export function BillingCollections() {
         serviceType: r.service_type,
         status: r.status,
         date: r.date,
-        notes: r.notes || "",
+        notes: cleanNotes,
         vendorName: r.vendor_name,
-      }))
+        serviceItems,
+      }
+      })
       setRecords(mapped)
       resetForm()
     } catch (err) {
@@ -226,9 +292,32 @@ export function BillingCollections() {
     setAmount("")
     setPaymentMethod("efectivo")
     setCourtesy(false)
-    setServiceType("")
+    setServiceLines([{ serviceType: "", quantity: 1, unitAmount: "" }])
     setNotes("")
   }
+
+  const updateServiceLine = (index: number, updates: Partial<ServiceLine>) => {
+    setServiceLines((prev) =>
+      prev.map((line, i) => (i === index ? { ...line, ...updates } : line)),
+    )
+  }
+
+  const addServiceLine = () => {
+    setServiceLines((prev) => [...prev, { serviceType: "", quantity: 1, unitAmount: "" }])
+  }
+
+  const removeServiceLine = (index: number) => {
+    setServiceLines((prev) => {
+      if (prev.length === 1) return prev
+      return prev.filter((_, i) => i !== index)
+    })
+  }
+
+  const computedTotal = serviceLines.reduce((sum, line) => {
+    const qty = Math.max(1, Number(line.quantity || 1))
+    const unit = Number(line.unitAmount || 0)
+    return sum + qty * unit
+  }, 0)
 
   const handleUpdateStatus = async (id: string, newStatus: "pendiente" | "pagado" | "cancelado") => {
     setIsSaving(true)
@@ -436,19 +525,64 @@ export function BillingCollections() {
               </Select>
             </div>
 
-            {/* Service Type */}
-            <div className="space-y-1.5">
-              <Label>Servicios *</Label>
-              <Select value={serviceType} onValueChange={setServiceType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona servicio" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SERVICE_OPTIONS.map((service) => (
-                    <SelectItem key={service} value={service}>{service}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Multi Services */}
+            <div className="space-y-2 md:col-span-2">
+              <div className="flex items-center justify-between">
+                <Label>Servicios *</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addServiceLine}>
+                  <Plus className="w-4 h-4 mr-1" />
+                  Agregar servicio
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {serviceLines.map((line, idx) => (
+                  <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center rounded-md border border-gray-200 dark:border-gray-700 p-2">
+                    <div className="md:col-span-6">
+                      <Select value={line.serviceType} onValueChange={(v) => updateServiceLine(idx, { serviceType: v })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona servicio" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SERVICE_OPTIONS.map((service) => (
+                            <SelectItem key={service} value={service}>{service}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <Input
+                        type="number"
+                        min="1"
+                        value={line.quantity}
+                        onChange={(e) => updateServiceLine(idx, { quantity: Math.max(1, parseInt(e.target.value) || 1) })}
+                        placeholder="Cant"
+                      />
+                    </div>
+                    <div className="md:col-span-3">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={line.unitAmount}
+                        onChange={(e) => updateServiceLine(idx, { unitAmount: e.target.value })}
+                        placeholder="Precio unitario"
+                      />
+                    </div>
+                    <div className="md:col-span-1 flex justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeServiceLine(idx)}
+                        disabled={serviceLines.length === 1}
+                        title="Quitar servicio"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Client Name */}
@@ -535,13 +669,13 @@ export function BillingCollections() {
 
             {/* Amount */}
             <div className="space-y-1.5">
-              <Label>Monto ({supportsMultiCurrency ? currency : "USD"}) *</Label>
+              <Label>Total ({supportsMultiCurrency ? currency : "USD"}) *</Label>
               <Input
                 type="number"
                 step="0.01"
                 min="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                value={computedTotal.toFixed(2)}
+                readOnly
                 placeholder="0.00"
               />
             </div>
@@ -613,9 +747,13 @@ export function BillingCollections() {
                         </Badge>
                       </td>
                       <td className="py-3 px-2">{record.serviceType}</td>
+                      
                       <td className="py-3 px-2">
                         <div>
                           <p className="font-medium">{record.clientName}</p>
+                          {record.serviceItems && record.serviceItems.length > 1 && (
+                            <p className="text-xs text-blue-600">{record.serviceItems.length} servicios en esta reserva</p>
+                          )}
                           {record.notes && <p className="text-xs text-gray-500">{record.notes}</p>}
                         </div>
                       </td>

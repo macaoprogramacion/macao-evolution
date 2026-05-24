@@ -14,6 +14,7 @@ import {
   DoorOpen,
   PackageCheck,
   UserCheck,
+  UserX,
   MapPinned,
   X,
   ExternalLink,
@@ -149,6 +150,29 @@ export default function ChoferDashboard() {
     } catch (e) {
       console.error("Error updating chofer status:", e)
       alert("Error al actualizar estado")
+    }
+  }
+
+  const markReservationNoShow = async (reservationId: string) => {
+    try {
+      const { error } = await supabase.rpc("update_reservation_status", {
+        p_reservation_id: reservationId,
+        p_status: "no_show",
+      })
+
+      if (!error) {
+        setReservations((prev) =>
+          prev.map((r) =>
+            r.id === reservationId ? { ...r, status: "no_show" } : r
+          )
+        )
+      } else {
+        console.error("Error setting reservation no_show:", error)
+        alert("No se pudo marcar como NO SHOW: " + error.message)
+      }
+    } catch (e) {
+      console.error("Error setting reservation no_show:", e)
+      alert("Error al marcar reserva como NO SHOW")
     }
   }
 
@@ -307,6 +331,7 @@ export default function ChoferDashboard() {
                     showChoferBadge={false}
                     readOnly={true}
                     onUpdateStatus={updateChoferStatus}
+                    onMarkNoShow={markReservationNoShow}
                     mapOpen={mapOpen}
                     setMapOpen={setMapOpen}
                     formatDate={formatDate}
@@ -325,6 +350,7 @@ export default function ChoferDashboard() {
                 showChoferBadge={false}
                 readOnly={false}
                 onUpdateStatus={updateChoferStatus}
+                onMarkNoShow={markReservationNoShow}
                 mapOpen={mapOpen}
                 setMapOpen={setMapOpen}
                 formatDate={formatDate}
@@ -343,6 +369,7 @@ function ReservationCard({
   showChoferBadge,
   readOnly = false,
   onUpdateStatus,
+  onMarkNoShow,
   mapOpen,
   setMapOpen,
   formatDate,
@@ -351,12 +378,14 @@ function ReservationCard({
   showChoferBadge: boolean
   readOnly?: boolean
   onUpdateStatus: (id: string, status: "recibida" | "confirmada") => Promise<void>
+  onMarkNoShow: (id: string) => Promise<void>
   mapOpen: string | null
   setMapOpen: React.Dispatch<React.SetStateAction<string | null>>
   formatDate: (d: string) => string
 }) {
   const [updating, setUpdating] = useState(false)
   const status = r.choferStatus || "none"
+  const isNoShow = r.status === "no_show"
   const isMapOpen = mapOpen === r.id
   const hotelInfo = findHotel(r.hotel)
   const searchName = hotelInfo ? hotelInfo.name : r.hotel
@@ -365,6 +394,7 @@ function ReservationCard({
 
   return (
     <Card className={`border-l-4 shadow-sm ${
+      isNoShow ? "border-l-red-600 bg-red-50/60" :
       status === "confirmada" ? "border-l-blue-500 bg-blue-50/50" :
       status === "recibida" ? "border-l-yellow-500 bg-yellow-50/50" :
       "border-l-green-500"
@@ -422,6 +452,12 @@ function ReservationCard({
             <Badge variant="secondary" className="text-sm gap-1.5 px-3 py-1.5 bg-pink-100 text-pink-700">
               <Baby className="h-4 w-4" />
               {r.children} niño{r.children > 1 ? "s" : ""}
+            </Badge>
+          )}
+          {isNoShow && (
+            <Badge variant="secondary" className="text-sm gap-1.5 px-3 py-1.5 bg-red-100 text-red-700">
+              <UserX className="h-4 w-4" />
+              NO SHOW
             </Badge>
           )}
           {showChoferBadge && r.choferName && (
@@ -490,7 +526,7 @@ function ReservationCard({
           <Button
             size="sm"
             variant={status === "recibida" || status === "confirmada" ? "default" : "outline"}
-            disabled={status === "recibida" || status === "confirmada" || updating}
+            disabled={status === "recibida" || status === "confirmada" || updating || isNoShow}
             className={`flex-1 text-xs h-11 gap-1.5 ${
               status === "recibida" || status === "confirmada"
                 ? "bg-yellow-500 text-white opacity-100"
@@ -504,7 +540,7 @@ function ReservationCard({
           <Button
             size="sm"
             variant={status === "confirmada" ? "default" : "outline"}
-            disabled={status !== "recibida" || updating}
+            disabled={status !== "recibida" || updating || isNoShow}
             className={`flex-1 text-xs h-11 gap-1.5 ${
               status === "confirmada"
                 ? "bg-blue-600 text-white opacity-100"
@@ -514,6 +550,24 @@ function ReservationCard({
           >
             <UserCheck className="h-4 w-4" />
             {updating ? "Actualizando..." : "Recogida Confirmada"}
+          </Button>
+          <Button
+            size="sm"
+            variant={isNoShow ? "default" : "outline"}
+            disabled={updating || isNoShow || status === "confirmada"}
+            className={`flex-1 text-xs h-11 gap-1.5 ${
+              isNoShow ? "bg-red-600 text-white opacity-100" : "border-red-300 text-red-700 hover:bg-red-50"
+            }`}
+            onClick={async () => {
+              const ok = window.confirm("¿Confirmas marcar esta reserva como NO SHOW?")
+              if (!ok) return
+              setUpdating(true)
+              await onMarkNoShow(r.id)
+              setUpdating(false)
+            }}
+          >
+            <UserX className="h-4 w-4" />
+            {updating ? "Actualizando..." : isNoShow ? "NO SHOW" : "Marcar NO SHOW"}
           </Button>
         </div>
         )}
