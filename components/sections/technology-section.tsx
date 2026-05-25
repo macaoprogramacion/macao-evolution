@@ -4,28 +4,16 @@ import Image from "next/image";
 
 const sideImages = [
   {
-    src: "/images/paradas/columna (1).webp",
-    alt: "Parada 1 de la excursiÃ³n",
-    position: "left",
-    span: 1,
+    src: "/images/paradas/columna (2).webp",
+    alt: "Typical House",
   },
   {
     src: "/images/paradas/columna (3).webp",
-    alt: "Parada 3 de la excursiÃ³n",
-    position: "left",
-    span: 1,
-  },
-  {
-    src: "/images/paradas/columna (2).webp",
-    alt: "Parada 2 de la excursiÃ³n",
-    position: "right",
-    span: 1,
+    alt: "Taino Cave",
   },
   {
     src: "/images/paradas/columna (4).webp",
-    alt: "Parada 4 de la excursiÃ³n",
-    position: "right",
-    span: 1,
+    alt: "Macao Beach",
   },
 ];
 
@@ -33,15 +21,15 @@ export function TechnologySection() {
   return (
     <section className="relative bg-foreground">
       <div className="relative overflow-hidden px-6 py-20 md:px-12 lg:px-20">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 place-items-center md:grid-cols-3 md:place-items-stretch">
           {sideImages.map((img, idx) => (
-            <div key={idx} className="relative min-h-[260px] overflow-hidden rounded-2xl">
+            <div key={idx} className="relative w-full max-w-[320px] overflow-hidden rounded-2xl aspect-[9/16] md:max-w-none">
               <Image
                 src={img.src || "/placeholder.svg"}
                 alt={img.alt}
                 fill
                 className="object-cover"
-                sizes="(max-width: 768px) 100vw, 33vw"
+                sizes="(max-width: 768px) 80vw, 33vw"
                 quality={88}
                 loading="lazy"
               />
