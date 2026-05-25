@@ -25,7 +25,7 @@ const SERVICE_OPTIONS: {
     label: "Horseback Ride",
     subtitle: "Ideal para disfrutar una ruta guiada",
     price: 0,
-    image: "/images/service-section/servicio-colective.webp",
+    image: "/images/service-section/servicio-caballos.png",
     name: "Horseback Ride",
   },
   {
@@ -33,7 +33,7 @@ const SERVICE_OPTIONS: {
     label: "Dune Buggy",
     subtitle: "Experiencia off-road para tu grupo",
     price: 100,
-    image: "/images/service-section/servicio-private.webp",
+    image: "/images/service-section/servicio-buggies.png",
     name: "Dune Buggy",
   },
   {

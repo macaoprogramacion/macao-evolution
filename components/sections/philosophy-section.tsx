@@ -14,7 +14,7 @@ export function PhilosophySection() {
     id: "service-horseback-ride",
     name: "Horseback Ride",
     price: 0,
-    image: "/images/service-section/servicio-colective.webp",
+    image: "/images/service-section/servicio-caballos.png",
     type: "service" as const,
   };
 
@@ -22,7 +22,7 @@ export function PhilosophySection() {
     id: "service-dune-buggy",
     name: "Dune Buggy",
     price: 100,
-    image: "/images/service-section/servicio-private.webp",
+    image: "/images/service-section/servicio-buggies.png",
     type: "service" as const,
   };
 
@@ -65,7 +65,7 @@ export function PhilosophySection() {
           title="Click para agregar al carrito"
         >
                 <Image
-                  src="/images/service-section/servicio-colective.webp"
+                  src="/images/service-section/servicio-caballos.png"
                   alt="Horseback Ride"
                   fill
                   className="object-cover transition-transform duration-300 group-hover/horseback:scale-105"
@@ -91,7 +91,7 @@ export function PhilosophySection() {
           title="Click para agregar al carrito"
         >
           <Image
-            src="/images/service-section/servicio-private.webp"
+            src="/images/service-section/servicio-buggies.png"
             alt="Dune Buggy"
             fill
             className="object-cover transition-transform duration-300 group-hover/dune:scale-105"
