@@ -2,16 +2,14 @@
 
 import { FadeImage } from "@/components/fade-image";
 import { useCart } from "@/context/cart-context";
-import { ShoppingCart, Check, AlertCircle, ArrowRight } from "lucide-react";
+import { ShoppingCart, Check, ArrowRight } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
-import { toast } from "sonner";
 import Link from "next/link";
 import { products as fallbackProducts, fetchProducts, type Product } from "@/lib/products";
 
 export function FeaturedProductsSection() {
-  const { addItem, hasServiceSelected } = useCart();
+  const { addItem } = useCart();
   const [addedId, setAddedId] = useState<string | null>(null);
-  const [showServiceWarning, setShowServiceWarning] = useState(false);
   const [productList, setProductList] = useState<Product[]>(fallbackProducts);
 
   // Fetch products from Supabase on mount
@@ -29,32 +27,7 @@ export function FeaturedProductsSection() {
     });
   }, []);
 
-  // Auto-hide warning when service is selected
-  useEffect(() => {
-    if (hasServiceSelected) {
-      setShowServiceWarning(false);
-    }
-  }, [hasServiceSelected]);
-
   const handleAddProduct = (feature: Product) => {
-    // Check if a service is selected first
-    if (!hasServiceSelected) {
-      // Scroll to service section
-      const serviceSection = document.getElementById("services");
-      if (serviceSection) {
-        serviceSection.scrollIntoView({ behavior: "smooth" });
-      }
-      // Show subtle toast message
-      toast("Selecciona un tipo de servicio primero", {
-        description: "Debes elegir entre Horseback Ride o Dune Buggy antes de seleccionar un buggy.",
-        icon: <AlertCircle className="h-5 w-5 text-amber-500" />,
-        duration: 4000,
-        position: "top-center",
-      });
-      setShowServiceWarning(true);
-      return;
-    }
-
     const id = feature.id;
     addItem({
       id,
@@ -80,20 +53,8 @@ export function FeaturedProductsSection() {
         </p>
       </div>
 
-      {/* Service Warning Banner */}
-      {showServiceWarning && !hasServiceSelected && (
-        <div className="mx-6 mb-6 md:mx-12 lg:mx-20 animate-in fade-in slide-in-from-top-2 duration-500">
-          <div className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-5 py-4">
-            <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0" />
-            <p className="text-sm text-amber-600 dark:text-amber-400">
-              Primero selecciona un tipo de servicio (Horseback Ride o Dune Buggy) para poder elegir tu buggy.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Features Grid */}
-      <div className={`grid grid-cols-2 gap-4 px-6 pb-20 md:px-12 lg:px-20 transition-opacity duration-300 ${!hasServiceSelected ? 'opacity-60' : 'opacity-100'}`}>
+      <div className="grid grid-cols-2 gap-4 px-6 pb-20 md:px-12 lg:px-20">
         {productList.map((feature) => {
           const productId = feature.id;
           const isAdded = addedId === productId;

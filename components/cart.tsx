@@ -11,18 +11,18 @@ const SERVICE_OPTIONS = [
   {
     id: "service-horseback-ride",
     name: "Horseback Ride",
-    price: 0,
+    price: 60,
     image: "/images/service-section/servicio-caballos.png",
     type: "service" as const,
-    caption: "Horseback Ride - GRATIS",
+    caption: "Horseback Ride desde 60 USD",
   },
   {
     id: "service-dune-buggy",
     name: "Dune Buggy",
-    price: 100,
+    price: 85,
     image: "/images/service-section/servicio-buggies.png",
     type: "service" as const,
-    caption: "Dune Buggy - $100",
+    caption: "Dune Buggy desde - 85 USD",
   },
 ];
 
@@ -83,7 +83,6 @@ export function CartPanel() {
     setIsOpen,
     totalItems,
     totalPrice,
-    hasServiceSelected,
     getConflictingService,
     replaceService,
   } = useCart();
@@ -92,7 +91,7 @@ export function CartPanel() {
   const [productList, setProductList] = useState<Product[]>(fallbackProducts);
 
   const hasProductSelected = items.some((item) => item.type === "product");
-  const canReserve = hasServiceSelected && hasProductSelected;
+  const canReserve = hasProductSelected;
 
   useEffect(() => {
     fetchProducts().then((data) => {
@@ -327,38 +326,7 @@ export function CartPanel() {
               </span>
             </div>
 
-            {/* Service warning */}
-            {!hasServiceSelected && (
-              <div className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 animate-in fade-in duration-300">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    Agrega un servicio (Horseback Ride o Dune Buggy) para poder reservar.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-2">
-                  {SERVICE_OPTIONS.map((service) => (
-                    <button
-                      key={service.id}
-                      type="button"
-                      onClick={() => handleSelectService(service.id)}
-                      className="flex items-center gap-3 rounded-xl border border-border bg-background/90 p-2 text-left transition-colors hover:bg-background"
-                    >
-                      <div className="relative h-14 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-secondary">
-                        <Image src={service.image} alt={service.name} fill className="object-cover" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-foreground">{service.name}</p>
-                        <p className="text-xs text-muted-foreground">{service.caption}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {hasServiceSelected && !hasProductSelected && (
+            {!hasProductSelected && (
               <div className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 animate-in fade-in duration-300">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0" />

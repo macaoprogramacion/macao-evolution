@@ -13,7 +13,7 @@ export function PhilosophySection() {
   const horsebackItem = {
     id: "service-horseback-ride",
     name: "Horseback Ride",
-    price: 0,
+    price: 60,
     image: "/images/service-section/servicio-caballos.png",
     type: "service" as const,
   };
@@ -21,7 +21,7 @@ export function PhilosophySection() {
   const duneBuggyItem = {
     id: "service-dune-buggy",
     name: "Dune Buggy",
-    price: 100,
+    price: 85,
     image: "/images/service-section/servicio-buggies.png",
     type: "service" as const,
   };
@@ -79,8 +79,8 @@ export function PhilosophySection() {
             </div>
           </div>
           <div className="absolute bottom-6 left-6">
-            <span className="backdrop-blur-md px-4 py-2 text-sm font-medium rounded-full bg-[rgba(255,255,255,0.2)] text-white">
-              Horseback Ride - GRATIS
+            <span className="backdrop-blur-md px-5 py-2.5 text-base md:text-lg font-semibold rounded-full bg-[rgba(255,255,255,0.2)] text-white">
+              Horseback Ride desde 60 USD
             </span>
           </div>
         </div>
@@ -105,8 +105,8 @@ export function PhilosophySection() {
             </div>
           </div>
           <div className="absolute bottom-6 left-6">
-            <span className="backdrop-blur-md px-4 py-2 text-sm font-medium rounded-full bg-[rgba(255,255,255,0.2)] text-white">
-              Dune Buggy - $100
+            <span className="backdrop-blur-md px-5 py-2.5 text-base md:text-lg font-semibold rounded-full bg-[rgba(255,255,255,0.2)] text-white">
+              Dune Buggy desde - 85 USD
             </span>
           </div>
         </div>
