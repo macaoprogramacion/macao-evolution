@@ -4,7 +4,6 @@ import { use, useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { getProductBySlug, fetchProductBySlug, type Product } from "@/lib/products";
-import { computeAverageRating, fetchProductReviews, type ProductReview } from "@/lib/product-reviews";
 import { useCart } from "@/context/cart-context";
 import {
   ArrowLeft,
@@ -15,7 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
-  Star,
   XCircle,
   CreditCard,
   Globe,
@@ -33,8 +31,6 @@ function ProductDetailContent({
   const { addItem, hasServiceSelected, items } = useCart();
   const [currentImage, setCurrentImage] = useState(0);
   const [isAdded, setIsAdded] = useState(false);
-  const [reviews, setReviews] = useState<ProductReview[]>([]);
-  const avgRating = computeAverageRating(reviews);
   const galleryRef = useRef<HTMLDivElement>(null);
 
   // Fetch from Supabase on mount
@@ -43,20 +39,6 @@ function ProductDetailContent({
       if (data) setProduct(data);
     });
   }, [slug]);
-
-  useEffect(() => {
-    let active = true;
-
-    fetchProductReviews(product?.id || slug).then((data) => {
-      if (active) {
-        setReviews(data);
-      }
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [product?.id, slug]);
 
   // Touch handling for gallery swipe
   const touchStartX = useRef(0);
@@ -292,7 +274,7 @@ function ProductDetailContent({
                   className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-400 transition-colors hover:bg-amber-500/10"
                 >
                   <AlertTriangle className="h-3 w-3 shrink-0" />
-                  Select a service type first (Collective or Private)
+                  Select a service type first (Horseback Ride or Dune Buggy)
                 </Link>
               )}
               <button
@@ -526,80 +508,6 @@ function ProductDetailContent({
             </div>
           </section>
 
-          <section className="border-t border-border py-16 md:py-20">
-            <div className="max-w-4xl">
-              <div className="flex flex-wrap items-end gap-4">
-                <h2 className="text-2xl md:text-3xl font-medium tracking-tight text-foreground font-title">
-                  Reseñas de clientes
-                </h2>
-                {avgRating !== null && (
-                  <div className="mb-1 flex items-center gap-2">
-                    <div className="flex items-center gap-0.5">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star
-                          key={star}
-                          className={`h-4 w-4 ${
-                            star <= Math.round(avgRating)
-                              ? "fill-amber-400 text-amber-400"
-                              : "fill-none text-muted-foreground/30"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <span className="text-sm font-semibold text-foreground">{avgRating.toFixed(1)}</span>
-                    <span className="text-sm text-muted-foreground">({reviews.length} reseña{reviews.length !== 1 ? "s" : ""})</span>
-                  </div>
-                )}
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Opiniones reales de clientes que ya vivieron esta experiencia.
-              </p>
-
-              {reviews.length === 0 ? (
-                <div className="mt-8 rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
-                  Aún no hay reseñas para este producto. Las primeras opiniones aparecerán aquí cuando los clientes terminen su tour.
-                </div>
-              ) : (
-                <div className="mt-8 space-y-4">
-                  {reviews.map((review) => (
-                    <article key={review.id} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="text-base font-semibold text-foreground">{review.customer_name}</p>
-                          <p className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">
-                            {new Date(review.created_at).toLocaleDateString("es-DO", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })}
-                          </p>
-                          {review.rating != null && review.rating > 0 && (
-                            <div className="mt-1.5 flex items-center gap-0.5">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Star
-                                  key={star}
-                                  className={`h-3.5 w-3.5 ${
-                                    star <= review.rating!
-                                      ? "fill-amber-400 text-amber-400"
-                                      : "fill-none text-muted-foreground/20"
-                                  }`}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-600">
-                          <Star className="h-3.5 w-3.5 fill-current" />
-                          Cliente verificado
-                        </div>
-                      </div>
-                      <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{review.review_text}</p>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
         </div>
 
         {/* Sticky bottom bar - Mobile */}

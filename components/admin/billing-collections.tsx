@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Trash2, Loader2, Send } from "lucide-react"
+import { Plus, Trash2, Loader2, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,17 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { insertBillingRecord, getTodayBillingRecords, updateBillingRecord, deleteBillingRecord } from "@/lib/billing-records"
-import { sendNotificationToDriver } from "@/lib/driver-notifications"
 import type { BillingRecord as DBBillingRecord } from "@/lib/billing-records"
 import { supabase } from "@/lib/supabase"
 
@@ -50,6 +41,22 @@ interface ServiceLine {
   quantity: number
   unitAmount: string
 }
+
+type CancellationRequestStatus = "pending" | "approved" | "rejected"
+
+interface CancellationRequest {
+  id: string
+  operationType: "buggy" | "saona" | "samana"
+  reservationId: string
+  customerName: string
+  reason: string
+  requestedAt: string
+  requestedBy?: string
+  status: CancellationRequestStatus
+  accountingNote?: string
+}
+
+const CANCELLATION_STORAGE_KEY = "macao_cancel_requests"
 
 const SERVICE_OPTIONS = [
   "Single Buggy",
@@ -122,11 +129,6 @@ export function BillingCollections() {
   const [closureFeedback, setClosureFeedback] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [drivers, setDrivers] = useState<Array<{ id: string; name: string }>>([])
-  const [sendDialogOpen, setSendDialogOpen] = useState(false)
-  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null)
-  const [selectedDriverId, setSelectedDriverId] = useState<string>("")
-  const [isSendingToDriver, setIsSendingToDriver] = useState(false)
 
   // Form state
   const [type, setType] = useState<"pago_al_llegar" | "credito_vendedor" | "venta_directa">("pago_al_llegar")
@@ -139,6 +141,7 @@ export function BillingCollections() {
   const [courtesy, setCourtesy] = useState(false)
   const [serviceLines, setServiceLines] = useState<ServiceLine[]>([{ serviceType: "", quantity: 1, unitAmount: "" }])
   const [notes, setNotes] = useState("")
+  const [cancelRequests, setCancelRequests] = useState<CancellationRequest[]>([])
 
   // Load records from Supabase on mount
   useEffect(() => {
@@ -176,25 +179,24 @@ export function BillingCollections() {
     void loadRecords()
   }, [])
 
-  // Load available drivers on mount
   useEffect(() => {
-    const loadDrivers = async () => {
+    const loadCancelRequests = () => {
       try {
-        const { data, error } = await supabase
-          .from("dashboard_users")
-          .select("id, name")
-          .eq("role", "chofer")
-          .eq("active", true)
-          .order("name");
-        
-        if (error) throw error;
-        setDrivers(data || []);
-      } catch (err) {
-        console.error("Error loading drivers:", err);
+        const raw = localStorage.getItem(CANCELLATION_STORAGE_KEY)
+        const parsed = raw ? JSON.parse(raw) : []
+        setCancelRequests(Array.isArray(parsed) ? parsed : [])
+      } catch {
+        setCancelRequests([])
       }
     }
 
-    void loadDrivers()
+    loadCancelRequests()
+    window.addEventListener("macao-cancel-requests-updated", loadCancelRequests)
+    window.addEventListener("storage", loadCancelRequests)
+    return () => {
+      window.removeEventListener("macao-cancel-requests-updated", loadCancelRequests)
+      window.removeEventListener("storage", loadCancelRequests)
+    }
   }, [])
 
   const supportsMultiCurrency = type === "pago_al_llegar" || type === "venta_directa"
@@ -202,6 +204,107 @@ export function BillingCollections() {
   const formatMoney = (code: "USD" | "DOP" | "EUR" | "GBP", value: number) => {
     const locale = code === "DOP" ? "es-DO" : "en-US"
     return `${CURRENCY_SYMBOLS[code]} ${value.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  }
+
+  const persistCancelRequests = (next: CancellationRequest[]) => {
+    setCancelRequests(next)
+    localStorage.setItem(CANCELLATION_STORAGE_KEY, JSON.stringify(next))
+    window.dispatchEvent(new CustomEvent("macao-cancel-requests-updated"))
+  }
+
+  const handleCancelDecision = async (request: CancellationRequest, status: "approved" | "rejected") => {
+    const accountingNote = window.prompt(
+      status === "approved"
+        ? "Nota de aprobación (opcional):"
+        : "Motivo de rechazo (opcional):",
+      "",
+    )
+
+    if (status === "approved") {
+      try {
+        if (request.operationType === "buggy") {
+          await supabase.rpc("update_reservation_status", {
+            p_reservation_id: request.reservationId,
+            p_status: "cancelled",
+          })
+        } else if (request.operationType === "saona") {
+          await supabase
+            .from("saona_reservations")
+            .update({ status: "cancelled", updated_at: new Date().toISOString() })
+            .eq("id", request.reservationId)
+        } else {
+          await supabase
+            .from("samana_reservations")
+            .update({ status: "cancelled", updated_at: new Date().toISOString() })
+            .eq("id", request.reservationId)
+        }
+      } catch (error) {
+        console.error("Error approving cancellation:", error)
+        alert("No se pudo aplicar la cancelación en la reserva")
+      }
+    }
+
+    const next = cancelRequests.map((item) =>
+      item.id === request.id
+        ? {
+            ...item,
+            status,
+            accountingNote: accountingNote?.trim() || undefined,
+          }
+        : item,
+    )
+    persistCancelRequests(next)
+  }
+
+  const printBillingInvoice = (record: BillingRecord) => {
+    const generatedAt = new Date().toLocaleString("es-DO")
+    const total = formatMoney(record.currency, record.amount)
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Factura ${record.id}</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 24px; color: #111827; }
+    .invoice { max-width: 720px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+    .header { padding: 20px; background: #111827; color: white; }
+    .header h1 { margin: 0; font-size: 20px; }
+    .content { padding: 20px; }
+    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
+    .row:last-child { border-bottom: none; }
+    .label { color: #6b7280; }
+    .value { font-weight: 600; }
+    .total { margin-top: 18px; padding: 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; text-align: right; font-size: 20px; font-weight: 700; }
+    @media print { body { padding: 0; } .invoice { border: none; } }
+  </style>
+</head>
+<body>
+  <div class="invoice">
+    <div class="header">
+      <h1>MACAO OFFROAD EXPERIENCE</h1>
+      <p>Factura de Cobro/Venta</p>
+    </div>
+    <div class="content">
+      <div class="row"><span class="label">Factura</span><span class="value">${record.id}</span></div>
+      <div class="row"><span class="label">Fecha</span><span class="value">${record.date}</span></div>
+      <div class="row"><span class="label">Cliente</span><span class="value">${record.clientName}</span></div>
+      <div class="row"><span class="label">Teléfono</span><span class="value">${record.phone || "—"}</span></div>
+      <div class="row"><span class="label">Tipo</span><span class="value">${TYPE_LABELS[record.type]}</span></div>
+      <div class="row"><span class="label">Servicio</span><span class="value">${record.serviceType}</span></div>
+      <div class="row"><span class="label">Método de pago</span><span class="value">${PAYMENT_METHOD_LABELS[record.paymentMethod]}</span></div>
+      <div class="row"><span class="label">Estado</span><span class="value">${record.status}</span></div>
+      <div class="total">Total: ${total}</div>
+      <p style="margin-top: 14px; font-size: 12px; color: #6b7280;">Generada: ${generatedAt}</p>
+    </div>
+  </div>
+</body>
+</html>`
+
+    const printWindow = window.open("", "_blank")
+    if (!printWindow) return
+    printWindow.document.write(html)
+    printWindow.document.close()
+    setTimeout(() => printWindow.print(), 200)
   }
 
   const handleAddRecord = async () => {
@@ -236,7 +339,7 @@ export function BillingCollections() {
 
       const finalNotes = [notes.trim(), serializedServiceItems].filter(Boolean).join("\n")
 
-      await insertBillingRecord({
+      const inserted = await insertBillingRecord({
         type,
         client_name: clientName,
         phone: phone || null,
@@ -273,6 +376,27 @@ export function BillingCollections() {
       }
       })
       setRecords(mapped)
+      if (inserted) {
+        const createdRecord: BillingRecord = {
+          id: inserted.id,
+          type: inserted.type,
+          clientName: inserted.client_name,
+          phone: inserted.phone || "",
+          currency: inserted.currency,
+          amount: inserted.amount,
+          paymentMethod: inserted.payment_method,
+          courtesy: inserted.courtesy,
+          serviceType: inserted.service_type,
+          status: inserted.status,
+          date: inserted.date,
+          notes,
+          vendorName: inserted.vendor_name || undefined,
+          serviceItems: normalizedLines,
+        }
+        if (window.confirm("Venta creada correctamente. ¿Deseas imprimir la factura ahora?")) {
+          printBillingInvoice(createdRecord)
+        }
+      }
       resetForm()
     } catch (err) {
       console.error("Error saving record:", err)
@@ -350,48 +474,6 @@ export function BillingCollections() {
       alert("No se pudo eliminar el registro")
     } finally {
       setIsSaving(false)
-    }
-  }
-
-  const handleSendToDriver = async () => {
-    if (!selectedRecordId || !selectedDriverId) {
-      alert("Selecciona un chofer")
-      return
-    }
-
-    const record = records.find((r) => r.id === selectedRecordId)
-    if (!record) return
-
-    setIsSendingToDriver(true)
-    try {
-      const notificationType =
-        record.type === "pago_al_llegar"
-          ? "payment_received"
-          : record.type === "credito_vendedor"
-          ? "credit_issued"
-          : "direct_sale"
-
-      await sendNotificationToDriver(
-        selectedDriverId,
-        selectedRecordId,
-        notificationType as any,
-        record.clientName,
-        record.amount,
-        record.currency,
-        record.phone,
-        record.serviceType,
-        record.notes
-      )
-
-      setSendDialogOpen(false)
-      setSelectedRecordId(null)
-      setSelectedDriverId("")
-      alert("Notificación enviada al chofer exitosamente")
-    } catch (err) {
-      console.error("Error sending notification to driver:", err)
-      alert("No se pudo enviar la notificación al chofer")
-    } finally {
-      setIsSendingToDriver(false)
     }
   }
 
@@ -496,6 +578,80 @@ export function BillingCollections() {
             <p className="text-xs text-gray-600 dark:text-gray-400">Envía un resumen para notificar al usuario de contabilidad.</p>
           </div>
           <Button onClick={handleSendOperationsClosure}>Enviar cierre a contabilidad</Button>
+        </CardContent>
+      </Card>
+
+      <Card className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/20">
+        <CardContent className="pt-5">
+          <p className="text-sm font-medium text-blue-900 dark:text-blue-200">Flujo de chofer actualizado</p>
+          <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+            Cobros y facturación no envía reservas directamente a chofer. La asignación debe hacerse desde Hoja de Recogida.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-gray-200 dark:border-gray-800">
+        <CardHeader>
+          <CardTitle className="text-base">Solicitudes de cancelación (Contabilidad)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {cancelRequests.length === 0 ? (
+            <p className="text-sm text-gray-500">No hay solicitudes de cancelación registradas.</p>
+          ) : (
+            cancelRequests
+              .slice()
+              .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
+              .map((request) => (
+                <div key={request.id} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold">{request.customerName}</p>
+                      <p className="text-xs text-gray-500">
+                        {request.operationType.toUpperCase()} • Reserva {request.reservationId}
+                      </p>
+                    </div>
+                    <Badge
+                      className={
+                        request.status === "approved"
+                          ? "bg-green-100 text-green-800"
+                          : request.status === "rejected"
+                          ? "bg-red-100 text-red-800"
+                          : "bg-yellow-100 text-yellow-800"
+                      }
+                    >
+                      {request.status === "pending"
+                        ? "Pendiente"
+                        : request.status === "approved"
+                        ? "Aprobada"
+                        : "Rechazada"}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">{request.reason}</p>
+                  {request.accountingNote ? (
+                    <p className="text-xs text-gray-500">Nota contabilidad: {request.accountingNote}</p>
+                  ) : null}
+                  {request.status === "pending" ? (
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => handleCancelDecision(request, "approved")}
+                      >
+                        Aprobar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-red-300 text-red-700 hover:bg-red-50"
+                        onClick={() => handleCancelDecision(request, "rejected")}
+                      >
+                        Rechazar
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ))
+          )}
         </CardContent>
       </Card>
 
@@ -787,74 +943,13 @@ export function BillingCollections() {
                       </td>
                       <td className="py-3 px-2 text-center">
                         <div className="flex gap-2 justify-center">
-                          <Dialog open={sendDialogOpen && selectedRecordId === record.id} onOpenChange={(open) => {
-                            setSendDialogOpen(open)
-                            if (open) {
-                              setSelectedRecordId(record.id)
-                              setSelectedDriverId("")
-                            }
-                          }}>
-                            <DialogTrigger asChild>
-                              <button
-                                onClick={() => {
-                                  setSelectedRecordId(record.id)
-                                  setSendDialogOpen(true)
-                                }}
-                                className="text-blue-600 hover:text-blue-700 inline-flex"
-                                title="Enviar a chofer"
-                              >
-                                <Send className="w-4 h-4" />
-                              </button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Enviar a Chofer</DialogTitle>
-                                <DialogDescription>
-                                  Selecciona un chofer para enviarle la información de este cobro
-                                </DialogDescription>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <div>
-                                  <p className="text-sm font-medium">Cobro: {record.clientName}</p>
-                                  <p className="text-sm text-gray-600">
-                                    {formatMoney(record.currency, record.amount)} - {record.serviceType}
-                                  </p>
-                                </div>
-                                <div className="space-y-1.5">
-                                  <Label>Selecciona Chofer *</Label>
-                                  <Select value={selectedDriverId} onValueChange={setSelectedDriverId}>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Elige un chofer..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {drivers.map((driver) => (
-                                        <SelectItem key={driver.id} value={driver.id}>
-                                          {driver.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <Button
-                                  onClick={handleSendToDriver}
-                                  disabled={isSendingToDriver || !selectedDriverId}
-                                  className="w-full bg-blue-600 hover:bg-blue-700"
-                                >
-                                  {isSendingToDriver ? (
-                                    <>
-                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                      Enviando...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Send className="w-4 h-4 mr-2" />
-                                      Enviar Notificación
-                                    </>
-                                  )}
-                                </Button>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
+                          <button
+                            onClick={() => printBillingInvoice(record)}
+                            className="text-indigo-600 hover:text-indigo-700 inline-flex"
+                            title="Imprimir factura"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
                           <button
                             onClick={() => handleDelete(record.id)}
                             className="text-red-600 hover:text-red-700 inline-flex"

@@ -79,29 +79,29 @@ export function Header() {
           <button
             type="button"
             onClick={() => { document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' }); }}
-            className="text-sm transition-colors text-muted-foreground hover:text-foreground"
+            className="text-base font-medium transition-colors text-muted-foreground hover:text-foreground"
           >
             Services
           </button>
           <button
             type="button"
             onClick={() => { document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }); }}
-            className="text-sm transition-colors text-muted-foreground hover:text-foreground"
+            className="text-base font-medium transition-colors text-muted-foreground hover:text-foreground"
           >
             Products
           </button>
           <button
             type="button"
             onClick={() => { document.getElementById('transport')?.scrollIntoView({ behavior: 'smooth' }); }}
-            className="text-sm transition-colors text-muted-foreground hover:text-foreground"
+            className="text-base font-medium transition-colors text-muted-foreground hover:text-foreground"
           >
             Private Transportation
           </button>
           <Link
             href="/photographer"
-            className="text-sm transition-colors text-muted-foreground hover:text-foreground"
+            className="text-base font-semibold transition-colors text-amber-600 hover:text-amber-500"
           >
-            Get my photos
+            Get my foto
           </Link>
         </nav>
 
@@ -215,10 +215,10 @@ export function Header() {
             </button>
             <Link
               href="/photographer"
-              className="text-lg text-foreground"
+              className="text-lg font-semibold text-amber-600"
               onClick={() => setIsMenuOpen(false)}
             >
-              Get my photos
+              Get my foto
             </Link>
             {userName ? (
               <>

@@ -50,7 +50,7 @@ export interface StoredCustomerReservation {
   };
 }
 
-const NON_REVIEWABLE_ITEM_IDS = ["service-colectivo", "service-privado", "private-transport"];
+const NON_REVIEWABLE_ITEM_IDS = ["service-horseback-ride", "service-dune-buggy", "private-transport"];
 
 export async function loadCustomerReservations(ownerEmail: string): Promise<StoredCustomerReservation[]> {
   const email = ownerEmail.trim().toLowerCase();

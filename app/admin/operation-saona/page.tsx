@@ -85,6 +85,22 @@ type SaonaReservation = {
   gygBookingReference: string
 }
 
+type CancellationRequestStatus = "pending" | "approved" | "rejected"
+
+type CancellationRequest = {
+  id: string
+  operationType: "buggy" | "saona" | "samana"
+  reservationId: string
+  customerName: string
+  reason: string
+  requestedAt: string
+  requestedBy?: string
+  status: CancellationRequestStatus
+  accountingNote?: string
+}
+
+const CANCELLATION_STORAGE_KEY = "macao_cancel_requests"
+
 function mapRow(r: any): SaonaReservation {
   return {
     id: r.id,
@@ -120,6 +136,7 @@ export default function OperationSaonaPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<string | null>(null)
+  const [cancellationRequests, setCancellationRequests] = useState<CancellationRequest[]>([])
 
   // Modal agregar reserva
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -367,6 +384,65 @@ export default function OperationSaonaPage() {
     return () => clearInterval(interval)
   }, [])
 
+  useEffect(() => {
+    const loadCancellationRequests = () => {
+      try {
+        const raw = localStorage.getItem(CANCELLATION_STORAGE_KEY)
+        const parsed = raw ? JSON.parse(raw) : []
+        setCancellationRequests(Array.isArray(parsed) ? parsed : [])
+      } catch {
+        setCancellationRequests([])
+      }
+    }
+
+    loadCancellationRequests()
+    window.addEventListener("macao-cancel-requests-updated", loadCancellationRequests)
+    window.addEventListener("storage", loadCancellationRequests)
+    return () => {
+      window.removeEventListener("macao-cancel-requests-updated", loadCancellationRequests)
+      window.removeEventListener("storage", loadCancellationRequests)
+    }
+  }, [])
+
+  const persistCancellationRequests = (next: CancellationRequest[]) => {
+    setCancellationRequests(next)
+    localStorage.setItem(CANCELLATION_STORAGE_KEY, JSON.stringify(next))
+    window.dispatchEvent(new CustomEvent("macao-cancel-requests-updated"))
+  }
+
+  const getCancellationRequest = (reservationId: string) => {
+    return cancellationRequests.find((item) => item.reservationId === reservationId)
+  }
+
+  const requestCancellation = (reservation: SaonaReservation) => {
+    const existing = getCancellationRequest(reservation.id)
+    if (existing?.status === "pending") {
+      alert("Esta reserva ya tiene una solicitud de cancelación pendiente de contabilidad.")
+      return
+    }
+
+    const reason = window.prompt("Motivo de cancelación (obligatorio):", "")
+    if (!reason || !reason.trim()) {
+      alert("Debes indicar un motivo para solicitar la cancelación.")
+      return
+    }
+
+    const request: CancellationRequest = {
+      id: `cancel-${Date.now()}-${reservation.id}`,
+      operationType: "saona",
+      reservationId: reservation.id,
+      customerName: reservation.customerName,
+      reason: reason.trim(),
+      requestedAt: new Date().toISOString(),
+      requestedBy: "Operaciones Saona",
+      status: "pending",
+    }
+
+    const next = [request, ...cancellationRequests.filter((item) => item.reservationId !== reservation.id)]
+    persistCancellationRequests(next)
+    alert("Solicitud enviada a contabilidad para aprobación/rechazo.")
+  }
+
   const toggleStatus = async (id: string) => {
     try {
       const { error } = await supabase
@@ -409,6 +485,10 @@ export default function OperationSaonaPage() {
       ? '<div class="amount-box"><div class="label">MONTO A PAGAR</div><div class="amount">$' + res.amount.toFixed(2) + ' USD</div></div>'
       : ""
 
+    const confirmationNumber = (res.gygBookingReference || res.gygBookingRef || `SAO-${res.id.slice(0, 8).toUpperCase()}`).toUpperCase()
+    const qrValue = `SAONA|${confirmationNumber}|${res.date}|${res.customerName}`
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrValue)}`
+
     const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -435,6 +515,11 @@ export default function OperationSaonaPage() {
   .amount-box { background: #f0fdfa; border: 2px solid #99f6e4; border-radius: 12px; padding: 16px; text-align: center; margin: 16px 0; }
   .amount-box .label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
   .amount-box .amount { font-size: 32px; font-weight: 800; color: #0891b2; }
+  .confirm { margin-top: 10px; text-align: center; font-size: 12px; color: #374151; }
+  .confirm strong { font-size: 16px; letter-spacing: 1px; color: #111827; }
+  .qr-wrap { margin-top: 14px; border: 1px dashed #d1d5db; border-radius: 12px; padding: 12px; text-align: center; }
+  .qr-wrap img { width: 140px; height: 140px; object-fit: contain; }
+  .qr-wrap p { margin-top: 8px; font-size: 11px; color: #6b7280; word-break: break-all; }
   .footer { text-align: center; padding: 16px 24px 24px; color: #9ca3af; font-size: 11px; line-height: 1.5; }
   .divider { border: none; border-top: 2px dashed #e5e7eb; margin: 0; }
   @media print { body { background: #fff; padding: 0; } .ticket { box-shadow: none; } }
@@ -464,6 +549,11 @@ export default function OperationSaonaPage() {
       <div class="row"><span class="label">Hora de recogida</span><span class="value" style="font-size:16px;color:#0891b2;font-weight:800">${res.pickupTime}</span></div>
     </div>
     ${amountBlock}
+    <div class="confirm">Número de confirmación: <strong>${confirmationNumber}</strong></div>
+    <div class="qr-wrap">
+      <img src="${qrUrl}" alt="QR de validación" />
+      <p>${qrValue}</p>
+    </div>
   </div>
   <hr class="divider" />
   <div class="footer">
@@ -508,24 +598,62 @@ export default function OperationSaonaPage() {
   }
 
   const getStatusButton = (reservation: SaonaReservation) => {
+    const cancelRequest = getCancellationRequest(reservation.id)
+    if (reservation.status === "cancelled") {
+      return (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">
+            <XCircle className="w-3 h-3 mr-1" />
+            Cancelada
+          </Badge>
+          {cancelRequest?.status === "approved" ? (
+            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 cursor-default">
+              Aprobada por contabilidad
+            </Badge>
+          ) : null}
+        </div>
+      )
+    }
     if (reservation.status === "confirmed") {
       return (
-        <Badge className="bg-green-100 text-green-700 hover:bg-green-100 cursor-default">
-          <CheckCircle2 className="w-3 h-3 mr-1" />
-          Confirmada
-        </Badge>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className="bg-green-100 text-green-700 hover:bg-green-100 cursor-default">
+            <CheckCircle2 className="w-3 h-3 mr-1" />
+            Confirmada
+          </Badge>
+          {cancelRequest?.status === "pending" ? (
+            <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 cursor-default">Cancelación solicitada</Badge>
+          ) : null}
+          {cancelRequest?.status === "approved" ? (
+            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 cursor-default">Cancelación aprobada</Badge>
+          ) : null}
+          {cancelRequest?.status === "rejected" ? (
+            <Badge className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">Cancelación rechazada</Badge>
+          ) : null}
+        </div>
       )
     }
     return (
-      <Button
-        size="sm"
-        variant="outline"
-        className="border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-green-100 hover:text-green-700 hover:border-green-300"
-        onClick={() => toggleStatus(reservation.id)}
-      >
-        <AlertCircle className="w-3 h-3 mr-1" />
-        Pendiente
-      </Button>
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-green-100 hover:text-green-700 hover:border-green-300"
+          onClick={() => toggleStatus(reservation.id)}
+        >
+          <AlertCircle className="w-3 h-3 mr-1" />
+          Pendiente
+        </Button>
+        {cancelRequest?.status === "pending" ? (
+          <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 cursor-default">Cancelación solicitada</Badge>
+        ) : null}
+        {cancelRequest?.status === "approved" ? (
+          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 cursor-default">Cancelación aprobada</Badge>
+        ) : null}
+        {cancelRequest?.status === "rejected" ? (
+          <Badge className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">Cancelación rechazada</Badge>
+        ) : null}
+      </div>
     )
   }
 
@@ -840,6 +968,21 @@ export default function OperationSaonaPage() {
                           >
                             <Ticket className="w-3 h-3 mr-1" />
                             Ticket
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-red-300 text-red-700 hover:bg-red-50 w-full"
+                            disabled={
+                              reservation.status === "cancelled" ||
+                              getCancellationRequest(reservation.id)?.status === "pending"
+                            }
+                            onClick={() => requestCancellation(reservation)}
+                          >
+                            <XCircle className="w-3 h-3 mr-1" />
+                            {getCancellationRequest(reservation.id)?.status === "pending"
+                              ? "Pendiente Contabilidad"
+                              : "Solicitar Cancelación"}
                           </Button>
                         </div>
                       </TableCell>

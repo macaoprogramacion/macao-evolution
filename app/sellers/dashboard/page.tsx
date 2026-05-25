@@ -103,7 +103,7 @@ export default function DashboardPage() {
               {rep.company} &middot; Comisión: {rep.commissionPercent}%
             </p>
           </div>
-          <Link href="/dashboard/new-booking">
+          <Link href="/sellers/dashboard/new-booking">
             <Button className="bg-red-600 hover:bg-red-700 text-white">
               <Plus className="w-4 h-4 mr-2" />
               Nueva Reserva
@@ -225,7 +225,7 @@ export default function DashboardPage() {
                 <CardTitle className="text-lg">Reservas Recientes</CardTitle>
                 <CardDescription>Últimas {recentBookings.length} reservas registradas</CardDescription>
               </div>
-              <Link href="/dashboard/bookings">
+              <Link href="/sellers/dashboard/bookings">
                 <Button variant="outline" size="sm">
                   Ver Todas
                 </Button>
@@ -238,7 +238,7 @@ export default function DashboardPage() {
                 <Calendar className="w-12 h-12 mx-auto mb-3" />
                 <p className="font-medium">Sin reservas aún</p>
                 <p className="text-sm mt-1">Crea tu primera reserva para empezar</p>
-                <Link href="/dashboard/new-booking" className="mt-4 inline-block">
+                <Link href="/sellers/dashboard/new-booking" className="mt-4 inline-block">
                   <Button className="bg-red-600 hover:bg-red-700 text-white" size="sm">
                     <Plus className="w-4 h-4 mr-1" />
                     Nueva Reserva

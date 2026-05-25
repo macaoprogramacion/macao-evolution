@@ -110,11 +110,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems([]);
   }, []);
 
-  const SERVICE_IDS = ["service-colectivo", "service-privado"];
+  const SERVICE_IDS = ["service-horseback-ride", "service-dune-buggy"];
 
   const getConflictingService = useCallback((id: string): CartItem | null => {
     if (!SERVICE_IDS.includes(id)) return null;
-    const otherId = id === "service-colectivo" ? "service-privado" : "service-colectivo";
+    const otherId = id === "service-horseback-ride" ? "service-dune-buggy" : "service-horseback-ride";
     return items.find((item) => item.id === otherId) || null;
   }, [items]);
 
@@ -138,7 +138,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     0
   );
   const hasServiceSelected = items.some(
-    (item) => item.id === "service-colectivo" || item.id === "service-privado"
+    (item) => item.id === "service-horseback-ride" || item.id === "service-dune-buggy"
   );
 
   return (

@@ -115,9 +115,24 @@ type NewReservationForm = {
   language: string
 }
 
+type CancellationRequestStatus = "pending" | "approved" | "rejected"
+
+type CancellationRequest = {
+  id: string
+  operationType: "buggy" | "saona" | "samana"
+  reservationId: string
+  customerName: string
+  reason: string
+  requestedAt: string
+  requestedBy?: string
+  status: CancellationRequestStatus
+  accountingNote?: string
+}
+
 const SAMANA_PRODUCT_ID = "1068932"
 const SAMANA_DEFAULT_CAPACITY = 40
 const AVAILABILITY_WINDOW_DAYS = 21
+const CANCELLATION_STORAGE_KEY = "macao_cancel_requests"
 
 const createEmptyNewReservation = (): NewReservationForm => ({
   customer_name: "",
@@ -372,6 +387,7 @@ export default function OperationSamanaPage() {
   const [noShowConfirmId, setNoShowConfirmId] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<string | null>(null)
+  const [cancellationRequests, setCancellationRequests] = useState<CancellationRequest[]>([])
   const [availabilityRows, setAvailabilityRows] = useState<AvailabilityDayRow[]>([])
   const [availabilityLoading, setAvailabilityLoading] = useState(true)
   const [availabilitySavingDate, setAvailabilitySavingDate] = useState<string | null>(null)
@@ -786,6 +802,65 @@ export default function OperationSamanaPage() {
   }, [])
 
   useEffect(() => {
+    const loadCancellationRequests = () => {
+      try {
+        const raw = localStorage.getItem(CANCELLATION_STORAGE_KEY)
+        const parsed = raw ? JSON.parse(raw) : []
+        setCancellationRequests(Array.isArray(parsed) ? parsed : [])
+      } catch {
+        setCancellationRequests([])
+      }
+    }
+
+    loadCancellationRequests()
+    window.addEventListener("macao-cancel-requests-updated", loadCancellationRequests)
+    window.addEventListener("storage", loadCancellationRequests)
+    return () => {
+      window.removeEventListener("macao-cancel-requests-updated", loadCancellationRequests)
+      window.removeEventListener("storage", loadCancellationRequests)
+    }
+  }, [])
+
+  const persistCancellationRequests = (next: CancellationRequest[]) => {
+    setCancellationRequests(next)
+    localStorage.setItem(CANCELLATION_STORAGE_KEY, JSON.stringify(next))
+    window.dispatchEvent(new CustomEvent("macao-cancel-requests-updated"))
+  }
+
+  const getCancellationRequest = (reservationId: string) => {
+    return cancellationRequests.find((item) => item.reservationId === reservationId)
+  }
+
+  const requestCancellation = (reservation: SamanaReservation) => {
+    const existing = getCancellationRequest(reservation.id)
+    if (existing?.status === "pending") {
+      alert("Esta reserva ya tiene una solicitud de cancelación pendiente de contabilidad.")
+      return
+    }
+
+    const reason = window.prompt("Motivo de cancelación (obligatorio):", "")
+    if (!reason || !reason.trim()) {
+      alert("Debes indicar un motivo para solicitar la cancelación.")
+      return
+    }
+
+    const request: CancellationRequest = {
+      id: `cancel-${Date.now()}-${reservation.id}`,
+      operationType: "samana",
+      reservationId: reservation.id,
+      customerName: reservation.customerName,
+      reason: reason.trim(),
+      requestedAt: new Date().toISOString(),
+      requestedBy: "Operaciones Samana",
+      status: "pending",
+    }
+
+    const next = [request, ...cancellationRequests.filter((item) => item.reservationId !== reservation.id)]
+    persistCancellationRequests(next)
+    alert("Solicitud enviada a contabilidad para aprobación/rechazo.")
+  }
+
+  useEffect(() => {
     let cancelled = false
 
     const loadBlockedReservationDates = async () => {
@@ -1089,6 +1164,9 @@ ${t.getReady} 🐋⚓
     const amountBlock = res.amount != null && res.amount > 0
       ? `<div class="amount-box"><div class="label">${t.amount}</div><div class="amount">$${res.amount.toFixed(2)} USD</div></div>`
       : ""
+    const confirmationNumber = (res.gygBookingReference || res.gygBookingRef || `SAM-${res.id.slice(0, 8).toUpperCase()}`).toUpperCase()
+    const qrValue = `SAMANA|${confirmationNumber}|${res.date}|${res.customerName}`
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrValue)}`
 
     const pickupRef = `${res.location || ""} ${res.hotel || ""}`.toLowerCase()
     const pickupPoint = pickupRef.includes("barrera") ? "Barrera" : "Lobby"
@@ -1123,6 +1201,11 @@ ${t.getReady} 🐋⚓
   .amount-box { background: #f0fdf4; border: 2px solid #bbf7d0; border-radius: 12px; padding: 16px; text-align: center; margin: 16px 0; }
   .amount-box .label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
   .amount-box .amount { font-size: 32px; font-weight: 800; color: #16a34a; }
+  .confirm { margin-top: 10px; text-align: center; font-size: 12px; color: #374151; }
+  .confirm strong { font-size: 16px; letter-spacing: 1px; color: #111827; }
+  .qr-wrap { margin-top: 14px; border: 1px dashed #d1d5db; border-radius: 12px; padding: 12px; text-align: center; }
+  .qr-wrap img { width: 140px; height: 140px; object-fit: contain; }
+  .qr-wrap p { margin-top: 8px; font-size: 11px; color: #6b7280; word-break: break-all; }
   .footer { text-align: center; padding: 16px 24px 24px; color: #9ca3af; font-size: 11px; line-height: 1.5; }
   .divider { border: none; border-top: 2px dashed #e5e7eb; margin: 0; }
   @media print { body { background: #fff; padding: 0; } .ticket { box-shadow: none; } }
@@ -1155,6 +1238,11 @@ ${t.getReady} 🐋⚓
       <div class="row"><span class="label">${t.pickupTime}</span><span class="value" style="font-size:16px;color:#16a34a;font-weight:800">${res.pickupTime}</span></div>
     </div>
     ${amountBlock}
+    <div class="confirm">${t.ref}: <strong>${confirmationNumber}</strong></div>
+    <div class="qr-wrap">
+      <img src="${qrUrl}" alt="QR de validación" />
+      <p>${qrValue}</p>
+    </div>
   </div>
   <hr class="divider" />
   <div class="footer">
@@ -1198,6 +1286,7 @@ ${t.getReady} 🐋⚓
   }
 
   const getStatusButton = (reservation: SamanaReservation) => {
+    const cancelRequest = getCancellationRequest(reservation.id)
     const pickupDeadline = getPickupDeadline(reservation.date, reservation.pickupTime)
     const canNoShow =
       (reservation.status === "pending" || reservation.status === "confirmed") &&
@@ -1215,10 +1304,15 @@ ${t.getReady} 🐋⚓
 
     if (reservation.status === "cancelled") {
       return (
-        <Badge className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">
-          <XCircle className="w-3 h-3 mr-1" />
-          Cancelada
-        </Badge>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">
+            <XCircle className="w-3 h-3 mr-1" />
+            Cancelada
+          </Badge>
+          {cancelRequest?.status === "approved" ? (
+            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 cursor-default">Aprobada por contabilidad</Badge>
+          ) : null}
+        </div>
       )
     }
 
@@ -1253,6 +1347,15 @@ ${t.getReady} 🐋⚓
             NO SHOW
           </Button>
         )}
+        {cancelRequest?.status === "pending" ? (
+          <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 cursor-default">Cancelación solicitada</Badge>
+        ) : null}
+        {cancelRequest?.status === "approved" ? (
+          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 cursor-default">Cancelación aprobada</Badge>
+        ) : null}
+        {cancelRequest?.status === "rejected" ? (
+          <Badge className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">Cancelación rechazada</Badge>
+        ) : null}
       </div>
     )
   }
@@ -1565,6 +1668,22 @@ ${t.getReady} 🐋⚓
                     >
                       <Ticket className="w-3.5 h-3.5 mr-1" />
                       Ticket
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-red-300 text-red-700 hover:bg-red-50"
+                      disabled={
+                        reservation.status === "cancelled" ||
+                        reservation.status === "no_show" ||
+                        getCancellationRequest(reservation.id)?.status === "pending"
+                      }
+                      onClick={() => requestCancellation(reservation)}
+                    >
+                      <XCircle className="w-3.5 h-3.5 mr-1" />
+                      {getCancellationRequest(reservation.id)?.status === "pending"
+                        ? "Pendiente Contabilidad"
+                        : "Solicitar Cancelación"}
                     </Button>
                     <Button
                       size="sm"

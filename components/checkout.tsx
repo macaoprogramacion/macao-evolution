@@ -330,8 +330,8 @@ export function CheckoutModal({
     };
   }, [isOpen]);
 
-  const depositAmount = totalPrice * 0.2;
-  const remainingAmount = totalPrice * 0.8;
+  const depositAmount = Math.min(20, totalPrice);
+  const remainingAmount = Math.max(totalPrice - depositAmount, 0);
   const amountToPay = paymentOption === "full" ? totalPrice : depositAmount;
 
   // --- Validation ---
@@ -484,7 +484,7 @@ export function CheckoutModal({
       body: JSON.stringify({
         amount: amountToPay,
         currency: "USD",
-        description: `Reserva Macao Evolution (${paymentOption === "full" ? "pago completo" : "depósito 20%"})`,
+        description: `Reserva Macao Evolution (${paymentOption === "full" ? "pago completo" : "reserva $20"})`,
       }),
     });
 
@@ -1032,7 +1032,7 @@ export function CheckoutModal({
                 Elige cómo deseas pagar tu reserva
               </p>
 
-              {/* Payment option: Full vs 20% */}
+              {/* Payment option: Full vs $20 */}
               <div className="mb-6 space-y-3">
                 <p className="text-sm font-medium text-foreground mb-2">
                   Opción de pago
@@ -1092,7 +1092,7 @@ export function CheckoutModal({
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-foreground">
-                      Reserva con el 20%
+                      Reserva con $20
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Paga ${depositAmount.toFixed(2)} ahora y $
@@ -1190,7 +1190,7 @@ export function CheckoutModal({
                   <>
                     <div className="mt-2 flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">
-                        Depósito (20%)
+                        Depósito ($20)
                       </span>
                       <span className="text-foreground">
                         ${depositAmount.toFixed(2)}
@@ -1351,14 +1351,41 @@ function ConfirmationUpsell({
   addItem: (item: { id: string; name: string; price: number; originalPrice?: number; image: string; type: "service" | "product" }) => void;
 }) {
   const [added, setAdded] = useState(false);
+  const [addingFlashOffer, setAddingFlashOffer] = useState(false);
+
+  const cartSignature = useMemo(
+    () => cartItems.map((i) => i.id).sort().join("|"),
+    [cartItems]
+  );
+
+  const recommendations = useMemo(() => {
+    const cartIds = new Set(cartItems.map((i) => i.id));
+    const available = products.filter((p) => !cartIds.has(p.id));
+    if (available.length <= 2) return available;
+
+    // Deterministic ranking prevents UI from changing on every keystroke.
+    const seed = hashSeed(cartSignature || "default");
+    return [...available]
+      .map((p, index) => ({
+        product: p,
+        score: hashSeed(`${seed}-${p.id}-${index}`),
+      }))
+      .sort((a, b) => a.score - b.score)
+      .slice(0, 2)
+      .map((entry) => entry.product);
+  }, [cartItems, cartSignature]);
 
   // Get the main activity name (the service, not products/transport)
   const mainActivity = cartItems.find(
-    (i) => i.id === "service-colectivo" || i.id === "service-privado"
+    (i) => i.id === "service-horseback-ride" || i.id === "service-dune-buggy"
   )?.name || "esta experiencia";
 
+  const hasTransportInCart = cartItems.some((item) => item.id === "private-transport");
+  const shouldShowFlashOffer = !hasPrivateTransport && !hasTransportInCart && !added;
+  const shouldShowFlashSuccess = !hasPrivateTransport && (hasTransportInCart || added);
+
   // If no private transport → flash offer
-  if (!hasPrivateTransport && !added) {
+  if (shouldShowFlashOffer) {
     const originalPrice = 75;
     const discountedPrice = originalPrice * 0.8;
 
@@ -1385,66 +1412,50 @@ function ConfirmationUpsell({
             <div className="flex items-center gap-2 mt-1">
               <span className="text-xs text-muted-foreground line-through">${originalPrice.toFixed(2)}</span>
               <span className="text-sm font-bold text-amber-600 dark:text-amber-400">${discountedPrice.toFixed(2)}</span>
-              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-200/50 dark:bg-amber-800/30 px-1.5 py-0.5 rounded-full">-20%</span>
+              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-200/50 dark:bg-amber-800/30 px-1.5 py-0.5 rounded-full">FLASH</span>
             </div>
           </div>
         </div>
         <button
           type="button"
           onClick={() => {
-            addItem({
-              id: "private-transport",
-              name: "Private Transport — Oferta Flash (20% OFF)",
-              price: discountedPrice,
-              originalPrice,
-              image: "/images/service-section/private-transportation.webp",
-              type: "service",
-            });
-            setAdded(true);
+            if (addingFlashOffer || hasTransportInCart) return;
+            setAddingFlashOffer(true);
+            try {
+              addItem({
+                id: "private-transport",
+                name: "Private Transport — Oferta Flash",
+                price: discountedPrice,
+                originalPrice,
+                image: "/images/service-section/private-transportation.webp",
+                type: "service",
+              });
+              setAdded(true);
+            } finally {
+              setAddingFlashOffer(false);
+            }
           }}
+          disabled={addingFlashOffer}
           className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-amber-500 hover:bg-amber-600 py-2.5 text-sm font-semibold text-white transition-colors"
         >
           <ShoppingCart size={14} />
-          Agregar a mi reserva
+          {addingFlashOffer ? "Agregando..." : "Agregar a mi reserva"}
         </button>
       </div>
     );
   }
 
   // If added the flash offer, show success
-  if (!hasPrivateTransport && added) {
+  if (shouldShowFlashSuccess) {
     return (
       <div className="mb-6 rounded-xl border border-green-300/50 bg-green-50/80 dark:bg-green-950/20 p-4 text-center">
         <Check size={20} className="mx-auto text-green-500 mb-1" />
         <p className="text-sm font-medium text-green-700 dark:text-green-400">
-          Transporte privado agregado con 20% de descuento
+          Transporte privado agregado con oferta flash
         </p>
       </div>
     );
   }
-
-  // Has private transport → show random product recommendations
-  const cartSignature = useMemo(
-    () => cartItems.map((i) => i.id).sort().join("|"),
-    [cartItems]
-  );
-
-  const recommendations = useMemo(() => {
-    const cartIds = new Set(cartItems.map((i) => i.id));
-    const available = products.filter((p) => !cartIds.has(p.id));
-    if (available.length <= 2) return available;
-
-    // Deterministic ranking prevents UI from changing on every keystroke.
-    const seed = hashSeed(cartSignature || "default");
-    return [...available]
-      .map((p, index) => ({
-        product: p,
-        score: hashSeed(`${seed}-${p.id}-${index}`),
-      }))
-      .sort((a, b) => a.score - b.score)
-      .slice(0, 2)
-      .map((entry) => entry.product);
-  }, [cartItems, cartSignature]);
 
   if (recommendations.length === 0) return null;
 

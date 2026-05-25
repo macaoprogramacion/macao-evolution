@@ -1,213 +1,124 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useState } from "react";
 import { useCart } from "@/context/cart-context";
 import { ShoppingCart, Check } from "lucide-react";
 
 export function PhilosophySection() {
-  const sectionRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef<number | null>(null);
-  const isMobileRef = useRef(false);
   const { addItem, getConflictingService, replaceService } = useCart();
-  const [addedColectivo, setAddedColectivo] = useState(false);
-  const [addedPrivado, setAddedPrivado] = useState(false);
+  const [addedHorseback, setAddedHorseback] = useState(false);
+  const [addedDuneBuggy, setAddedDuneBuggy] = useState(false);
 
-  // DOM refs for direct manipulation
-  const titleRef = useRef<HTMLDivElement>(null);
-  const colectivoRef = useRef<HTMLDivElement>(null);
-  const privadoRef = useRef<HTMLDivElement>(null);
-
-  const colectivoItem = {
-    id: "service-colectivo",
-    name: "Servicio Colectivo",
+  const horsebackItem = {
+    id: "service-horseback-ride",
+    name: "Horseback Ride",
     price: 0,
     image: "/images/service-section/servicio-colective.webp",
     type: "service" as const,
   };
 
-  const privadoItem = {
-    id: "service-privado",
-    name: "Servicio Privado",
+  const duneBuggyItem = {
+    id: "service-dune-buggy",
+    name: "Dune Buggy",
     price: 100,
     image: "/images/service-section/servicio-private.webp",
     type: "service" as const,
   };
 
-  const handleAddColectivo = () => {
-    const conflict = getConflictingService("service-colectivo");
+  const handleAddHorseback = () => {
+    const conflict = getConflictingService("service-horseback-ride");
     if (conflict) {
-      if (!confirm(`Ya tienes "${conflict.name}" en tu carrito. ¿Deseas cambiarlo por "Servicio Colectivo"?`)) return;
-      replaceService(conflict.id, colectivoItem);
+      if (!confirm(`Ya tienes "${conflict.name}" en tu carrito. ¿Deseas cambiarlo por "Horseback Ride"?`)) return;
+      replaceService(conflict.id, horsebackItem);
     } else {
-      addItem(colectivoItem);
+      addItem(horsebackItem);
     }
-    setAddedColectivo(true);
-    setTimeout(() => setAddedColectivo(false), 1500);
+    setAddedHorseback(true);
+    setTimeout(() => setAddedHorseback(false), 1500);
   };
 
-  const handleAddPrivado = () => {
-    const conflict = getConflictingService("service-privado");
+  const handleAddDuneBuggy = () => {
+    const conflict = getConflictingService("service-dune-buggy");
     if (conflict) {
-      if (!confirm(`Ya tienes "${conflict.name}" en tu carrito. ¿Deseas cambiarlo por "Servicio Privado"?`)) return;
-      replaceService(conflict.id, privadoItem);
+      if (!confirm(`Ya tienes "${conflict.name}" en tu carrito. ¿Deseas cambiarlo por "Dune Buggy"?`)) return;
+      replaceService(conflict.id, duneBuggyItem);
     } else {
-      addItem(privadoItem);
+      addItem(duneBuggyItem);
     }
-    setAddedPrivado(true);
-    setTimeout(() => setAddedPrivado(false), 1500);
+    setAddedDuneBuggy(true);
+    setTimeout(() => setAddedDuneBuggy(false), 1500);
   };
-
-  const updateTransforms = useCallback(() => {
-    if (!sectionRef.current) return;
-    
-    const rect = sectionRef.current.getBoundingClientRect();
-    const windowHeight = window.innerHeight;
-    const sectionHeight = sectionRef.current.offsetHeight;
-    
-    const scrollableRange = sectionHeight - windowHeight;
-    const scrolled = -rect.top;
-    const progress = Math.max(0, Math.min(1, scrolled / scrollableRange));
-    
-    // Apply directly to DOM — no re-renders
-    if (colectivoRef.current) {
-      colectivoRef.current.style.transform = `translate3d(${(1 - progress) * -100}%, 0, 0)`;
-    }
-    if (privadoRef.current) {
-      privadoRef.current.style.transform = `translate3d(${(1 - progress) * 100}%, 0, 0)`;
-    }
-    if (titleRef.current) {
-      titleRef.current.style.opacity = `${1 - progress}`;
-    }
-  }, []);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      isMobileRef.current = window.innerWidth < 1024;
-    };
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-
-    const handleScroll = () => {
-      // Cancel any pending animation frame
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-      }
-      
-      // Use requestAnimationFrame for smooth updates
-      rafRef.current = requestAnimationFrame(updateTransforms);
-    };
-
-    // Run scroll animation on all screen sizes
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    updateTransforms();
-    
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("resize", checkMobile);
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-      }
-    };
-  }, [updateTransforms]);
 
   return (
     <section id="services" className="bg-background">
-      {/* Scroll-Animated Product Grid — static on mobile, animated on desktop */}
-      <div ref={sectionRef} className="relative h-[250vh] lg:h-[150vh]">
-        <div className="sticky top-0 h-screen flex items-center justify-center">
-          <div className="relative w-full">
-            {/* Title - positioned behind the blocks */}
-            <div 
-              ref={titleRef}
-              className="absolute inset-0 flex items-center justify-center pointer-events-none z-0"
-              style={{ opacity: 1 }}
-            >
-              <h2 className="text-[8vw] font-medium leading-[0.95] tracking-tighter text-foreground lg:text-[5vw] text-center px-6 font-title whitespace-nowrap select-none pointer-events-none">
-                Choose One.
-              </h2>
-            </div>
+      <div className="px-6 py-20 text-center md:px-12 md:py-24 lg:px-20 lg:py-28">
+        <h2 className="text-4xl font-medium leading-[0.95] tracking-tight text-foreground md:text-5xl lg:text-6xl font-title">
+          Choose One.
+        </h2>
+      </div>
 
-            {/* Product Grid */}
-            <div className="relative z-10 grid grid-cols-1 gap-4 px-6 lg:grid-cols-2 lg:px-12 xl:px-20">
-              {/* Colectivo Image - comes from left */}
-              <div 
-                ref={colectivoRef}
-                className="relative aspect-[4/3] overflow-hidden rounded-2xl cursor-pointer group/colectivo will-change-transform"
-                style={{
-                  transform: 'translate3d(-100%, 0, 0)',
-                  backfaceVisibility: 'hidden',
-                }}
-                onClick={handleAddColectivo}
-                title="Click para agregar al carrito"
-              >
+      <div className="grid grid-cols-1 gap-4 px-6 pb-12 lg:grid-cols-2 lg:px-12 xl:px-20">
+        <div
+          className="relative aspect-[4/3] overflow-hidden rounded-2xl cursor-pointer group/horseback"
+          onClick={handleAddHorseback}
+          title="Click para agregar al carrito"
+        >
                 <Image
                   src="/images/service-section/servicio-colective.webp"
-                  alt="Servicio colectivo"
+                  alt="Horseback Ride"
                   fill
-                  className="object-cover transition-transform duration-300 group-hover/colectivo:scale-105"
+                  className="object-cover transition-transform duration-300 group-hover/horseback:scale-105"
                   sizes="(max-width: 768px) 100vw, 50vw"
                   quality={75}
                   loading="lazy"
                 />
-                {/* Hover overlay */}
-                <div className="absolute inset-0 bg-black/0 group-hover/colectivo:bg-black/30 transition-all duration-300 flex items-center justify-center">
-                  <div className={`rounded-full p-3 transition-all duration-300 ${addedColectivo ? 'bg-green-500 scale-100' : 'bg-white/80 scale-0 group-hover/colectivo:scale-100'}`}>
-                    {addedColectivo ? <Check size={24} className="text-white" /> : <ShoppingCart size={24} className="text-foreground" />}
-                  </div>
-                </div>
-                <div className="absolute bottom-6 left-6">
-                  <span className="backdrop-blur-md px-4 py-2 text-sm font-medium rounded-full bg-[rgba(255,255,255,0.2)] text-white">
-                    Colectivo — GRATIS
-                  </span>
-                </div>
-              </div>
-
-              {/* Privado Image - comes from right */}
-              <div 
-                ref={privadoRef}
-                className="relative aspect-[4/3] overflow-hidden rounded-2xl cursor-pointer group/privado will-change-transform"
-                style={{
-                  transform: 'translate3d(100%, 0, 0)',
-                  backfaceVisibility: 'hidden',
-                }}
-                onClick={handleAddPrivado}
-                title="Click para agregar al carrito"
-              >
-                <Image
-                  src="/images/service-section/servicio-private.webp"
-                  alt="Servicio privado"
-                  fill
-                  className="object-cover transition-transform duration-300 group-hover/privado:scale-105"
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  quality={75}
-                  loading="lazy"
-                />
-                {/* Hover overlay */}
-                <div className="absolute inset-0 bg-black/0 group-hover/privado:bg-black/30 transition-all duration-300 flex items-center justify-center">
-                  <div className={`rounded-full p-3 transition-all duration-300 ${addedPrivado ? 'bg-green-500 scale-100' : 'bg-white/80 scale-0 group-hover/privado:scale-100'}`}>
-                    {addedPrivado ? <Check size={24} className="text-white" /> : <ShoppingCart size={24} className="text-foreground" />}
-                  </div>
-                </div>
-                <div className="absolute bottom-6 left-6">
-                  <span className="backdrop-blur-md px-4 py-2 text-sm font-medium rounded-full bg-[rgba(255,255,255,0.2)] text-white">
-                    Privado — $100
-                  </span>
-                </div>
-              </div>
+          <div className="absolute inset-0 bg-black/0 group-hover/horseback:bg-black/30 transition-all duration-300 flex items-center justify-center">
+            <div className={`rounded-full p-3 transition-all duration-300 ${addedHorseback ? 'bg-green-500 scale-100' : 'bg-white/80 scale-0 group-hover/horseback:scale-100'}`}>
+              {addedHorseback ? <Check size={24} className="text-white" /> : <ShoppingCart size={24} className="text-foreground" />}
             </div>
+          </div>
+          <div className="absolute bottom-6 left-6">
+            <span className="backdrop-blur-md px-4 py-2 text-sm font-medium rounded-full bg-[rgba(255,255,255,0.2)] text-white">
+              Horseback Ride - GRATIS
+            </span>
+          </div>
+        </div>
+
+        <div
+          className="relative aspect-[4/3] overflow-hidden rounded-2xl cursor-pointer group/dune"
+          onClick={handleAddDuneBuggy}
+          title="Click para agregar al carrito"
+        >
+          <Image
+            src="/images/service-section/servicio-private.webp"
+            alt="Dune Buggy"
+            fill
+            className="object-cover transition-transform duration-300 group-hover/dune:scale-105"
+            sizes="(max-width: 768px) 100vw, 50vw"
+            quality={75}
+            loading="lazy"
+          />
+          <div className="absolute inset-0 bg-black/0 group-hover/dune:bg-black/30 transition-all duration-300 flex items-center justify-center">
+            <div className={`rounded-full p-3 transition-all duration-300 ${addedDuneBuggy ? 'bg-green-500 scale-100' : 'bg-white/80 scale-0 group-hover/dune:scale-100'}`}>
+              {addedDuneBuggy ? <Check size={24} className="text-white" /> : <ShoppingCart size={24} className="text-foreground" />}
+            </div>
+          </div>
+          <div className="absolute bottom-6 left-6">
+            <span className="backdrop-blur-md px-4 py-2 text-sm font-medium rounded-full bg-[rgba(255,255,255,0.2)] text-white">
+              Dune Buggy - $100
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Description */}
       <div className="px-6 py-20 md:px-12 md:py-28 lg:px-20 lg:py-36 lg:pb-14">
         <div className="text-center">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">
             Which service should I choose?
           </p>
           <p className="mt-8 leading-relaxed text-muted-foreground text-3xl text-center">
-            Explora los caminos de Macao en una caravana de buggies o eleva tu experiencia con nuestro servicio privado, que incluye guía exclusivo y más tiempo en cada parada.
+            Elige entre Horseback Ride o Dune Buggy para comenzar tu experiencia y luego selecciona el tour ideal para tu aventura.
           </p>
         </div>
       </div>

@@ -46,7 +46,7 @@ export function FeaturedProductsSection() {
       }
       // Show subtle toast message
       toast("Selecciona un tipo de servicio primero", {
-        description: "Debes elegir entre Colectivo o Privado antes de seleccionar un buggy.",
+        description: "Debes elegir entre Horseback Ride o Dune Buggy antes de seleccionar un buggy.",
         icon: <AlertCircle className="h-5 w-5 text-amber-500" />,
         duration: 4000,
         position: "top-center",
@@ -86,7 +86,7 @@ export function FeaturedProductsSection() {
           <div className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-5 py-4">
             <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0" />
             <p className="text-sm text-amber-600 dark:text-amber-400">
-              Primero selecciona un tipo de servicio (Colectivo o Privado) para poder elegir tu buggy.
+              Primero selecciona un tipo de servicio (Horseback Ride o Dune Buggy) para poder elegir tu buggy.
             </p>
           </div>
         </div>

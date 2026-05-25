@@ -10,7 +10,7 @@ import { fetchProducts, products as fallbackProducts, type Product } from "@/lib
 import { getCustomerSession } from "@/lib/customer-session";
 import { saveGiftDraft } from "@/lib/customer-checkout-draft";
 
-type GiftService = "service-colectivo" | "service-privado" | "private-transport";
+type GiftService = "service-horseback-ride" | "service-dune-buggy" | "private-transport";
 
 const SERVICE_OPTIONS: {
   id: GiftService;
@@ -21,20 +21,20 @@ const SERVICE_OPTIONS: {
   name: string;
 }[] = [
   {
-    id: "service-colectivo",
-    label: "Servicio Colectivo",
-    subtitle: "Ideal para compartir la aventura",
+    id: "service-horseback-ride",
+    label: "Horseback Ride",
+    subtitle: "Ideal para disfrutar una ruta guiada",
     price: 0,
     image: "/images/service-section/servicio-colective.webp",
-    name: "Servicio Colectivo",
+    name: "Horseback Ride",
   },
   {
-    id: "service-privado",
-    label: "Servicio Privado",
-    subtitle: "Experiencia exclusiva para su grupo",
+    id: "service-dune-buggy",
+    label: "Dune Buggy",
+    subtitle: "Experiencia off-road para tu grupo",
     price: 100,
     image: "/images/service-section/servicio-private.webp",
-    name: "Servicio Privado",
+    name: "Dune Buggy",
   },
   {
     id: "private-transport",
@@ -56,7 +56,7 @@ export default function RegalarPage() {
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [receiverEmail, setReceiverEmail] = useState("");
-  const [selectedService, setSelectedService] = useState<GiftService>("service-colectivo");
+  const [selectedService, setSelectedService] = useState<GiftService>("service-horseback-ride");
   const [selectedProductId, setSelectedProductId] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 

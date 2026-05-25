@@ -9,20 +9,20 @@ import { useState, useEffect } from "react";
 
 const SERVICE_OPTIONS = [
   {
-    id: "service-colectivo",
-    name: "Servicio Colectivo",
+    id: "service-horseback-ride",
+    name: "Horseback Ride",
     price: 0,
     image: "/images/service-section/servicio-colective.webp",
     type: "service" as const,
-    caption: "Colectivo - GRATIS",
+    caption: "Horseback Ride - GRATIS",
   },
   {
-    id: "service-privado",
-    name: "Servicio Privado",
+    id: "service-dune-buggy",
+    name: "Dune Buggy",
     price: 100,
     image: "/images/service-section/servicio-private.webp",
     type: "service" as const,
-    caption: "Privado - $100",
+    caption: "Dune Buggy - $100",
   },
 ];
 
@@ -333,7 +333,7 @@ export function CartPanel() {
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0" />
                   <p className="text-xs text-amber-600 dark:text-amber-400">
-                    Agrega un servicio (Colectivo o Privado) para poder reservar.
+                    Agrega un servicio (Horseback Ride o Dune Buggy) para poder reservar.
                   </p>
                 </div>
 

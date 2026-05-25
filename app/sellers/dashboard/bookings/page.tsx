@@ -109,7 +109,7 @@ export default function BookingsPage() {
               <Download className="w-4 h-4 mr-2" />
               Exportar
             </Button>
-            <Link href="/dashboard/new-booking">
+            <Link href="/sellers/dashboard/new-booking">
               <Button className="bg-orange-600 hover:bg-orange-700 text-white" size="sm">
                 <Plus className="w-4 h-4 mr-2" />
                 Nueva Reserva

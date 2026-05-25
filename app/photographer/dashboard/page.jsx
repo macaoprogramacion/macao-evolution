@@ -490,20 +490,7 @@ export default function PhotographerDashboard() {
 
   return (
     <DashboardAuthGate allowedRoles={["photographer", "both", "admin"]}>
-    <div className="min-h-screen flex flex-col relative">
-      {/* Background Image */}
-      <div 
-        className="fixed inset-0 z-0"
-        style={{
-          backgroundImage: `url("/photographer/branding/photos/bg-4k-ftg.png")`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundAttachment: 'fixed',
-        }}
-      >
-        {/* Overlay for better readability */}
-        <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
-      </div>
+    <div className="min-h-screen flex flex-col relative bg-[#1f2b36]">
 
       {/* Navbar */}
       <div className="relative z-10">

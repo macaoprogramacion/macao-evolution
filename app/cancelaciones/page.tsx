@@ -9,7 +9,7 @@ export default function CancelacionesPage() {
       <article className="rounded-xl border border-border bg-card p-5 text-sm leading-7 text-foreground/90 shadow-sm md:p-8 md:text-base">
         <h2 className="text-lg font-title text-foreground md:text-xl">1. Cancelacion por parte del cliente</h2>
         <p className="mt-2">
-          Las cancelaciones realizadas con más de 48 horas de antelación pueden aplicar a reembolso total o crédito,
+          Las cancelaciones realizadas con más de 24 horas de antelación pueden aplicar a reembolso total o crédito,
           según el método de pago y el canal de reserva.
         </p>
 

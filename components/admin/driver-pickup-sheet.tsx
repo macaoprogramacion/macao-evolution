@@ -306,6 +306,9 @@ export function DriverPickupSheet() {
       }))
   }, [pickups])
 
+  const activeShift = pickups.length > 0 ? pickups[0].shift : null
+  const hasMixedShifts = new Set(pickups.map((pickup) => pickup.shift)).size > 1
+
   const suggestedTime = useMemo(() => {
     return getScheduledTime(hotel, shift)
   }, [hotel, shift])
@@ -313,6 +316,11 @@ export function DriverPickupSheet() {
   const handleAddPickup = () => {
     if (!hotel || !zoneId || !time || !agency || !customerName || !persons || !serviceType) {
       alert("Por favor completa todos los campos")
+      return
+    }
+
+    if (activeShift && shift !== activeShift) {
+      alert(`Esta hoja ya está configurada para el turno ${activeShift}. No se permiten turnos mezclados.`)
       return
     }
 
@@ -380,6 +388,11 @@ export function DriverPickupSheet() {
       return
     }
 
+    if (activeShift && shift !== activeShift) {
+      alert(`Esta hoja ya está configurada para el turno ${activeShift}. No se permiten turnos mezclados.`)
+      return
+    }
+
     try {
       const parsed = parsePickupReservationCode(reservationCode)
       const normalizedTime = toTimeInputValue(parsed.pickupTime) || "08:00"
@@ -444,6 +457,11 @@ export function DriverPickupSheet() {
   const handlePrint = () => {
     if (pickups.length === 0) {
       alert("Agrega al menos una recogida antes de imprimir")
+      return
+    }
+
+    if (hasMixedShifts) {
+      alert("No puedes imprimir mientras existan turnos mezclados en la hoja. Mantén un solo turno por hoja de recogida.")
       return
     }
 
@@ -638,6 +656,9 @@ export function DriverPickupSheet() {
                       <SelectItem value="3 PM">Turno 3:00 PM</SelectItem>
                     </SelectContent>
                   </Select>
+                  {activeShift ? (
+                    <p className="text-xs text-gray-500">Hoja activa en turno: {activeShift}</p>
+                  ) : null}
                 </div>
 
                 {/* Agency */}
@@ -730,6 +751,12 @@ export function DriverPickupSheet() {
                 </Button>
               </CardHeader>
               <CardContent>
+                {hasMixedShifts ? (
+                  <div className="mb-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-red-800">
+                    <AlertCircle className="w-4 h-4 mt-0.5" />
+                    <p className="text-sm">Hay turnos mezclados en esta hoja. Corrige los registros y deja un único turno antes de imprimir.</p>
+                  </div>
+                ) : null}
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>

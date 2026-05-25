@@ -125,7 +125,7 @@ export default function NewBookingPage() {
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <Link href="/dashboard">
+          <Link href="/sellers/dashboard">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="w-5 h-5" />
             </Button>
@@ -344,7 +344,7 @@ export default function NewBookingPage() {
 
           {/* Submit */}
           <div className="flex items-center justify-between pt-2 pb-8">
-            <Link href="/dashboard">
+            <Link href="/sellers/dashboard">
               <Button variant="outline" type="button">
                 Cancelar
               </Button>

@@ -154,6 +154,22 @@ type GhostReservationSeed = {
   notes?: string
 }
 
+type CancellationRequestStatus = "pending" | "approved" | "rejected"
+
+type CancellationRequest = {
+  id: string
+  operationType: "buggy" | "saona" | "samana"
+  reservationId: string
+  customerName: string
+  reason: string
+  requestedAt: string
+  requestedBy?: string
+  status: CancellationRequestStatus
+  accountingNote?: string
+}
+
+const CANCELLATION_STORAGE_KEY = "macao_cancel_requests"
+
 // Random data for ghost pickups
 const RANDOM_FIRST_NAMES = ["Juan", "Maria", "Carlos", "Ana", "Miguel", "Rosa", "Jose", "Laura", "Luis", "Sofia", "Pedro", "Isabel", "Diego", "Elena", "Fernando"]
 const RANDOM_LAST_NAMES = ["Garcia", "Rodriguez", "Martinez", "Hernandez", "Sanchez", "Lopez", "Gonzalez", "Perez", "Torres", "Rivera", "Ramirez", "Cruz", "Morales", "Vargas", "Ruiz"]
@@ -252,6 +268,7 @@ export default function OperationPage() {
   const [transportFilter, setTransportFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [closureFeedback, setClosureFeedback] = useState<string>("")
+  const [cancellationRequests, setCancellationRequests] = useState<CancellationRequest[]>([])
   const [scanCodeInput, setScanCodeInput] = useState("")
   const [scanResult, setScanResult] = useState<{ valid: boolean; message: string } | null>(null)
 
@@ -309,6 +326,26 @@ export default function OperationPage() {
       alert("No se pudo enviar el cierre de operaciones")
     }
   }
+
+  useEffect(() => {
+    const loadCancellationRequests = () => {
+      try {
+        const raw = localStorage.getItem(CANCELLATION_STORAGE_KEY)
+        const parsed = raw ? JSON.parse(raw) : []
+        setCancellationRequests(Array.isArray(parsed) ? parsed : [])
+      } catch {
+        setCancellationRequests([])
+      }
+    }
+
+    loadCancellationRequests()
+    window.addEventListener("macao-cancel-requests-updated", loadCancellationRequests)
+    window.addEventListener("storage", loadCancellationRequests)
+    return () => {
+      window.removeEventListener("macao-cancel-requests-updated", loadCancellationRequests)
+      window.removeEventListener("storage", loadCancellationRequests)
+    }
+  }, [])
 
   const buildExportRows = (): ExportRow[] => {
     const slots = selectedTurnSlots()
@@ -746,6 +783,48 @@ export default function OperationPage() {
     setNoShowConfirmId(null)
   }
 
+  const persistCancellationRequests = (next: CancellationRequest[]) => {
+    setCancellationRequests(next)
+    localStorage.setItem(CANCELLATION_STORAGE_KEY, JSON.stringify(next))
+    window.dispatchEvent(new CustomEvent("macao-cancel-requests-updated"))
+  }
+
+  const getCancellationRequest = (reservationId: string) => {
+    return cancellationRequests.find((item) => item.reservationId === reservationId)
+  }
+
+  const requestCancellation = (reservation: Reservation) => {
+    const existing = getCancellationRequest(reservation.id)
+    if (existing?.status === "pending") {
+      alert("Esta reserva ya tiene una solicitud de cancelación pendiente de contabilidad.")
+      return
+    }
+
+    const reason = window.prompt("Motivo de cancelación (obligatorio):", "")
+    if (!reason || !reason.trim()) {
+      alert("Debes indicar un motivo para solicitar la cancelación.")
+      return
+    }
+
+    const request: CancellationRequest = {
+      id: `cancel-${Date.now()}-${reservation.id}`,
+      operationType: "buggy",
+      reservationId: reservation.id,
+      customerName: reservation.customerName,
+      reason: reason.trim(),
+      requestedAt: new Date().toISOString(),
+      requestedBy: "Operaciones Buggy",
+      status: "pending",
+    }
+
+    const next = [
+      request,
+      ...cancellationRequests.filter((item) => item.reservationId !== reservation.id),
+    ]
+    persistCancellationRequests(next)
+    alert("Solicitud enviada a contabilidad para aprobación/rechazo.")
+  }
+
   const generateClientMessage = (res: Reservation) => {
     const totalPax = res.guests + res.children
     const dateStr = new Date(res.date + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
@@ -957,6 +1036,7 @@ export default function OperationPage() {
     const confirmationNumber = buildConfirmationNumber(res)
     const validationCode = buildPickupCode(res)
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(validationCode)}`
+    const logoUrl = `${window.location.origin}/Logo%20PNG/MACAO%20LOGO_Mesa%20de%20trabajo%201.png`
 
     const amountBlock = res.amount != null && res.amount > 0
       ? '<div class="amount-box"><div class="label">MONTO A PAGAR</div><div class="amount">$' + res.amount.toFixed(2) + ' USD</div></div>'
@@ -973,6 +1053,7 @@ export default function OperationPage() {
   body { font-family: 'Segoe UI', Arial, sans-serif; background: #f3f4f6; padding: 20px; }
   .ticket { max-width: 480px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.1); }
   .header { background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: #fff; padding: 28px 24px; text-align: center; }
+  .header .logo { width: 170px; max-width: 80%; margin: 0 auto 10px; display: block; }
   .header h1 { font-size: 22px; font-weight: 800; letter-spacing: 2px; margin-bottom: 4px; }
   .header p { font-size: 12px; opacity: 0.85; letter-spacing: 1px; }
   .status { text-align: center; padding: 12px; background: #f0fdf4; border-bottom: 1px solid #e5e7eb; }
@@ -1001,7 +1082,8 @@ export default function OperationPage() {
 <body>
 <div class="ticket">
   <div class="header">
-    <h1>MACAO OFF ROAD</h1>
+    <img class="logo" src="${logoUrl}" alt="MACAO OFFROAD EXPERIENCE" />
+    <h1>MACAO OFFROAD EXPERIENCE</h1>
     <p>EXPERIENCE TICKET</p>
   </div>
   <div class="status"><span>✓ RESERVA CONFIRMADA</span></div>
@@ -1088,6 +1170,7 @@ export default function OperationPage() {
   }
 
   const getStatusButton = (reservation: Reservation) => {
+    const cancelRequest = getCancellationRequest(reservation.id)
     const pickupDeadline = getPickupDeadline(reservation.date, reservation.pickupTime, reservation.timeslot)
     const canNoShow =
       (reservation.status === "pending" || reservation.status === "confirmed") &&
@@ -1105,10 +1188,17 @@ export default function OperationPage() {
 
     if (reservation.status === "cancelled") {
       return (
-        <Badge className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">
-          <XCircle className="w-3 h-3 mr-1" />
-          Cancelada
-        </Badge>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">
+            <XCircle className="w-3 h-3 mr-1" />
+            Cancelada
+          </Badge>
+          {cancelRequest?.status === "approved" ? (
+            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 cursor-default">
+              Aprobada por contabilidad
+            </Badge>
+          ) : null}
+        </div>
       )
     }
 
@@ -1143,6 +1233,21 @@ export default function OperationPage() {
             NO SHOW
           </Button>
         )}
+        {cancelRequest?.status === "pending" ? (
+          <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 cursor-default">
+            Cancelación solicitada
+          </Badge>
+        ) : null}
+        {cancelRequest?.status === "approved" ? (
+          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 cursor-default">
+            Cancelación aprobada
+          </Badge>
+        ) : null}
+        {cancelRequest?.status === "rejected" ? (
+          <Badge className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">
+            Cancelación rechazada
+          </Badge>
+        ) : null}
       </div>
     )
   }
@@ -1522,6 +1627,22 @@ export default function OperationPage() {
                     >
                       <Ticket className="w-3 h-3 mr-1" />
                       Ticket
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-red-300 text-red-700 hover:bg-red-50"
+                      disabled={
+                        reservation.status === "cancelled" ||
+                        reservation.status === "no_show" ||
+                        getCancellationRequest(reservation.id)?.status === "pending"
+                      }
+                      onClick={() => requestCancellation(reservation)}
+                    >
+                      <XCircle className="w-3 h-3 mr-1" />
+                      {getCancellationRequest(reservation.id)?.status === "pending"
+                        ? "Pendiente Contabilidad"
+                        : "Solicitar Cancelación"}
                     </Button>
                     <Button
                       size="sm"
