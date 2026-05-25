@@ -79,27 +79,27 @@ export function Header() {
           <button
             type="button"
             onClick={() => { document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' }); }}
-            className="text-base font-medium transition-colors text-muted-foreground hover:text-foreground"
+            className="text-lg font-semibold transition-colors text-muted-foreground hover:text-foreground"
           >
             Services
           </button>
           <button
             type="button"
             onClick={() => { document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }); }}
-            className="text-base font-medium transition-colors text-muted-foreground hover:text-foreground"
+            className="text-lg font-semibold transition-colors text-muted-foreground hover:text-foreground"
           >
             Products
           </button>
           <button
             type="button"
             onClick={() => { document.getElementById('transport')?.scrollIntoView({ behavior: 'smooth' }); }}
-            className="text-base font-medium transition-colors text-muted-foreground hover:text-foreground"
+            className="text-lg font-semibold transition-colors text-muted-foreground hover:text-foreground"
           >
             Private Transportation
           </button>
           <Link
             href="/photographer"
-            className="text-base font-semibold transition-colors text-amber-600 hover:text-amber-500"
+            className="text-lg font-bold transition-colors text-amber-600 hover:text-amber-500"
           >
             Get my foto
           </Link>
@@ -121,7 +121,7 @@ export function Header() {
               <button
                 type="button"
                 onClick={() => setIsProfileMenuOpen((prev) => !prev)}
-                className="px-4 py-2 text-sm font-medium rounded-full bg-foreground text-background hover:opacity-80"
+                className="px-4 py-2 text-base font-semibold rounded-full bg-foreground text-background hover:opacity-80"
               >
                 {userName.split(" ")[0]}
               </button>
@@ -170,7 +170,7 @@ export function Header() {
             <button
               type="button"
               onClick={() => setIsAuthOpen(true)}
-              className="px-4 py-2 text-sm font-medium rounded-full bg-foreground text-background hover:opacity-80"
+              className="px-4 py-2 text-base font-semibold rounded-full bg-foreground text-background hover:opacity-80"
             >
               Sign in
             </button>
@@ -194,28 +194,28 @@ export function Header() {
           <nav className="flex flex-col gap-6">
             <button
               type="button"
-              className="text-lg text-foreground text-left"
+              className="text-xl font-semibold text-foreground text-left"
               onClick={() => { setIsMenuOpen(false); document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' }); }}
             >
               Services
             </button>
             <button
               type="button"
-              className="text-lg text-foreground text-left"
+              className="text-xl font-semibold text-foreground text-left"
               onClick={() => { setIsMenuOpen(false); document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }); }}
             >
               Products
             </button>
             <button
               type="button"
-              className="text-lg text-foreground text-left"
+              className="text-xl font-semibold text-foreground text-left"
               onClick={() => { setIsMenuOpen(false); document.getElementById('transport')?.scrollIntoView({ behavior: 'smooth' }); }}
             >
               Private Transportation
             </button>
             <Link
               href="/photographer"
-              className="text-lg font-semibold text-amber-600"
+              className="text-xl font-bold text-amber-600"
               onClick={() => setIsMenuOpen(false)}
             >
               Get my foto
