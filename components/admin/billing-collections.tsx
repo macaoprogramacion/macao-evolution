@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Trash2, Loader2, Printer, Send } from "lucide-react"
+import { Plus, Trash2, Loader2, Printer, Send, Copy, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { insertBillingRecord, getTodayBillingRecords, updateBillingRecord, deleteBillingRecord } from "@/lib/billing-records"
 import type { BillingRecord as DBBillingRecord } from "@/lib/billing-records"
 import { supabase } from "@/lib/supabase"
-import { parsePickupReservationCode } from "@/lib/pickup-reservation-code"
+import { createPickupReservationCode, parsePickupReservationCode } from "@/lib/pickup-reservation-code"
 import { addPickupSheetRows, getOrCreateDraftPickupSheet } from "@/lib/pickup-sheets"
 
 interface BillingRecord {
@@ -147,6 +147,7 @@ export function BillingCollections() {
   const [closureFeedback, setClosureFeedback] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [copiedPickupRecordId, setCopiedPickupRecordId] = useState<string | null>(null)
 
   // Form state
   const [type, setType] = useState<"pago_al_llegar" | "credito_vendedor" | "venta_directa">("pago_al_llegar")
@@ -159,6 +160,10 @@ export function BillingCollections() {
   const [courtesy, setCourtesy] = useState(false)
   const [serviceLines, setServiceLines] = useState<ServiceLine[]>([{ serviceType: "", quantity: 1, unitAmount: "" }])
   const [pickupCode, setPickupCode] = useState("")
+  const [pickupHotel, setPickupHotel] = useState("")
+  const [pickupTime, setPickupTime] = useState("")
+  const [pickupRoom, setPickupRoom] = useState("")
+  const [pickupPax, setPickupPax] = useState("1")
   const [notes, setNotes] = useState("")
   const [cancelRequests, setCancelRequests] = useState<CancellationRequest[]>([])
 
@@ -280,6 +285,7 @@ export function BillingCollections() {
   const printBillingInvoice = (record: BillingRecord) => {
     const generatedAt = new Date().toLocaleString("es-DO")
     const total = formatMoney(record.currency, record.amount)
+    const logoUrl = "/Logo%20PNG/MACAO%20LOGO_Mesa%20de%20trabajo%201.png"
     const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -289,7 +295,10 @@ export function BillingCollections() {
     body { font-family: Arial, sans-serif; padding: 24px; color: #111827; }
     .invoice { max-width: 720px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
     .header { padding: 20px; background: #111827; color: white; }
-    .header h1 { margin: 0; font-size: 20px; }
+    .header-top { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+    .logo { width: 74px; height: auto; object-fit: contain; background: #fff; border-radius: 8px; padding: 6px; }
+    .header h1 { margin: 0; font-size: 20px; line-height: 1.15; }
+    .header p { margin: 4px 0 0; }
     .content { padding: 20px; }
     .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
     .row:last-child { border-bottom: none; }
@@ -302,8 +311,13 @@ export function BillingCollections() {
 <body>
   <div class="invoice">
     <div class="header">
-      <h1>MACAO OFFROAD EXPERIENCE</h1>
-      <p>Factura de Cobro/Venta</p>
+      <div class="header-top">
+        <img src="${logoUrl}" alt="Macao Offroad Logo" class="logo" />
+        <div>
+          <h1>MACAO OFFROAD EXPERIENCE</h1>
+          <p>Factura de Cobro/Venta</p>
+        </div>
+      </div>
     </div>
     <div class="content">
       <div class="row"><span class="label">Factura</span><span class="value">${record.id}</span></div>
@@ -364,6 +378,11 @@ export function BillingCollections() {
       return
     }
 
+    if (!pickupCode.trim() && (!pickupHotel.trim() || !pickupTime.trim())) {
+      alert("Para generar codigo MRC1 automatico debes completar Hotel y Hora de recogida, o pegar un codigo MRC1 manual.")
+      return
+    }
+
     setIsSaving(true)
     try {
       const recordCurrency = supportsMultiCurrency ? currency : "USD"
@@ -380,8 +399,7 @@ export function BillingCollections() {
         items: normalizedLines,
       })}`
 
-      const pickupCodeNote = pickupCode.trim() ? `${PICKUP_CODE_TAG}${pickupCode.trim()}` : ""
-      const finalNotes = [notes.trim(), serializedServiceItems, pickupCodeNote].filter(Boolean).join("\n")
+      const finalNotes = [notes.trim(), serializedServiceItems].filter(Boolean).join("\n")
 
       const inserted = await insertBillingRecord({
         type,
@@ -398,29 +416,59 @@ export function BillingCollections() {
         vendor_name: type === "credito_vendedor" ? vendorName : null,
       })
 
-      // Reload records from DB
-      const updatedRecords = await getTodayBillingRecords()
-      const mapped = updatedRecords.map((r: DBBillingRecord) => {
-        const { cleanNotes, serviceItems } = parseServiceItemsFromNotes(r.notes || "")
-        return {
-        id: r.id,
-        type: r.type,
-        clientName: r.client_name,
-        phone: r.phone || "",
-        currency: r.currency,
-        amount: r.amount,
-        paymentMethod: r.payment_method,
-        courtesy: r.courtesy,
-        serviceType: r.service_type,
-        status: r.status,
-        date: r.date,
-        notes: cleanNotes,
-        vendorName: r.vendor_name,
-        serviceItems,
-      }
-      })
-      setRecords(mapped)
+      let effectivePickupCode = pickupCode.trim()
+
       if (inserted) {
+        if (!effectivePickupCode) {
+          effectivePickupCode = createPickupReservationCode({
+            reservationId: inserted.id,
+            customerName: clientName,
+            hotel: pickupHotel.trim(),
+            pickupTime: pickupTime.trim(),
+            agency: type === "credito_vendedor" ? vendorName.trim() : "Facturacion",
+            persons: Math.max(1, Number(pickupPax || "1")),
+            room: pickupRoom.trim(),
+            serviceType: serviceSummary,
+          })
+        }
+
+        if (effectivePickupCode) {
+          const notesWithCode = [
+            notes.trim(),
+            serializedServiceItems,
+            `${PICKUP_CODE_TAG}${effectivePickupCode}`,
+          ]
+            .filter(Boolean)
+            .join("\n")
+
+          await updateBillingRecord(inserted.id, { notes: notesWithCode })
+        }
+
+        // Reload records from DB after optional code update
+        const updatedRecords = await getTodayBillingRecords()
+        const mapped = updatedRecords.map((r: DBBillingRecord) => {
+          const { cleanNotes, serviceItems } = parseServiceItemsFromNotes(r.notes || "")
+          const noteWithoutCode = removePickupCodeTag(cleanNotes)
+          return {
+            id: r.id,
+            type: r.type,
+            clientName: r.client_name,
+            phone: r.phone || "",
+            currency: r.currency,
+            amount: r.amount,
+            paymentMethod: r.payment_method,
+            courtesy: r.courtesy,
+            serviceType: r.service_type,
+            status: r.status,
+            date: r.date,
+            notes: noteWithoutCode,
+            vendorName: r.vendor_name,
+            serviceItems,
+            pickupCode: extractPickupCodeFromNotes(r.notes || ""),
+          }
+        })
+        setRecords(mapped)
+
         const createdRecord: BillingRecord = {
           id: inserted.id,
           type: inserted.type,
@@ -436,12 +484,12 @@ export function BillingCollections() {
           notes,
           vendorName: inserted.vendor_name || undefined,
           serviceItems: normalizedLines,
-          pickupCode: pickupCode.trim() || undefined,
+          pickupCode: effectivePickupCode || undefined,
         }
 
-        if (pickupCode.trim()) {
+        if (effectivePickupCode) {
           try {
-            await sendPickupCodeToDriverSheet(pickupCode.trim())
+            await sendPickupCodeToDriverSheet(effectivePickupCode)
           } catch (pickupError) {
             console.error("Error sending reservation to pickup sheet:", pickupError)
             alert("El cobro se guardó, pero no se pudo enviar a Hoja de Recogida. Revisa el codigo MRC1 e intenta desde el boton Enviar.")
@@ -473,6 +521,10 @@ export function BillingCollections() {
     setCourtesy(false)
     setServiceLines([{ serviceType: "", quantity: 1, unitAmount: "" }])
     setPickupCode("")
+    setPickupHotel("")
+    setPickupTime("")
+    setPickupRoom("")
+    setPickupPax("1")
     setNotes("")
   }
 
@@ -550,6 +602,22 @@ export function BillingCollections() {
       alert(err instanceof Error ? err.message : "No se pudo enviar la reserva a Hoja de Recogida")
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleCopyPickupCode = async (record: BillingRecord) => {
+    const code = (record.pickupCode || "").trim()
+    if (!code) {
+      alert("Este registro no tiene codigo MRC1 guardado")
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopiedPickupRecordId(record.id)
+      window.setTimeout(() => setCopiedPickupRecordId((prev) => (prev === record.id ? null : prev)), 1800)
+    } catch {
+      alert("No se pudo copiar el codigo al portapapeles")
     }
   }
 
@@ -912,6 +980,44 @@ export function BillingCollections() {
               />
             </div>
 
+            <div className="space-y-1.5">
+              <Label>Hotel / Punto de recogida *</Label>
+              <Input
+                value={pickupHotel}
+                onChange={(e) => setPickupHotel(e.target.value)}
+                placeholder="Ej: Vista Sol Punta Cana"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Hora de recogida *</Label>
+              <Input
+                value={pickupTime}
+                onChange={(e) => setPickupTime(e.target.value)}
+                placeholder="Ej: 08:00"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Habitación</Label>
+              <Input
+                value={pickupRoom}
+                onChange={(e) => setPickupRoom(e.target.value)}
+                placeholder="Ej: 2041"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>PAX recogida</Label>
+              <Input
+                type="number"
+                min="1"
+                value={pickupPax}
+                onChange={(e) => setPickupPax(e.target.value)}
+                placeholder="1"
+              />
+            </div>
+
             <div className="space-y-1.5 md:col-span-2">
               <Label>Codigo de Reserva MRC1 (opcional)</Label>
               <Input
@@ -920,7 +1026,7 @@ export function BillingCollections() {
                 placeholder="MRC1:..."
               />
               <p className="text-xs text-gray-500">
-                Si lo completas, al registrar el cobro se enviara automaticamente a Hoja de Recogida.
+                Si lo dejas vacio, el sistema lo genera automaticamente con los datos de recogida.
               </p>
             </div>
           </div>
@@ -1031,6 +1137,17 @@ export function BillingCollections() {
                       </td>
                       <td className="py-3 px-2 text-center">
                         <div className="flex gap-2 justify-center">
+                          <button
+                            onClick={() => handleCopyPickupCode(record)}
+                            className={copiedPickupRecordId === record.id ? "text-green-600 hover:text-green-700 inline-flex" : "text-violet-600 hover:text-violet-700 inline-flex"}
+                            title="Copiar codigo MRC1"
+                          >
+                            {copiedPickupRecordId === record.id ? (
+                              <CheckCircle2 className="w-4 h-4" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </button>
                           <button
                             onClick={() => handleSendToPickupSheet(record)}
                             className="text-blue-600 hover:text-blue-700 inline-flex"
