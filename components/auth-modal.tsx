@@ -154,6 +154,27 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         const user = await authenticateByEmail(adminEmail.trim().toLowerCase());
         if (user && String(user.pin) === String(adminPin)) {
           await setDashboardSession({ id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, avatar_url: user.avatar_url || null, active: true });
+
+          if (user.role === "representante") {
+            const initials = user.name
+              .split(" ")
+              .map((w: string) => w[0])
+              .join("")
+              .toUpperCase()
+              .slice(0, 2)
+
+            await setSellerPortalSession({
+              id: `REP-${String(user.id).replace(/-/g, "").slice(0, 8).toUpperCase()}`,
+              name: user.name,
+              phone: user.phone || "",
+              email: user.email,
+              company: "Independiente",
+              type: "local_seller",
+              commissionPercent: 15,
+              initials,
+            })
+          }
+
           onClose();
           const roleRoutes: Record<string, string> = {
             admin: '/admin',

@@ -4,6 +4,8 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { getSellerPortalSession } from "@/lib/sellers-session"
+import { getDashboardSession } from "@/lib/dashboard-session"
+import { setSellerPortalSession } from "@/lib/sellers-session"
 import { Button } from "@/components/ui/button"
 
 export default function LoginPage() {
@@ -13,6 +15,30 @@ export default function LoginPage() {
     const resolveSession = async () => {
       const session = await getSellerPortalSession()
       if (session) {
+        router.replace("/sellers/dashboard")
+        return
+      }
+
+      const dashboardSession = await getDashboardSession()
+      if (dashboardSession?.role === "representante" && dashboardSession?.id && dashboardSession?.name) {
+        const initials = dashboardSession.name
+          .split(" ")
+          .map((word) => word[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2)
+
+        await setSellerPortalSession({
+          id: `REP-${String(dashboardSession.id).replace(/-/g, "").slice(0, 8).toUpperCase()}`,
+          name: dashboardSession.name,
+          phone: dashboardSession.phone || "",
+          email: dashboardSession.email || "",
+          company: "Independiente",
+          type: "local_seller",
+          commissionPercent: 15,
+          initials,
+        })
+
         router.replace("/sellers/dashboard")
       }
     }
