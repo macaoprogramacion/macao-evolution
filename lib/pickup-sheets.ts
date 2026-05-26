@@ -30,6 +30,8 @@ export interface PickupSheetRow {
   created_at?: string;
 }
 
+export type PickupSheetRowInsert = Omit<PickupSheetRow, 'id' | 'sheet_id' | 'created_at'>;
+
 /**
  * Create a new pickup sheet (draft status)
  */
@@ -88,13 +90,77 @@ export async function getPickupSheetByDate(date: string): Promise<PickupSheet | 
       .from('pickup_sheets')
       .select('*')
       .eq('date', date)
-      .single();
+      .order('created_at', { ascending: false })
+      .limit(1);
 
-    if (error && error.code !== 'PGRST116') throw error; // 404 is expected
-    return data || null;
+    if (error) throw error;
+    return (data && data.length > 0 ? data[0] : null) as PickupSheet | null;
   } catch (err) {
     console.error('Error fetching pickup sheet by date:', err);
     return null;
+  }
+}
+
+/**
+ * Get most recent draft pickup sheet by date.
+ */
+export async function getDraftPickupSheetByDate(date: string): Promise<PickupSheet | null> {
+  try {
+    const { data, error } = await supabase
+      .from('pickup_sheets')
+      .select('*')
+      .eq('date', date)
+      .eq('status', 'draft')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) throw error;
+    return (data && data.length > 0 ? data[0] : null) as PickupSheet | null;
+  } catch (err) {
+    console.error('Error fetching draft pickup sheet by date:', err);
+    return null;
+  }
+}
+
+/**
+ * Reuse today's draft sheet if available, otherwise create one.
+ */
+export async function getOrCreateDraftPickupSheet(
+  date: string,
+  turno: '8 AM' | '11 AM' | '3 PM' | 'all' = '8 AM',
+  createdBy?: string,
+): Promise<PickupSheet> {
+  const existingDraft = await getDraftPickupSheetByDate(date);
+  if (existingDraft) return existingDraft;
+  return createPickupSheet(date, turno, createdBy);
+}
+
+/**
+ * List recent pickup sheet documents, optionally filtered by status.
+ */
+export async function listPickupSheets(options?: {
+  status?: PickupSheet['status'];
+  limit?: number;
+}): Promise<PickupSheet[]> {
+  try {
+    const limit = options?.limit ?? 30;
+    let query = supabase
+      .from('pickup_sheets')
+      .select('*')
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (options?.status) {
+      query = query.eq('status', options.status);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []) as PickupSheet[];
+  } catch (err) {
+    console.error('Error listing pickup sheets:', err);
+    return [];
   }
 }
 
@@ -120,7 +186,7 @@ export async function getPickupSheetRows(sheetId: string): Promise<PickupSheetRo
 /**
  * Add rows to pickup sheet
  */
-export async function addPickupSheetRows(sheetId: string, rows: Omit<PickupSheetRow, 'id' | 'sheet_id' | 'created_at'>[]): Promise<PickupSheetRow[]> {
+export async function addPickupSheetRows(sheetId: string, rows: PickupSheetRowInsert[]): Promise<PickupSheetRow[]> {
   try {
     const rowsWithIds = rows.map((r) => ({
       ...r,

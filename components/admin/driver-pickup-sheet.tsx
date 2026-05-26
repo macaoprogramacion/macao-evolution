@@ -18,9 +18,10 @@ import { hotelDirectory } from "@/lib/hotel-locations"
 import { getBuggyPickupSuggestion, type TurnSlot } from "@/lib/hotel-pickup-schedules"
 import { parsePickupReservationCode } from "@/lib/pickup-reservation-code"
 import {
-  createPickupSheet,
   getPickupSheetByDate,
+  getOrCreateDraftPickupSheet,
   getPickupSheetRows,
+  listPickupSheets,
   addPickupSheetRows,
   removePickupSheetRow,
   markPickupSheetPrinted,
@@ -119,6 +120,14 @@ function toMinutes(timeValue: string) {
   return hh * 60 + mm
 }
 
+function inferShiftFromTime(timeValue: string): ShiftOption {
+  const hh = Number((timeValue || "").split(":")[0] || 8)
+  if (!Number.isFinite(hh)) return "9 AM"
+  if (hh <= 9) return "9 AM"
+  if (hh <= 12) return "12 PM"
+  return "3 PM"
+}
+
 function resolveHotelInfo(hotelInput: string) {
   const query = normalizeText(hotelInput)
   const found = Object.entries(hotelDirectory).find(([key, value]) => {
@@ -168,13 +177,53 @@ export function DriverPickupSheet() {
   const [serviceType, setServiceType] = useState("")
   const [reservationCode, setReservationCode] = useState("")
   const [codeFeedback, setCodeFeedback] = useState("")
+  const [historySheets, setHistorySheets] = useState<PickupSheet[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [selectedHistorySheetId, setSelectedHistorySheetId] = useState<string | null>(null)
+  const [selectedHistoryRows, setSelectedHistoryRows] = useState<PickupSheetRow[]>([])
+  const [historyRowsLoading, setHistoryRowsLoading] = useState(false)
+  const [historyFromDate, setHistoryFromDate] = useState("")
+  const [historyToDate, setHistoryToDate] = useState("")
+  const [historyTurnoFilter, setHistoryTurnoFilter] = useState("todos")
+  const [historySearch, setHistorySearch] = useState("")
+  const [detailSearch, setDetailSearch] = useState("")
+  const [historyPage, setHistoryPage] = useState(1)
+
+  const HISTORY_PAGE_SIZE = 10
+
+  const loadHistory = async () => {
+    setHistoryLoading(true)
+    try {
+      const docs = await listPickupSheets({ status: "printed", limit: 60 })
+      setHistorySheets(docs)
+    } catch (error) {
+      console.error("Error loading pickup history:", error)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const handleOpenHistorySheet = async (doc: PickupSheet) => {
+    setSelectedHistorySheetId(doc.id)
+    setDetailSearch("")
+    setHistoryRowsLoading(true)
+    try {
+      const rows = await getPickupSheetRows(doc.id)
+      setSelectedHistoryRows(rows)
+    } catch (error) {
+      console.error("Error loading history sheet rows:", error)
+      setSelectedHistoryRows([])
+    } finally {
+      setHistoryRowsLoading(false)
+    }
+  }
 
   // Load pickup sheet for today on mount
   useEffect(() => {
     const loadSheet = async () => {
       try {
         const today = new Date().toISOString().split("T")[0]
-        // Try to find existing sheet for today
+        // Load latest sheet for today; if none exists, create a draft document.
         const existingSheet = await getPickupSheetByDate(today)
         
         if (existingSheet?.id) {
@@ -188,8 +237,8 @@ export function DriverPickupSheet() {
             const entries: PickupEntry[] = rows.map((row: PickupSheetRow) => ({
               id: row.id,
               hotel: row.hotel || "",
-              zoneId: "zona3" as PickupZoneId,
-              shift: "9 AM" as ShiftOption,
+              zoneId: resolveHotelInfo(row.hotel || "").defaultZoneId,
+              shift: inferShiftFromTime(row.pickup_time || ""),
               pickupTime: row.pickup_time || "",
               agency: row.agency || "",
               customerName: row.customer_name || "",
@@ -200,8 +249,8 @@ export function DriverPickupSheet() {
             setPickups(entries)
           }
         } else {
-          // Create new sheet for today
-          const newSheet = await createPickupSheet(today, "8 AM", "system")
+          // Ensure there is an active draft document for today.
+          const newSheet = await getOrCreateDraftPickupSheet(today, "8 AM", "system")
           if (newSheet?.id) {
             setSheetId(newSheet.id)
             setSheetStatus("draft")
@@ -215,6 +264,7 @@ export function DriverPickupSheet() {
     }
 
     loadSheet()
+    void loadHistory()
   }, [])
 
   const hotelList = Object.keys(hotelDirectory).sort()
@@ -282,6 +332,39 @@ export function DriverPickupSheet() {
     [hotel, hotelOptions, zoneId],
   )
 
+  const filteredHistorySheets = useMemo(() => {
+    const normalizedSearch = normalizeText(historySearch)
+
+    return historySheets.filter((doc) => {
+      if (historyFromDate && doc.date < historyFromDate) return false
+      if (historyToDate && doc.date > historyToDate) return false
+      if (historyTurnoFilter !== "todos" && doc.turno !== historyTurnoFilter) return false
+
+      if (!normalizedSearch) return true
+
+      const printableAt = doc.printed_at ? new Date(doc.printed_at).toLocaleString("es-DO") : ""
+      const searchable = `${doc.id} ${doc.date} ${doc.turno} ${doc.status} ${printableAt}`
+      return normalizeText(searchable).includes(normalizedSearch)
+    })
+  }, [historySheets, historyFromDate, historyToDate, historyTurnoFilter, historySearch])
+
+  const filteredSelectedHistoryRows = useMemo(() => {
+    const normalized = normalizeText(detailSearch)
+    if (!normalized) return selectedHistoryRows
+
+    return selectedHistoryRows.filter((row) => {
+      const searchable = `${row.pickup_time} ${row.hotel} ${row.customer_name} ${row.agency || ""} ${row.room || ""} ${row.notes || ""}`
+      return normalizeText(searchable).includes(normalized)
+    })
+  }, [selectedHistoryRows, detailSearch])
+
+  const totalHistoryPages = Math.max(1, Math.ceil(filteredHistorySheets.length / HISTORY_PAGE_SIZE))
+  const safeHistoryPage = Math.min(historyPage, totalHistoryPages)
+  const paginatedHistorySheets = useMemo(() => {
+    const start = (safeHistoryPage - 1) * HISTORY_PAGE_SIZE
+    return filteredHistorySheets.slice(start, start + HISTORY_PAGE_SIZE)
+  }, [filteredHistorySheets, safeHistoryPage])
+
   const groupedPickups = useMemo(() => {
     const map = new Map<PickupZoneId, { zoneId: PickupZoneId; items: PickupEntry[] }>()
 
@@ -341,7 +424,7 @@ export function DriverPickupSheet() {
 
         // Save to BD
         if (sheetId) {
-          await addPickupSheetRows(sheetId, [
+          const insertedRows = await addPickupSheetRows(sheetId, [
             {
               pickup_time: time,
               customer_name: customerName,
@@ -356,6 +439,11 @@ export function DriverPickupSheet() {
               reservation_id: null,
             },
           ])
+
+          const inserted = insertedRows?.[0]
+          if (inserted?.id) {
+            newEntry.id = inserted.id
+          }
         }
 
         setPickups([...pickups, newEntry])
@@ -396,13 +484,19 @@ export function DriverPickupSheet() {
     try {
       const parsed = parsePickupReservationCode(reservationCode)
       const normalizedTime = toTimeInputValue(parsed.pickupTime) || "08:00"
+      const detectedShift = inferShiftFromTime(normalizedTime)
       const detectedZone = resolveHotelInfo(parsed.hotel).defaultZoneId
+
+      if (activeShift && detectedShift !== activeShift) {
+        alert(`Esta hoja ya está configurada para el turno ${activeShift}. El codigo pertenece al turno ${detectedShift}.`)
+        return
+      }
 
       const newEntry: PickupEntry = {
         id: Date.now().toString(),
         hotel: parsed.hotel,
         zoneId: detectedZone,
-        shift: shift,
+        shift: detectedShift,
         pickupTime: normalizedTime,
         agency: parsed.agency || "—",
         customerName: parsed.customerName,
@@ -412,7 +506,7 @@ export function DriverPickupSheet() {
       }
 
       if (sheetId) {
-        await addPickupSheetRows(sheetId, [
+        const insertedRows = await addPickupSheetRows(sheetId, [
           {
             pickup_time: normalizedTime,
             customer_name: parsed.customerName,
@@ -427,6 +521,11 @@ export function DriverPickupSheet() {
             reservation_id: parsed.reservationId || null,
           },
         ])
+
+        const inserted = insertedRows?.[0]
+        if (inserted?.id) {
+          newEntry.id = inserted.id
+        }
       }
 
       setPickups((prev) => [...prev, newEntry])
@@ -482,6 +581,7 @@ export function DriverPickupSheet() {
         if (sheetId) {
           await markPickupSheetPrinted(sheetId)
           setSheetStatus("printed")
+          await loadHistory()
         }
       } catch (error) {
         console.error("Error printing:", error)
@@ -823,6 +923,197 @@ export function DriverPickupSheet() {
               </CardContent>
             </Card>
           )}
+
+          <Card className="border-gray-200 dark:border-gray-800">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Historial de Documentos de Recogida</CardTitle>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void loadHistory()}
+                disabled={historyLoading}
+              >
+                {historyLoading ? "Actualizando..." : "Actualizar"}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 mb-4">
+                <div className="space-y-1">
+                  <Label>Desde</Label>
+                  <Input
+                    type="date"
+                    value={historyFromDate}
+                    onChange={(e) => {
+                      setHistoryFromDate(e.target.value)
+                      setHistoryPage(1)
+                    }}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Hasta</Label>
+                  <Input
+                    type="date"
+                    value={historyToDate}
+                    onChange={(e) => {
+                      setHistoryToDate(e.target.value)
+                      setHistoryPage(1)
+                    }}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Turno</Label>
+                  <Select
+                    value={historyTurnoFilter}
+                    onValueChange={(value) => {
+                      setHistoryTurnoFilter(value)
+                      setHistoryPage(1)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      <SelectItem value="8 AM">8 AM</SelectItem>
+                      <SelectItem value="11 AM">11 AM</SelectItem>
+                      <SelectItem value="3 PM">3 PM</SelectItem>
+                      <SelectItem value="all">All</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1 lg:col-span-2">
+                  <Label>Buscar documento</Label>
+                  <Input
+                    value={historySearch}
+                    onChange={(e) => {
+                      setHistorySearch(e.target.value)
+                      setHistoryPage(1)
+                    }}
+                    placeholder="ID, fecha, turno o estado"
+                  />
+                </div>
+              </div>
+
+              {filteredHistorySheets.length === 0 ? (
+                <p className="text-sm text-gray-500">Aun no hay hojas impresas en el historial.</p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left py-3 px-2 font-semibold">Fecha</th>
+                          <th className="text-left py-3 px-2 font-semibold">Turno</th>
+                          <th className="text-left py-3 px-2 font-semibold">Estado</th>
+                          <th className="text-left py-3 px-2 font-semibold">Impresa</th>
+                          <th className="text-center py-3 px-2 font-semibold">Accion</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedHistorySheets.map((doc) => (
+                          <tr key={doc.id} className="border-b border-gray-100 dark:border-gray-800">
+                            <td className="py-3 px-2">{doc.date}</td>
+                            <td className="py-3 px-2">{doc.turno}</td>
+                            <td className="py-3 px-2">
+                              <Badge className="bg-green-100 text-green-800">{doc.status}</Badge>
+                            </td>
+                            <td className="py-3 px-2">{doc.printed_at ? new Date(doc.printed_at).toLocaleString("es-DO") : "—"}</td>
+                            <td className="py-3 px-2 text-center">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void handleOpenHistorySheet(doc)}
+                              >
+                                Ver detalle
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1">
+                    <p className="text-xs text-gray-500">
+                      Mostrando {(safeHistoryPage - 1) * HISTORY_PAGE_SIZE + 1}
+                      -{Math.min(safeHistoryPage * HISTORY_PAGE_SIZE, filteredHistorySheets.length)} de {filteredHistorySheets.length} documentos
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={safeHistoryPage <= 1}
+                        onClick={() => setHistoryPage((prev) => Math.max(1, prev - 1))}
+                      >
+                        Anterior
+                      </Button>
+                      <span className="text-xs text-gray-600">
+                        Pagina {safeHistoryPage} de {totalHistoryPages}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={safeHistoryPage >= totalHistoryPages}
+                        onClick={() => setHistoryPage((prev) => Math.min(totalHistoryPages, prev + 1))}
+                      >
+                        Siguiente
+                      </Button>
+                    </div>
+                  </div>
+
+                  {selectedHistorySheetId ? (
+                    <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
+                      <p className="text-sm font-medium mb-2">Detalle del documento {selectedHistorySheetId}</p>
+                      <div className="mb-3">
+                        <Input
+                          value={detailSearch}
+                          onChange={(e) => setDetailSearch(e.target.value)}
+                          placeholder="Filtrar detalle por cliente, hotel, agencia, habitacion o servicio"
+                        />
+                      </div>
+                      {historyRowsLoading ? (
+                        <p className="text-sm text-gray-500">Cargando reservas...</p>
+                      ) : filteredSelectedHistoryRows.length === 0 ? (
+                        <p className="text-sm text-gray-500">Este documento no tiene reservas.</p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-gray-200 dark:border-gray-700">
+                                <th className="text-left py-2 px-2">Hora</th>
+                                <th className="text-left py-2 px-2">Hotel</th>
+                                <th className="text-left py-2 px-2">Cliente</th>
+                                <th className="text-left py-2 px-2">Agencia</th>
+                                <th className="text-center py-2 px-2">Pax</th>
+                                <th className="text-left py-2 px-2">Hab.</th>
+                                <th className="text-left py-2 px-2">Servicio</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredSelectedHistoryRows.map((row) => (
+                                <tr key={row.id} className="border-b border-gray-100 dark:border-gray-800">
+                                  <td className="py-2 px-2">{row.pickup_time}</td>
+                                  <td className="py-2 px-2">{row.hotel}</td>
+                                  <td className="py-2 px-2">{row.customer_name}</td>
+                                  <td className="py-2 px-2">{row.agency || "—"}</td>
+                                  <td className="py-2 px-2 text-center">{row.pax}</td>
+                                  <td className="py-2 px-2">{row.room || "—"}</td>
+                                  <td className="py-2 px-2">{row.notes || "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
     </div>
