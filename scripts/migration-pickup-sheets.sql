@@ -33,10 +33,19 @@ CREATE TABLE IF NOT EXISTS public.pickup_sheet_rows (
   is_ghost BOOLEAN DEFAULT FALSE,
   ghost_hotel_random TEXT,
   ghost_name_random TEXT,
-  reservation_id TEXT REFERENCES reservations(id) ON DELETE SET NULL,
+  -- Can store UUID reservation ids and non-UUID external/billing ids.
+  reservation_id TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   UNIQUE(sheet_id, customer_name, hotel)
 );
+
+-- Backward compatibility: if a previous version created an FK to reservations(id), remove it.
+ALTER TABLE public.pickup_sheet_rows
+  DROP CONSTRAINT IF EXISTS pickup_sheet_rows_reservation_id_fkey;
+
+-- Ensure reservation_id stays TEXT across environments.
+ALTER TABLE public.pickup_sheet_rows
+  ALTER COLUMN reservation_id TYPE TEXT USING reservation_id::TEXT;
 
 -- Index for searching by sheet_id
 CREATE INDEX IF NOT EXISTS idx_pickup_sheet_rows_sheet_id ON public.pickup_sheet_rows(sheet_id);
