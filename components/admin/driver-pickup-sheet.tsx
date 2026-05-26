@@ -18,7 +18,7 @@ import { hotelDirectory } from "@/lib/hotel-locations"
 import { getBuggyPickupSuggestion, type TurnSlot } from "@/lib/hotel-pickup-schedules"
 import { parsePickupReservationCode } from "@/lib/pickup-reservation-code"
 import {
-  getPickupSheetByDate,
+  getDraftPickupSheetByDate,
   getOrCreateDraftPickupSheet,
   getPickupSheetRows,
   listPickupSheets,
@@ -168,6 +168,26 @@ function getLocalISODate() {
   return `${year}-${month}-${day}`
 }
 
+function describeUnknownError(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === "string") return error
+  if (error && typeof error === "object") {
+    const message = (error as { message?: unknown }).message
+    if (typeof message === "string" && message.trim()) return message
+
+    const details = (error as { details?: unknown }).details
+    if (typeof details === "string" && details.trim()) return details
+
+    try {
+      return JSON.stringify(error)
+    } catch {
+      return "Error desconocido"
+    }
+  }
+
+  return "Error desconocido"
+}
+
 export function DriverPickupSheet() {
   const [pickups, setPickups] = useState<PickupEntry[]>([])
   const [sheetId, setSheetId] = useState<string | null>(null)
@@ -231,10 +251,11 @@ export function DriverPickupSheet() {
     const loadSheet = async () => {
       try {
         const today = getLocalISODate()
-        // Resolve current local-day sheet first; if none exists, create a draft.
-        const existingSheet = await getPickupSheetByDate(today)
-        const activeSheet = existingSheet?.id
-          ? existingSheet
+        // Always work on the current draft sheet. If today's sheet was already printed,
+        // create a fresh draft so the operator can keep adding pickups.
+        const existingDraft = await getDraftPickupSheetByDate(today)
+        const activeSheet = existingDraft?.id
+          ? existingDraft
           : await getOrCreateDraftPickupSheet(today, "8 AM", "system")
 
         if (activeSheet?.id) {
@@ -548,7 +569,7 @@ export function DriverPickupSheet() {
       window.setTimeout(() => setCodeFeedback(""), 3000)
     } catch (error) {
       console.error("Error importing reservation code:", error)
-      alert(error instanceof Error ? error.message : "No se pudo importar el codigo")
+      alert(describeUnknownError(error) || "No se pudo importar el codigo")
     }
   }
 

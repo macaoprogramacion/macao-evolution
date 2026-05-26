@@ -12,6 +12,13 @@ export type PickupReservationCodePayload = {
 const PREFIX = "MRC1:";
 const SEPARATOR = "~";
 
+function normalizeCodeInput(raw: string): string {
+  return (raw || "")
+    .trim()
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\s+/g, "");
+}
+
 function toBase64UrlUtf8(value: string): string {
   const bytes = new TextEncoder().encode(value);
   let binary = "";
@@ -30,6 +37,20 @@ function fromBase64UrlUtf8(value: string): string {
   const binary = atob(base64);
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
   return new TextDecoder().decode(bytes);
+}
+
+function fromBase64Utf8(value: string): string {
+  const binary = atob(value);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function safeDecodePart(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function normalizePayload(parsed: Record<string, unknown>): PickupReservationCodePayload {
@@ -75,17 +96,23 @@ export function createPickupReservationCode(payload: PickupReservationCodePayloa
 }
 
 export function parsePickupReservationCode(raw: string): PickupReservationCodePayload {
-  const value = (raw || "").trim();
+  const value = normalizeCodeInput(raw);
   if (!value.startsWith(PREFIX)) {
-    throw new Error("Formato de codigo invalido. Debe iniciar con MRC1:");
+    if (!value.startsWith(PREFIX.slice(0, -1))) {
+      throw new Error("Formato de codigo invalido. Debe iniciar con MRC1:");
+    }
   }
 
-  const encoded = value.slice(PREFIX.length);
+  const encoded = value.startsWith(PREFIX) ? value.slice(PREFIX.length) : value.slice(PREFIX.length - 1);
+
+  if (!encoded) {
+    throw new Error("Formato de codigo invalido. Debe iniciar con MRC1:");
+  }
 
   // V2 compact format
   try {
     const decoded = fromBase64UrlUtf8(encoded);
-    const parts = decoded.split(SEPARATOR).map((part) => decodeURIComponent(part));
+    const parts = decoded.split(SEPARATOR).map((part) => safeDecodePart(part));
     if (parts.length === 8) {
       const payload: PickupReservationCodePayload = {
         reservationId: parts[0] || "",
@@ -105,7 +132,7 @@ export function parsePickupReservationCode(raw: string): PickupReservationCodePa
 
   // Legacy format (JSON encoded with base64)
   try {
-    const json = atob(encoded);
+    const json = encoded.includes("-") || encoded.includes("_") ? fromBase64UrlUtf8(encoded) : fromBase64Utf8(encoded);
     const parsed = JSON.parse(json);
     if (!parsed || typeof parsed !== "object") {
       throw new Error("Codigo de reserva invalido");
