@@ -217,6 +217,14 @@ function getPickupDeadline(dateValue: string, pickupValue: string, timeslotFallb
   return pickupDate
 }
 
+function getLocalISODate() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, "0")
+  const day = String(now.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
 /** Mapear fila de Supabase a formato del componente */
 function mapRow(r: any): Reservation {
   return {
@@ -256,6 +264,8 @@ export default function OperationPage() {
   const [timeslotFilter, setTimeslotFilter] = useState("all")
   const [transportFilter, setTransportFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [dateFromFilter, setDateFromFilter] = useState("")
+  const [dateToFilter, setDateToFilter] = useState("")
   const [closureFeedback, setClosureFeedback] = useState<string>("")
   const [cancellationRequests, setCancellationRequests] = useState<CancellationRequest[]>([])
   const [scanCodeInput, setScanCodeInput] = useState("")
@@ -1128,8 +1138,10 @@ export default function OperationPage() {
     const matchesTimeslot = timeslotFilter === "all" || reservation.timeslot === timeslotFilter
     const matchesTransport = transportFilter === "all" || reservation.transportType === transportFilter
     const matchesStatus = statusFilter === "all" || reservation.status === statusFilter
+    const matchesDateFrom = !dateFromFilter || reservation.date >= dateFromFilter
+    const matchesDateTo = !dateToFilter || reservation.date <= dateToFilter
 
-    return matchesSearch && matchesChannel && matchesTimeslot && matchesTransport && matchesStatus
+    return matchesSearch && matchesChannel && matchesTimeslot && matchesTransport && matchesStatus && matchesDateFrom && matchesDateTo
   })
 
   // Estadísticas
@@ -1436,6 +1448,41 @@ export default function OperationPage() {
                   <SelectItem value="cancelled">Canceladas</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Input
+                type="date"
+                value={dateFromFilter}
+                onChange={(e) => setDateFromFilter(e.target.value)}
+                placeholder="Desde"
+              />
+              <Input
+                type="date"
+                value={dateToFilter}
+                onChange={(e) => setDateToFilter(e.target.value)}
+                placeholder="Hasta"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const today = getLocalISODate()
+                  setDateFromFilter(today)
+                  setDateToFilter(today)
+                }}
+              >
+                Ver solo hoy
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setDateFromFilter("")
+                  setDateToFilter("")
+                }}
+              >
+                Limpiar fechas
+              </Button>
             </div>
             </CardContent>
             </Card>

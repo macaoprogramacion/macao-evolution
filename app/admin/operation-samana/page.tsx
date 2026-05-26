@@ -178,6 +178,14 @@ function toDateInputValue(date: Date) {
   return `${year}-${month}-${day}`
 }
 
+function getLocalISODate() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, "0")
+  const day = String(now.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
 function parseExternalReservationText(rawText: string): { updates: Partial<NewReservationForm>; detected: string[] } {
   const text = rawText.replace(/\r/g, "")
   const lines = text.split("\n").map((line) => line.trim()).filter(Boolean)
@@ -373,6 +381,8 @@ export default function OperationSamanaPage() {
   const [channelFilter, setChannelFilter] = useState("all")
   const [tourFilter, setTourFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [dateFromFilter, setDateFromFilter] = useState("")
+  const [dateToFilter, setDateToFilter] = useState("")
   const [copiedMsg, setCopiedMsg] = useState("")
   const [noShowConfirmId, setNoShowConfirmId] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
@@ -1261,8 +1271,10 @@ ${t.getReady} 🐋⚓
     const matchesChannel = channelFilter === "all" || reservation.channel === channelFilter
     const matchesTour = tourFilter === "all" || reservation.tourType === tourFilter
     const matchesStatus = statusFilter === "all" || reservation.status === statusFilter
+    const matchesDateFrom = !dateFromFilter || reservation.date >= dateFromFilter
+    const matchesDateTo = !dateToFilter || reservation.date <= dateToFilter
 
-    return matchesSearch && matchesChannel && matchesTour && matchesStatus
+    return matchesSearch && matchesChannel && matchesTour && matchesStatus && matchesDateFrom && matchesDateTo
   })
 
   const stats = {
@@ -1528,6 +1540,41 @@ ${t.getReady} 🐋⚓
                   <SelectItem value="cancelled">Canceladas</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <Input
+                type="date"
+                value={dateFromFilter}
+                onChange={(e) => setDateFromFilter(e.target.value)}
+                placeholder="Desde"
+              />
+              <Input
+                type="date"
+                value={dateToFilter}
+                onChange={(e) => setDateToFilter(e.target.value)}
+                placeholder="Hasta"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const today = getLocalISODate()
+                  setDateFromFilter(today)
+                  setDateToFilter(today)
+                }}
+              >
+                Ver solo hoy
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setDateFromFilter("")
+                  setDateToFilter("")
+                }}
+              >
+                Limpiar fechas
+              </Button>
             </div>
           </CardContent>
         </Card>

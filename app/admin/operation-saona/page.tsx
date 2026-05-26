@@ -108,6 +108,14 @@ function mapRow(r: any): SaonaReservation {
   }
 }
 
+function getLocalISODate() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, "0")
+  const day = String(now.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
 export default function OperationSaonaPage() {
   const [reservations, setReservations] = useState<SaonaReservation[]>([])
   const [loading, setLoading] = useState(true)
@@ -115,6 +123,8 @@ export default function OperationSaonaPage() {
   const [channelFilter, setChannelFilter] = useState("all")
   const [boatFilter, setBoatFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [dateFromFilter, setDateFromFilter] = useState("")
+  const [dateToFilter, setDateToFilter] = useState("")
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<string | null>(null)
   const [cancellationRequests, setCancellationRequests] = useState<CancellationRequest[]>([])
@@ -564,8 +574,10 @@ export default function OperationSaonaPage() {
     const matchesChannel = channelFilter === "all" || reservation.channel === channelFilter
     const matchesBoat = boatFilter === "all" || reservation.boatType === boatFilter
     const matchesStatus = statusFilter === "all" || reservation.status === statusFilter
+    const matchesDateFrom = !dateFromFilter || reservation.date >= dateFromFilter
+    const matchesDateTo = !dateToFilter || reservation.date <= dateToFilter
 
-    return matchesSearch && matchesChannel && matchesBoat && matchesStatus
+    return matchesSearch && matchesChannel && matchesBoat && matchesStatus && matchesDateFrom && matchesDateTo
   })
 
   const stats = {
@@ -790,6 +802,41 @@ export default function OperationSaonaPage() {
                   <SelectItem value="cancelled">Canceladas</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <Input
+                type="date"
+                value={dateFromFilter}
+                onChange={(e) => setDateFromFilter(e.target.value)}
+                placeholder="Desde"
+              />
+              <Input
+                type="date"
+                value={dateToFilter}
+                onChange={(e) => setDateToFilter(e.target.value)}
+                placeholder="Hasta"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const today = getLocalISODate()
+                  setDateFromFilter(today)
+                  setDateToFilter(today)
+                }}
+              >
+                Ver solo hoy
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setDateFromFilter("")
+                  setDateToFilter("")
+                }}
+              >
+                Limpiar fechas
+              </Button>
             </div>
           </CardContent>
         </Card>

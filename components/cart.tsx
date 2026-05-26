@@ -92,7 +92,7 @@ export function CartPanel() {
   const [productList, setProductList] = useState<Product[]>(fallbackProducts);
 
   const hasProductSelected = items.some((item) => item.type === "product");
-  const canReserve = hasServiceSelected;
+  const canReserve = items.length > 0;
 
   useEffect(() => {
     fetchProducts().then((data) => {

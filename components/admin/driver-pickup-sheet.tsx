@@ -396,6 +396,21 @@ export function DriverPickupSheet() {
     return getScheduledTime(hotel, shift)
   }, [hotel, shift])
 
+  const ensureDraftSheetId = async () => {
+    if (sheetId) return sheetId
+
+    const today = getLocalISODate()
+    const draftSheet = await getOrCreateDraftPickupSheet(today, "8 AM", "system")
+
+    if (!draftSheet?.id) {
+      throw new Error("No se pudo crear la hoja de recogida de hoy")
+    }
+
+    setSheetId(draftSheet.id)
+    setSheetStatus("draft")
+    return draftSheet.id
+  }
+
   const handleAddPickup = () => {
     if (!hotel || !zoneId || !time || !agency || !customerName || !persons || !serviceType) {
       alert("Por favor completa todos los campos")
@@ -409,6 +424,8 @@ export function DriverPickupSheet() {
 
     const handleAddAsync = async () => {
       try {
+        const activeSheetId = await ensureDraftSheetId()
+
         const newEntry: PickupEntry = {
           id: Date.now().toString(),
           hotel,
@@ -422,28 +439,25 @@ export function DriverPickupSheet() {
           serviceType,
         }
 
-        // Save to BD
-        if (sheetId) {
-          const insertedRows = await addPickupSheetRows(sheetId, [
-            {
-              pickup_time: time,
-              customer_name: customerName,
-              hotel,
-              room: room || null,
-              agency: agency || null,
-              pax: parseInt(persons) || 1,
-              notes: serviceType || null,
-              is_ghost: false,
-              ghost_hotel_random: null,
-              ghost_name_random: null,
-              reservation_id: null,
-            },
-          ])
+        const insertedRows = await addPickupSheetRows(activeSheetId, [
+          {
+            pickup_time: time,
+            customer_name: customerName,
+            hotel,
+            room: room || null,
+            agency: agency || null,
+            pax: parseInt(persons) || 1,
+            notes: serviceType || null,
+            is_ghost: false,
+            ghost_hotel_random: null,
+            ghost_name_random: null,
+            reservation_id: null,
+          },
+        ])
 
-          const inserted = insertedRows?.[0]
-          if (inserted?.id) {
-            newEntry.id = inserted.id
-          }
+        const inserted = insertedRows?.[0]
+        if (inserted?.id) {
+          newEntry.id = inserted.id
         }
 
         setPickups((prev) => [...prev, newEntry])
@@ -505,27 +519,27 @@ export function DriverPickupSheet() {
         serviceType: parsed.serviceType || "Buggy",
       }
 
-      if (sheetId) {
-        const insertedRows = await addPickupSheetRows(sheetId, [
-          {
-            pickup_time: normalizedTime,
-            customer_name: parsed.customerName,
-            hotel: parsed.hotel,
-            room: parsed.room || null,
-            agency: parsed.agency || null,
-            pax: parsed.persons > 0 ? parsed.persons : 1,
-            notes: parsed.serviceType || null,
-            is_ghost: false,
-            ghost_hotel_random: null,
-            ghost_name_random: null,
-            reservation_id: parsed.reservationId || null,
-          },
-        ])
+      const activeSheetId = await ensureDraftSheetId()
 
-        const inserted = insertedRows?.[0]
-        if (inserted?.id) {
-          newEntry.id = inserted.id
-        }
+      const insertedRows = await addPickupSheetRows(activeSheetId, [
+        {
+          pickup_time: normalizedTime,
+          customer_name: parsed.customerName,
+          hotel: parsed.hotel,
+          room: parsed.room || null,
+          agency: parsed.agency || null,
+          pax: parsed.persons > 0 ? parsed.persons : 1,
+          notes: parsed.serviceType || null,
+          is_ghost: false,
+          ghost_hotel_random: null,
+          ghost_name_random: null,
+          reservation_id: parsed.reservationId || null,
+        },
+      ])
+
+      const inserted = insertedRows?.[0]
+      if (inserted?.id) {
+        newEntry.id = inserted.id
       }
 
       setPickups((prev) => [...prev, newEntry])
