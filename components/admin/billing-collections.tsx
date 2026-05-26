@@ -487,15 +487,6 @@ export function BillingCollections() {
           pickupCode: effectivePickupCode || undefined,
         }
 
-        if (effectivePickupCode) {
-          try {
-            await sendPickupCodeToDriverSheet(effectivePickupCode)
-          } catch (pickupError) {
-            console.error("Error sending reservation to pickup sheet:", pickupError)
-            alert("El cobro se guardó, pero no se pudo enviar a Hoja de Recogida. Revisa el codigo MRC1 e intenta desde el boton Enviar.")
-          }
-        }
-
         if (window.confirm("Venta creada correctamente. ¿Deseas imprimir la factura ahora?")) {
           printBillingInvoice(createdRecord)
         }
@@ -586,10 +577,9 @@ export function BillingCollections() {
   }
 
   const handleSendToPickupSheet = async (record: BillingRecord) => {
-    const fallback = window.prompt("Pega el codigo MRC1 para enviar esta reserva a Hoja de Recogida:", record.pickupCode || "")
-    const codeToSend = (fallback || "").trim()
+    const codeToSend = (record.pickupCode || "").trim()
     if (!codeToSend) {
-      alert("No se envio nada porque el codigo esta vacio")
+      alert("Este registro no tiene codigo MRC1. Edita o vuelve a crear el cobro para que se genere.")
       return
     }
 
@@ -729,7 +719,7 @@ export function BillingCollections() {
         <CardContent className="pt-5">
           <p className="text-sm font-medium text-blue-900 dark:text-blue-200">Flujo de chofer actualizado</p>
           <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-            Cobros y facturación ahora puede enviar reservas a Hoja de Recogida usando el codigo MRC1 al registrar o con el boton Enviar en cada fila.
+            Cobros y facturación genera el codigo MRC1 automaticamente y el operador envia la reserva a Hoja de Recogida solo con el boton Enviar en cada fila.
           </p>
         </CardContent>
       </Card>
