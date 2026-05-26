@@ -20,6 +20,11 @@ import type { BillingRecord as DBBillingRecord } from "@/lib/billing-records"
 import { supabase } from "@/lib/supabase"
 import { createPickupReservationCode, parsePickupReservationCode } from "@/lib/pickup-reservation-code"
 import { addPickupSheetRows, getOrCreateDraftPickupSheet } from "@/lib/pickup-sheets"
+import {
+  listCancellationRequests,
+  updateCancellationRequestDecision,
+  type CancellationRequest,
+} from "@/lib/cancellation-requests"
 
 interface BillingRecord {
   id: string
@@ -44,22 +49,6 @@ interface ServiceLine {
   quantity: number
   unitAmount: string
 }
-
-type CancellationRequestStatus = "pending" | "approved" | "rejected"
-
-interface CancellationRequest {
-  id: string
-  operationType: "buggy" | "saona" | "samana"
-  reservationId: string
-  customerName: string
-  reason: string
-  requestedAt: string
-  requestedBy?: string
-  status: CancellationRequestStatus
-  accountingNote?: string
-}
-
-const CANCELLATION_STORAGE_KEY = "macao_cancel_requests"
 
 const SERVICE_OPTIONS = [
   "Single Buggy",
@@ -206,23 +195,11 @@ export function BillingCollections() {
   }, [])
 
   useEffect(() => {
-    const loadCancelRequests = () => {
-      try {
-        const raw = localStorage.getItem(CANCELLATION_STORAGE_KEY)
-        const parsed = raw ? JSON.parse(raw) : []
-        setCancelRequests(Array.isArray(parsed) ? parsed : [])
-      } catch {
-        setCancelRequests([])
-      }
-    }
-
-    loadCancelRequests()
-    window.addEventListener("macao-cancel-requests-updated", loadCancelRequests)
-    window.addEventListener("storage", loadCancelRequests)
-    return () => {
-      window.removeEventListener("macao-cancel-requests-updated", loadCancelRequests)
-      window.removeEventListener("storage", loadCancelRequests)
-    }
+    void loadCancelRequests()
+    const interval = window.setInterval(() => {
+      void loadCancelRequests()
+    }, 5000)
+    return () => window.clearInterval(interval)
   }, [])
 
   const supportsMultiCurrency = type === "pago_al_llegar" || type === "venta_directa"
@@ -232,10 +209,14 @@ export function BillingCollections() {
     return `${CURRENCY_SYMBOLS[code]} ${value.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 
-  const persistCancelRequests = (next: CancellationRequest[]) => {
-    setCancelRequests(next)
-    localStorage.setItem(CANCELLATION_STORAGE_KEY, JSON.stringify(next))
-    window.dispatchEvent(new CustomEvent("macao-cancel-requests-updated"))
+  const loadCancelRequests = async () => {
+    try {
+      const requests = await listCancellationRequests()
+      setCancelRequests(requests)
+    } catch (error) {
+      console.error("Error loading cancellation requests:", error)
+      setCancelRequests([])
+    }
   }
 
   const handleCancelDecision = async (request: CancellationRequest, status: "approved" | "rejected") => {
@@ -270,16 +251,18 @@ export function BillingCollections() {
       }
     }
 
-    const next = cancelRequests.map((item) =>
-      item.id === request.id
-        ? {
-            ...item,
-            status,
-            accountingNote: accountingNote?.trim() || undefined,
-          }
-        : item,
-    )
-    persistCancelRequests(next)
+    try {
+      await updateCancellationRequestDecision(
+        request.id,
+        status,
+        accountingNote?.trim() || undefined,
+        "Contabilidad",
+      )
+      await loadCancelRequests()
+    } catch (error) {
+      console.error("Error updating cancellation decision:", error)
+      alert("No se pudo guardar la decisión de contabilidad")
+    }
   }
 
   const printBillingInvoice = (record: BillingRecord) => {

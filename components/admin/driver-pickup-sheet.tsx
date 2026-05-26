@@ -160,6 +160,14 @@ function resolveHotelInfo(hotelInput: string) {
   }
 }
 
+function getLocalISODate() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, "0")
+  const day = String(now.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
 export function DriverPickupSheet() {
   const [pickups, setPickups] = useState<PickupEntry[]>([])
   const [sheetId, setSheetId] = useState<string | null>(null)
@@ -222,39 +230,31 @@ export function DriverPickupSheet() {
   useEffect(() => {
     const loadSheet = async () => {
       try {
-        const today = new Date().toISOString().split("T")[0]
-        // Load latest sheet for today; if none exists, create a draft document.
+        const today = getLocalISODate()
+        // Resolve current local-day sheet first; if none exists, create a draft.
         const existingSheet = await getPickupSheetByDate(today)
-        
-        if (existingSheet?.id) {
-          setSheetId(existingSheet.id)
-          setSheetStatus(existingSheet.status as "draft" | "locked" | "printed")
-          
-          // Load rows
-          const rows = await getPickupSheetRows(existingSheet.id)
-          if (rows && rows.length > 0) {
-            // Convert DB rows to PickupEntry format
-            const entries: PickupEntry[] = rows.map((row: PickupSheetRow) => ({
-              id: row.id,
-              hotel: row.hotel || "",
-              zoneId: resolveHotelInfo(row.hotel || "").defaultZoneId,
-              shift: inferShiftFromTime(row.pickup_time || ""),
-              pickupTime: row.pickup_time || "",
-              agency: row.agency || "",
-              customerName: row.customer_name || "",
-              persons: row.pax || 1,
-              room: row.room || "",
-              serviceType: row.notes || "",
-            }))
-            setPickups(entries)
-          }
-        } else {
-          // Ensure there is an active draft document for today.
-          const newSheet = await getOrCreateDraftPickupSheet(today, "8 AM", "system")
-          if (newSheet?.id) {
-            setSheetId(newSheet.id)
-            setSheetStatus("draft")
-          }
+        const activeSheet = existingSheet?.id
+          ? existingSheet
+          : await getOrCreateDraftPickupSheet(today, "8 AM", "system")
+
+        if (activeSheet?.id) {
+          setSheetId(activeSheet.id)
+          setSheetStatus(activeSheet.status as "draft" | "locked" | "printed")
+
+          const rows = await getPickupSheetRows(activeSheet.id)
+          const entries: PickupEntry[] = (rows || []).map((row: PickupSheetRow) => ({
+            id: row.id,
+            hotel: row.hotel || "",
+            zoneId: resolveHotelInfo(row.hotel || "").defaultZoneId,
+            shift: inferShiftFromTime(row.pickup_time || ""),
+            pickupTime: row.pickup_time || "",
+            agency: row.agency || "",
+            customerName: row.customer_name || "",
+            persons: row.pax || 1,
+            room: row.room || "",
+            serviceType: row.notes || "",
+          }))
+          setPickups(entries)
         }
       } catch (error) {
         console.error("Error loading pickup sheet:", error)
@@ -446,7 +446,7 @@ export function DriverPickupSheet() {
           }
         }
 
-        setPickups([...pickups, newEntry])
+        setPickups((prev) => [...prev, newEntry])
         setHotel("")
         setZoneId("zona4")
         setShowHotelSuggestions(false)
@@ -543,7 +543,7 @@ export function DriverPickupSheet() {
       try {
         // Remove from BD
         await removePickupSheetRow(id)
-        setPickups(pickups.filter((p) => p.id !== id))
+        setPickups((prev) => prev.filter((p) => p.id !== id))
       } catch (error) {
         console.error("Error removing pickup:", error)
         alert("No se pudo eliminar la recogida")

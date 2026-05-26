@@ -54,6 +54,11 @@ import {
 import Link from "next/link"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { supabase } from "@/lib/supabase"
+import {
+  listCancellationRequests,
+  upsertCancellationRequest,
+  type CancellationRequest,
+} from "@/lib/cancellation-requests"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as DateCalendar } from "@/components/ui/calendar"
@@ -115,24 +120,9 @@ type NewReservationForm = {
   language: string
 }
 
-type CancellationRequestStatus = "pending" | "approved" | "rejected"
-
-type CancellationRequest = {
-  id: string
-  operationType: "buggy" | "saona" | "samana"
-  reservationId: string
-  customerName: string
-  reason: string
-  requestedAt: string
-  requestedBy?: string
-  status: CancellationRequestStatus
-  accountingNote?: string
-}
-
 const SAMANA_PRODUCT_ID = "1068932"
 const SAMANA_DEFAULT_CAPACITY = 40
 const AVAILABILITY_WINDOW_DAYS = 21
-const CANCELLATION_STORAGE_KEY = "macao_cancel_requests"
 
 const createEmptyNewReservation = (): NewReservationForm => ({
   customer_name: "",
@@ -801,37 +791,29 @@ export default function OperationSamanaPage() {
     return () => clearInterval(interval)
   }, [])
 
-  useEffect(() => {
-    const loadCancellationRequests = () => {
-      try {
-        const raw = localStorage.getItem(CANCELLATION_STORAGE_KEY)
-        const parsed = raw ? JSON.parse(raw) : []
-        setCancellationRequests(Array.isArray(parsed) ? parsed : [])
-      } catch {
-        setCancellationRequests([])
-      }
+  const loadCancellationRequests = async () => {
+    try {
+      const requests = await listCancellationRequests()
+      setCancellationRequests(requests)
+    } catch (error) {
+      console.error("Error loading cancellation requests:", error)
+      setCancellationRequests([])
     }
-
-    loadCancellationRequests()
-    window.addEventListener("macao-cancel-requests-updated", loadCancellationRequests)
-    window.addEventListener("storage", loadCancellationRequests)
-    return () => {
-      window.removeEventListener("macao-cancel-requests-updated", loadCancellationRequests)
-      window.removeEventListener("storage", loadCancellationRequests)
-    }
-  }, [])
-
-  const persistCancellationRequests = (next: CancellationRequest[]) => {
-    setCancellationRequests(next)
-    localStorage.setItem(CANCELLATION_STORAGE_KEY, JSON.stringify(next))
-    window.dispatchEvent(new CustomEvent("macao-cancel-requests-updated"))
   }
+
+  useEffect(() => {
+    void loadCancellationRequests()
+    const interval = window.setInterval(() => {
+      void loadCancellationRequests()
+    }, 5000)
+    return () => window.clearInterval(interval)
+  }, [])
 
   const getCancellationRequest = (reservationId: string) => {
     return cancellationRequests.find((item) => item.reservationId === reservationId)
   }
 
-  const requestCancellation = (reservation: SamanaReservation) => {
+  const requestCancellation = async (reservation: SamanaReservation) => {
     const existing = getCancellationRequest(reservation.id)
     if (existing?.status === "pending") {
       alert("Esta reserva ya tiene una solicitud de cancelación pendiente de contabilidad.")
@@ -855,9 +837,14 @@ export default function OperationSamanaPage() {
       status: "pending",
     }
 
-    const next = [request, ...cancellationRequests.filter((item) => item.reservationId !== reservation.id)]
-    persistCancellationRequests(next)
-    alert("Solicitud enviada a contabilidad para aprobación/rechazo.")
+    try {
+      await upsertCancellationRequest(request)
+      await loadCancellationRequests()
+      alert("Solicitud enviada a contabilidad para aprobación/rechazo.")
+    } catch (error) {
+      console.error("Error creating cancellation request:", error)
+      alert("No se pudo enviar la solicitud de cancelación. Verifica la migración de base de datos.")
+    }
   }
 
   useEffect(() => {

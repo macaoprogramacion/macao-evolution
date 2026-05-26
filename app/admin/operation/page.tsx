@@ -59,6 +59,11 @@ import { supabase } from "@/lib/supabase"
 import { parseExternalReservationText } from "@/lib/external-reservation-parser"
 import { getBuggyPickupSuggestion, type TurnSlot } from "@/lib/hotel-pickup-schedules"
 import { createPickupReservationCode, parsePickupReservationCode } from "@/lib/pickup-reservation-code"
+import {
+  listCancellationRequests,
+  upsertCancellationRequest,
+  type CancellationRequest,
+} from "@/lib/cancellation-requests"
 import { Label } from "@/components/ui/label"
 
 function inferTimeslotFromPickup(pickupValue: string) {
@@ -153,22 +158,6 @@ type GhostReservationSeed = {
   pax: number
   notes?: string
 }
-
-type CancellationRequestStatus = "pending" | "approved" | "rejected"
-
-type CancellationRequest = {
-  id: string
-  operationType: "buggy" | "saona" | "samana"
-  reservationId: string
-  customerName: string
-  reason: string
-  requestedAt: string
-  requestedBy?: string
-  status: CancellationRequestStatus
-  accountingNote?: string
-}
-
-const CANCELLATION_STORAGE_KEY = "macao_cancel_requests"
 
 // Random data for ghost pickups
 const RANDOM_FIRST_NAMES = ["Juan", "Maria", "Carlos", "Ana", "Miguel", "Rosa", "Jose", "Laura", "Luis", "Sofia", "Pedro", "Isabel", "Diego", "Elena", "Fernando"]
@@ -327,24 +316,22 @@ export default function OperationPage() {
     }
   }
 
-  useEffect(() => {
-    const loadCancellationRequests = () => {
-      try {
-        const raw = localStorage.getItem(CANCELLATION_STORAGE_KEY)
-        const parsed = raw ? JSON.parse(raw) : []
-        setCancellationRequests(Array.isArray(parsed) ? parsed : [])
-      } catch {
-        setCancellationRequests([])
-      }
+  const loadCancellationRequests = async () => {
+    try {
+      const requests = await listCancellationRequests()
+      setCancellationRequests(requests)
+    } catch (error) {
+      console.error("Error loading cancellation requests:", error)
+      setCancellationRequests([])
     }
+  }
 
-    loadCancellationRequests()
-    window.addEventListener("macao-cancel-requests-updated", loadCancellationRequests)
-    window.addEventListener("storage", loadCancellationRequests)
-    return () => {
-      window.removeEventListener("macao-cancel-requests-updated", loadCancellationRequests)
-      window.removeEventListener("storage", loadCancellationRequests)
-    }
+  useEffect(() => {
+    void loadCancellationRequests()
+    const interval = window.setInterval(() => {
+      void loadCancellationRequests()
+    }, 5000)
+    return () => window.clearInterval(interval)
   }, [])
 
   const buildExportRows = (): ExportRow[] => {
@@ -784,17 +771,11 @@ export default function OperationPage() {
     setNoShowConfirmId(null)
   }
 
-  const persistCancellationRequests = (next: CancellationRequest[]) => {
-    setCancellationRequests(next)
-    localStorage.setItem(CANCELLATION_STORAGE_KEY, JSON.stringify(next))
-    window.dispatchEvent(new CustomEvent("macao-cancel-requests-updated"))
-  }
-
   const getCancellationRequest = (reservationId: string) => {
     return cancellationRequests.find((item) => item.reservationId === reservationId)
   }
 
-  const requestCancellation = (reservation: Reservation) => {
+  const requestCancellation = async (reservation: Reservation) => {
     const existing = getCancellationRequest(reservation.id)
     if (existing?.status === "pending") {
       alert("Esta reserva ya tiene una solicitud de cancelación pendiente de contabilidad.")
@@ -818,12 +799,14 @@ export default function OperationPage() {
       status: "pending",
     }
 
-    const next = [
-      request,
-      ...cancellationRequests.filter((item) => item.reservationId !== reservation.id),
-    ]
-    persistCancellationRequests(next)
-    alert("Solicitud enviada a contabilidad para aprobación/rechazo.")
+    try {
+      await upsertCancellationRequest(request)
+      await loadCancellationRequests()
+      alert("Solicitud enviada a contabilidad para aprobación/rechazo.")
+    } catch (error) {
+      console.error("Error creating cancellation request:", error)
+      alert("No se pudo enviar la solicitud de cancelación. Verifica la migración de base de datos.")
+    }
   }
 
   const generateClientMessage = (res: Reservation) => {
