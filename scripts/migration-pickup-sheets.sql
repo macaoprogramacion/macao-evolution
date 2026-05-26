@@ -60,134 +60,80 @@ DROP POLICY IF EXISTS "pickup_sheets_view_admin" ON public.pickup_sheets;
 DROP POLICY IF EXISTS "pickup_sheets_insert_admin" ON public.pickup_sheets;
 DROP POLICY IF EXISTS "pickup_sheets_update_draft_only" ON public.pickup_sheets;
 DROP POLICY IF EXISTS "pickup_sheets_delete_admin" ON public.pickup_sheets;
+DROP POLICY IF EXISTS "pickup_sheets_select_policy" ON public.pickup_sheets;
+DROP POLICY IF EXISTS "pickup_sheets_insert_policy" ON public.pickup_sheets;
+DROP POLICY IF EXISTS "pickup_sheets_update_draft_policy" ON public.pickup_sheets;
+DROP POLICY IF EXISTS "pickup_sheets_delete_draft_policy" ON public.pickup_sheets;
 
-CREATE POLICY "pickup_sheets_view_admin" ON public.pickup_sheets
+-- Dashboard uses app-side session, not Supabase Auth role claims.
+-- Keep policies runtime-safe (no dependency on auth.users).
+CREATE POLICY "pickup_sheets_select_policy" ON public.pickup_sheets
   FOR SELECT
-  USING (
-    auth.jwt() ->> 'email' IN (
-      SELECT email FROM auth.users
-      WHERE raw_user_meta_data->>'role' IN ('admin', 'both', 'operaciones', 'chofer')
-    )
-    OR auth.jwt() ->> 'email' LIKE '%jonathan%'
-  );
+  USING (true);
 
-CREATE POLICY "pickup_sheets_insert_admin" ON public.pickup_sheets
+CREATE POLICY "pickup_sheets_insert_policy" ON public.pickup_sheets
   FOR INSERT
-  WITH CHECK (
-    auth.jwt() ->> 'email' IN (
-      SELECT email FROM auth.users
-      WHERE raw_user_meta_data->>'role' IN ('admin', 'both', 'operaciones')
-    )
-    OR auth.jwt() ->> 'email' LIKE '%jonathan%'
-  );
+  WITH CHECK (true);
 
 -- Can only update if status is still draft
-CREATE POLICY "pickup_sheets_update_draft_only" ON public.pickup_sheets
+CREATE POLICY "pickup_sheets_update_draft_policy" ON public.pickup_sheets
   FOR UPDATE
-  USING (
-    (status = 'draft') AND (
-      auth.jwt() ->> 'email' IN (
-        SELECT email FROM auth.users
-        WHERE raw_user_meta_data->>'role' IN ('admin', 'both', 'operaciones')
-      )
-      OR auth.jwt() ->> 'email' LIKE '%jonathan%'
-    )
-  )
-  WITH CHECK (
-    auth.jwt() ->> 'email' IN (
-      SELECT email FROM auth.users
-      WHERE raw_user_meta_data->>'role' IN ('admin', 'both', 'operaciones')
-    )
-    OR auth.jwt() ->> 'email' LIKE '%jonathan%'
-  );
+  USING (status = 'draft')
+  WITH CHECK (status IN ('draft', 'locked', 'printed'));
 
-CREATE POLICY "pickup_sheets_delete_admin" ON public.pickup_sheets
+CREATE POLICY "pickup_sheets_delete_draft_policy" ON public.pickup_sheets
   FOR DELETE
-  USING (
-    auth.jwt() ->> 'email' IN (
-      SELECT email FROM auth.users
-      WHERE raw_user_meta_data->>'role' IN ('admin', 'both', 'operaciones')
-    )
-    OR auth.jwt() ->> 'email' LIKE '%jonathan%'
-  );
+  USING (status = 'draft');
 
 -- RLS Policies for pickup_sheet_rows
 DROP POLICY IF EXISTS "pickup_sheet_rows_view_admin" ON public.pickup_sheet_rows;
 DROP POLICY IF EXISTS "pickup_sheet_rows_insert_admin" ON public.pickup_sheet_rows;
 DROP POLICY IF EXISTS "pickup_sheet_rows_update_draft_only" ON public.pickup_sheet_rows;
 DROP POLICY IF EXISTS "pickup_sheet_rows_delete_admin" ON public.pickup_sheet_rows;
+DROP POLICY IF EXISTS "pickup_sheet_rows_select_policy" ON public.pickup_sheet_rows;
+DROP POLICY IF EXISTS "pickup_sheet_rows_insert_policy" ON public.pickup_sheet_rows;
+DROP POLICY IF EXISTS "pickup_sheet_rows_update_draft_policy" ON public.pickup_sheet_rows;
+DROP POLICY IF EXISTS "pickup_sheet_rows_delete_draft_policy" ON public.pickup_sheet_rows;
 
-CREATE POLICY "pickup_sheet_rows_view_admin" ON public.pickup_sheet_rows
+CREATE POLICY "pickup_sheet_rows_select_policy" ON public.pickup_sheet_rows
   FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.pickup_sheets ps
-      WHERE ps.id = public.pickup_sheet_rows.sheet_id
-      AND (
-        auth.jwt() ->> 'email' IN (
-          SELECT email FROM auth.users
-          WHERE raw_user_meta_data->>'role' IN ('admin', 'both', 'operaciones', 'chofer')
-        )
-        OR auth.jwt() ->> 'email' LIKE '%jonathan%'
-      )
-    )
-  );
+  USING (true);
 
-CREATE POLICY "pickup_sheet_rows_insert_admin" ON public.pickup_sheet_rows
+CREATE POLICY "pickup_sheet_rows_insert_policy" ON public.pickup_sheet_rows
   FOR INSERT
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.pickup_sheets ps
       WHERE ps.id = sheet_id
-      AND (
-        auth.jwt() ->> 'email' IN (
-          SELECT email FROM auth.users
-          WHERE raw_user_meta_data->>'role' IN ('admin', 'both', 'operaciones')
-        )
-        OR auth.jwt() ->> 'email' LIKE '%jonathan%'
-      )
+      AND ps.status = 'draft'
     )
   );
 
 -- Can only update rows if the parent sheet status is still draft
-CREATE POLICY "pickup_sheet_rows_update_draft_only" ON public.pickup_sheet_rows
+CREATE POLICY "pickup_sheet_rows_update_draft_policy" ON public.pickup_sheet_rows
   FOR UPDATE
   USING (
     EXISTS (
       SELECT 1 FROM public.pickup_sheets ps
       WHERE ps.id = sheet_id
       AND ps.status = 'draft'
-      AND (
-        auth.jwt() ->> 'email' IN (
-          SELECT email FROM auth.users
-          WHERE raw_user_meta_data->>'role' IN ('admin', 'both', 'operaciones')
-        )
-        OR auth.jwt() ->> 'email' LIKE '%jonathan%'
-      )
     )
   )
   WITH CHECK (
-    auth.jwt() ->> 'email' IN (
-      SELECT email FROM auth.users
-      WHERE raw_user_meta_data->>'role' IN ('admin', 'both', 'operaciones')
+    EXISTS (
+      SELECT 1 FROM public.pickup_sheets ps
+      WHERE ps.id = sheet_id
+      AND ps.status = 'draft'
     )
-    OR auth.jwt() ->> 'email' LIKE '%jonathan%'
   );
 
-CREATE POLICY "pickup_sheet_rows_delete_admin" ON public.pickup_sheet_rows
+CREATE POLICY "pickup_sheet_rows_delete_draft_policy" ON public.pickup_sheet_rows
   FOR DELETE
   USING (
     EXISTS (
       SELECT 1 FROM public.pickup_sheets ps
       WHERE ps.id = sheet_id
       AND ps.status = 'draft'
-      AND (
-        auth.jwt() ->> 'email' IN (
-          SELECT email FROM auth.users
-          WHERE raw_user_meta_data->>'role' IN ('admin', 'both', 'operaciones')
-        )
-        OR auth.jwt() ->> 'email' LIKE '%jonathan%'
-      )
     )
   );
 
