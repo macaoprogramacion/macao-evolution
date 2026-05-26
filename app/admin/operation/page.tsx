@@ -649,9 +649,10 @@ export default function OperationPage() {
     setSaving(true)
     try {
       console.log("Attempting to save reservation:", newRes)
+      const { horses, ...newResWithoutHorses } = newRes
       const insertPayload = {
-        ...newRes,
-        notes: upsertHorseCountInNotes(newRes.notes, newRes.horses),
+        ...newResWithoutHorses,
+        notes: upsertHorseCountInNotes(newRes.notes, horses),
         channel_color: channelColors[newRes.channel] || "#6b7280",
       }
       console.log("Insert payload:", insertPayload)
