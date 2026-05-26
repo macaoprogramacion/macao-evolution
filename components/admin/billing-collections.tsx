@@ -261,7 +261,7 @@ export function BillingCollections() {
       await loadCancelRequests()
     } catch (error) {
       console.error("Error updating cancellation decision:", error)
-      alert("No se pudo guardar la decisión de contabilidad")
+      alert(error instanceof Error ? error.message : "No se pudo guardar la decisión de contabilidad")
     }
   }
 

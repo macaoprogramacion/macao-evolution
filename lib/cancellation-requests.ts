@@ -27,6 +27,25 @@ type CancellationRequestRow = {
   accounting_note: string | null
 }
 
+function formatCancellationDbError(error: unknown, fallbackMessage: string) {
+  const message = error instanceof Error ? error.message : fallbackMessage
+  const anyError = error as { code?: string; message?: string } | null | undefined
+
+  if (anyError?.code === "42P01" || /relation .*reservation_cancellation_requests.* does not exist/i.test(anyError?.message || message)) {
+    return new Error(
+      "Falta aplicar la migración de cancelaciones en la base de datos. Ejecuta scripts/migration-cancellation-requests.sql en Supabase.",
+    )
+  }
+
+  if (anyError?.code === "42501" || /row level security|permission denied/i.test(anyError?.message || message)) {
+    return new Error(
+      "La base de datos está bloqueando la acción por permisos/RLS. Revisa las policies de reservation_cancellation_requests.",
+    )
+  }
+
+  return new Error(message || fallbackMessage)
+}
+
 function mapRow(row: CancellationRequestRow): CancellationRequest {
   return {
     id: row.id,
@@ -47,7 +66,7 @@ export async function listCancellationRequests() {
     .select("id, operation_type, reservation_id, customer_name, reason, requested_at, requested_by, status, accounting_note")
     .order("requested_at", { ascending: false })
 
-  if (error) throw error
+  if (error) throw formatCancellationDbError(error, "No se pudieron cargar las solicitudes de cancelación")
   return (data || []).map((row) => mapRow(row as CancellationRequestRow))
 }
 
@@ -70,7 +89,7 @@ export async function upsertCancellationRequest(request: CancellationRequest) {
     .select("id, operation_type, reservation_id, customer_name, reason, requested_at, requested_by, status, accounting_note")
     .single()
 
-  if (error) throw error
+  if (error) throw formatCancellationDbError(error, "No se pudo guardar la solicitud de cancelación")
   return mapRow(data as CancellationRequestRow)
 }
 
@@ -92,6 +111,6 @@ export async function updateCancellationRequestDecision(
     .select("id, operation_type, reservation_id, customer_name, reason, requested_at, requested_by, status, accounting_note")
     .single()
 
-  if (error) throw error
+  if (error) throw formatCancellationDbError(error, "No se pudo actualizar la solicitud de cancelación")
   return mapRow(data as CancellationRequestRow)
 }

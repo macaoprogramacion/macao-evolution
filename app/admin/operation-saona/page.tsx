@@ -427,7 +427,7 @@ export default function OperationSaonaPage() {
       alert("Solicitud enviada a contabilidad para aprobación/rechazo.")
     } catch (error) {
       console.error("Error creating cancellation request:", error)
-      alert("No se pudo enviar la solicitud de cancelación. Verifica la migración de base de datos.")
+      alert(error instanceof Error ? error.message : "No se pudo enviar la solicitud de cancelación.")
     }
   }
 
