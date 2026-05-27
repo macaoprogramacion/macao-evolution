@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Plus, Trash2, Loader2, Printer, Send, Copy, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,7 @@ import { createPickupReservationCode, parsePickupReservationCode } from "@/lib/p
 import { addPickupSheetRows, getOrCreateDraftPickupSheet } from "@/lib/pickup-sheets"
 import { getDashboardSession } from "@/lib/dashboard-session"
 import { hotelDirectory } from "@/lib/hotel-locations"
+import { getBuggyPickupSuggestion } from "@/lib/hotel-pickup-schedules"
 import {
   listCancellationRequests,
   updateCancellationRequestDecision,
@@ -228,6 +229,17 @@ const HOTEL_OPTIONS = Array.from(new Set(Object.values(hotelDirectory).map((hote
   a.localeCompare(b),
 )
 
+const UNKNOWN_PICKUP_TIME_OPTIONS = ["8:00 AM", "11:00 AM", "2:00 PM"]
+
+function normalizeLooseText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+}
+
 export function BillingCollections() {
   const [records, setRecords] = useState<BillingRecord[]>([])
   const [closureFeedback, setClosureFeedback] = useState<string>("")
@@ -246,6 +258,7 @@ export function BillingCollections() {
   const [courtesy, setCourtesy] = useState(false)
   const [serviceLines, setServiceLines] = useState<ServiceLine[]>([{ serviceType: "", quantity: 1, unitAmount: "" }])
   const [pickupHotel, setPickupHotel] = useState("")
+  const [showHotelSuggestions, setShowHotelSuggestions] = useState(false)
   const [pickupTime, setPickupTime] = useState("")
   const [pickupRoom, setPickupRoom] = useState("")
   const [pickupPax, setPickupPax] = useState("1")
@@ -341,6 +354,54 @@ export function BillingCollections() {
       }),
     )
   }, [type, vendorName])
+
+  const normalizedPickupHotel = useMemo(() => normalizeLooseText(pickupHotel), [pickupHotel])
+
+  const hotelSuggestions = useMemo(() => {
+    if (!normalizedPickupHotel) return HOTEL_OPTIONS.slice(0, 12)
+
+    const withScore = HOTEL_OPTIONS.map((name) => {
+      const n = normalizeLooseText(name)
+      let score = 0
+      if (n === normalizedPickupHotel) score = 100
+      else if (n.startsWith(normalizedPickupHotel)) score = 80
+      else if (n.includes(normalizedPickupHotel)) score = 60
+      return { name, score }
+    }).filter((item) => item.score > 0)
+
+    return withScore
+      .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+      .slice(0, 8)
+      .map((item) => item.name)
+  }, [normalizedPickupHotel])
+
+  const hasExactRegisteredHotel = useMemo(
+    () => HOTEL_OPTIONS.some((name) => normalizeLooseText(name) === normalizedPickupHotel),
+    [normalizedPickupHotel],
+  )
+
+  const pickupScheduleSuggestion = useMemo(() => {
+    if (!pickupHotel.trim()) return null
+    const suggestion = getBuggyPickupSuggestion(pickupHotel, "8 AM")
+    if (!suggestion || suggestion.score < 0.6) return null
+    return suggestion
+  }, [pickupHotel])
+
+  useEffect(() => {
+    if (!pickupHotel.trim()) return
+
+    if (pickupScheduleSuggestion?.pickupTime) {
+      setPickupTime(pickupScheduleSuggestion.pickupTime)
+      return
+    }
+
+    setPickupTime((prev) => (prev.trim() ? prev : UNKNOWN_PICKUP_TIME_OPTIONS[0]))
+  }, [pickupHotel, pickupScheduleSuggestion])
+
+  const chooseHotel = (value: string) => {
+    setPickupHotel(value)
+    setShowHotelSuggestions(false)
+  }
 
   const supportsMultiCurrency = type === "pago_al_llegar" || type === "venta_directa"
 
@@ -1113,19 +1174,46 @@ export function BillingCollections() {
 
             <div className="space-y-1.5">
               <Label>Hotel / Punto de recogida *</Label>
-              <Select
-                value={pickupHotel}
-                onValueChange={setPickupHotel}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona hotel" />
-                </SelectTrigger>
-                <SelectContent>
-                  {HOTEL_OPTIONS.map((hotelName) => (
-                    <SelectItem key={hotelName} value={hotelName}>{hotelName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="space-y-2">
+                <Input
+                  value={pickupHotel}
+                  onChange={(e) => {
+                    setPickupHotel(e.target.value)
+                    setShowHotelSuggestions(true)
+                  }}
+                  onFocus={() => setShowHotelSuggestions(true)}
+                  placeholder="Escribe hotel o lugar de recogida"
+                />
+                {showHotelSuggestions ? (
+                  <div className="rounded-md border border-gray-200 dark:border-gray-700 max-h-48 overflow-auto">
+                    {hotelSuggestions.length > 0 ? (
+                      hotelSuggestions.map((hotelName) => (
+                        <button
+                          key={hotelName}
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                          onClick={() => chooseHotel(hotelName)}
+                        >
+                          {hotelName}
+                        </button>
+                      ))
+                    ) : null}
+
+                    {pickupHotel.trim() && !hasExactRegisteredHotel ? (
+                      <button
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 border-t border-gray-200 dark:border-gray-700"
+                        onClick={() => chooseHotel(pickupHotel.trim())}
+                      >
+                        Agregar lugar desconocido: {pickupHotel.trim()}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+                <p className="text-xs text-gray-500">
+                  Puedes escribir para buscar por nombre. Si no existe, puedes agregar el lugar manualmente.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-1.5">
@@ -1135,6 +1223,26 @@ export function BillingCollections() {
                 onChange={(e) => setPickupTime(e.target.value)}
                 placeholder="Ej: 08:00"
               />
+              {!pickupScheduleSuggestion ? (
+                <div className="flex flex-wrap gap-2">
+                  {UNKNOWN_PICKUP_TIME_OPTIONS.map((timeOption) => (
+                    <Button
+                      key={timeOption}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPickupTime(timeOption)}
+                    >
+                      {timeOption}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
+              <p className="text-xs text-gray-500">
+                {pickupScheduleSuggestion
+                  ? `Hora autocompletada segun hotel: ${pickupScheduleSuggestion.pickupTime}. Puedes editarla si lo necesitas.`
+                  : "Lugar no registrado: se muestran horarios estandar (8:00, 11:00, 2:00) y puedes editarlos."}
+              </p>
             </div>
 
             <div className="space-y-1.5">
