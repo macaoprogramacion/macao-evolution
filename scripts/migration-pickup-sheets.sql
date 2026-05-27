@@ -7,13 +7,34 @@ CREATE TABLE IF NOT EXISTS public.pickup_sheets (
   date DATE NOT NULL,
   turno TEXT NOT NULL CHECK (turno IN ('8 AM', '11 AM', '3 PM', 'all')),
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'locked', 'printed')),
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  locked_at TIMESTAMP,
-  printed_at TIMESTAMP,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  locked_at TIMESTAMPTZ,
+  printed_at TIMESTAMPTZ,
   created_by TEXT,
   notes TEXT
 );
+
+DO $do$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'pickup_sheets'
+      AND column_name IN ('created_at', 'updated_at', 'locked_at', 'printed_at')
+      AND data_type = 'timestamp without time zone'
+  ) THEN
+    EXECUTE $sql$
+      ALTER TABLE public.pickup_sheets
+        ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC',
+        ALTER COLUMN updated_at TYPE TIMESTAMPTZ USING updated_at AT TIME ZONE 'UTC',
+        ALTER COLUMN locked_at TYPE TIMESTAMPTZ USING locked_at AT TIME ZONE 'UTC',
+        ALTER COLUMN printed_at TYPE TIMESTAMPTZ USING printed_at AT TIME ZONE 'UTC'
+    $sql$;
+  END IF;
+END
+$do$;
 
 -- Index for searching by date and turno
 CREATE INDEX IF NOT EXISTS idx_pickup_sheets_date_turno ON public.pickup_sheets(date, turno);
@@ -35,9 +56,27 @@ CREATE TABLE IF NOT EXISTS public.pickup_sheet_rows (
   ghost_name_random TEXT,
   -- Can store UUID reservation ids and non-UUID external/billing ids.
   reservation_id TEXT,
-  created_at TIMESTAMP DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(sheet_id, customer_name, hotel)
 );
+
+DO $do$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'pickup_sheet_rows'
+      AND column_name = 'created_at'
+      AND data_type = 'timestamp without time zone'
+  ) THEN
+    EXECUTE $sql$
+      ALTER TABLE public.pickup_sheet_rows
+        ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC'
+    $sql$;
+  END IF;
+END
+$do$;
 
 -- Backward compatibility: if a previous version created an FK to reservations(id), remove it.
 ALTER TABLE public.pickup_sheet_rows
@@ -54,6 +93,20 @@ CREATE INDEX IF NOT EXISTS idx_pickup_sheet_rows_reservation ON public.pickup_sh
 -- Enable RLS
 ALTER TABLE public.pickup_sheets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pickup_sheet_rows ENABLE ROW LEVEL SECURITY;
+
+-- Keep sheet timestamps aligned with updates.
+CREATE OR REPLACE FUNCTION update_pickup_sheets_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS pickup_sheets_updated_at ON public.pickup_sheets;
+CREATE TRIGGER pickup_sheets_updated_at
+  BEFORE UPDATE ON public.pickup_sheets
+  FOR EACH ROW EXECUTE FUNCTION update_pickup_sheets_updated_at();
 
 -- RLS Policies for pickup_sheets
 DROP POLICY IF EXISTS "pickup_sheets_view_admin" ON public.pickup_sheets;

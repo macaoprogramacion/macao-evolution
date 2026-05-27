@@ -98,12 +98,38 @@ const MACHINE_CATALOG: MachineCatalogRule[] = [
   },
 ]
 
+type MachineAliasRule = {
+  pattern: RegExp
+  machineType: NonNullable<ParsedExternalReservation["machineType"]> | null
+}
+
+const MACHINE_OPTION_ALIASES: MachineAliasRule[] = [
+  { pattern: /shared\s*vip\s*(predator|predactor|predacter)/i, machineType: "vip_shared_predator" },
+  { pattern: /shared\s*atv/i, machineType: "shared_atv" },
+  { pattern: /shared\s*buggy/i, machineType: "shared_buggy" },
+  { pattern: /vip\s*family|family\s*vip|vip\s*family\s*(predator|predactor|predacter)/i, machineType: "vip_family_predator" },
+  { pattern: /family\s*buggy|familiar\s*predator|familiar\s*predactor/i, machineType: "family_buggy" },
+  { pattern: /single\s*buggy|individual\s*buggy|individual\b.*\bbuggy/i, machineType: "single_buggy" },
+  { pattern: /\batv\b|quad\s*four\s*wheeler/i, machineType: "single_atv" },
+  { pattern: /sunset\s*tour|sunset\s*ride/i, machineType: null },
+  { pattern: /\bcaballos\b|horseback|horse\s*ride|equestrian/i, machineType: null },
+]
+
 function getRuleByType(machineType: NonNullable<ParsedExternalReservation["machineType"]>) {
   return MACHINE_CATALOG.find((rule) => rule.machineType === machineType) || null
 }
 
 function inferMachineTypeFromText(optionTitle?: string, productTitle?: string) {
-  const source = normalizeText(`${optionTitle || ""} ${productTitle || ""}`)
+  const optionSource = normalizeText(optionTitle || "")
+  const productSource = normalizeText(productTitle || "")
+  const source = `${optionSource} ${productSource}`.trim()
+
+  for (const alias of MACHINE_OPTION_ALIASES) {
+    if (alias.pattern.test(optionSource)) {
+      if (alias.machineType === null) return null
+      return getRuleByType(alias.machineType)
+    }
+  }
 
   const hasShared = /\bshared\b/.test(source)
   const hasAtv = /\batv\b|quad\s*four\s*wheeler/.test(source)
@@ -166,15 +192,14 @@ function getAmountDistance(rule: MachineCatalogRule, totalPeople: number, amount
 }
 
 function inferMachineTypeFromPeopleAndPrice(totalPeople: number, amount?: number, hint?: MachineCatalogRule | null) {
-  if (totalPeople <= 0) return hint || null
-  if (amount == null || !Number.isFinite(amount) || amount <= 0) return hint || null
+  if (hint) return hint
+  if (totalPeople <= 0) return null
+  if (amount == null || !Number.isFinite(amount) || amount <= 0) return null
 
-  const candidates = hint
-    ? MACHINE_CATALOG.filter((rule) => rule.machineType === hint.machineType || rule.machineType === "family_buggy" || rule.machineType === "vip_family_predator")
-    : MACHINE_CATALOG
+  const candidates = MACHINE_CATALOG
 
-  let selected: MachineCatalogRule | null = hint || null
-  let bestScore = hint ? getAmountDistance(hint, totalPeople, amount) : Number.POSITIVE_INFINITY
+  let selected: MachineCatalogRule | null = null
+  let bestScore = Number.POSITIVE_INFINITY
 
   for (const rule of candidates) {
     const score = getAmountDistance(rule, totalPeople, amount)
@@ -185,7 +210,7 @@ function inferMachineTypeFromPeopleAndPrice(totalPeople: number, amount?: number
   }
 
   // Avoid wild guesses when price clearly doesn't match any known rule.
-  if (!selected || bestScore > 0.45) return hint || null
+  if (!selected || bestScore > 0.45) return null
   return selected
 }
 
