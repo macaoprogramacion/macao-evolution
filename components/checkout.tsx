@@ -1110,37 +1110,8 @@ export function CheckoutModal({
                 <p className="text-sm font-medium text-foreground mb-3">
                   Método
                 </p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPaymentMethod("card");
-                      setErrors({});
-                    }}
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium transition-colors ${
-                      paymentMethod === "card"
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border text-foreground hover:bg-secondary"
-                    }`}
-                  >
-                    <CreditCard size={16} />
-                    Tarjeta
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPaymentMethod("paypal");
-                      setErrors({});
-                    }}
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium transition-colors ${
-                      paymentMethod === "paypal"
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border text-foreground hover:bg-secondary"
-                    }`}
-                  >
-                    <CircleDollarSign size={16} />
-                    PayPal
-                  </button>
+                <div className="rounded-xl border border-border bg-secondary/40 px-4 py-3 text-sm text-foreground text-center">
+                  PayPal (cuenta o tarjeta)
                 </div>
               </div>
 
@@ -1152,18 +1123,16 @@ export function CheckoutModal({
                 ) : (
                   <PayPalScriptProvider options={PAYPAL_OPTIONS}>
                     <p className="mb-3 text-xs text-muted-foreground text-center">
-                      {paymentMethod === "paypal"
-                        ? "Paga con tu cuenta PayPal."
-                        : "Paga con tarjeta de crédito o débito, procesada por PayPal."}
+                      Paga con tu cuenta PayPal o con tarjeta sin crear cuenta.
                     </p>
                     <PayPalButtons
                       style={{ layout: "vertical", shape: "pill", label: "pay" }}
                       disabled={isProcessing}
-                      forceReRender={[paymentMethod, amountToPay]}
+                      forceReRender={[amountToPay]}
                       createOrder={async () => createPayPalOrder()}
                       onApprove={async (data) => {
                         if (!data.orderID) throw new Error("Orden de PayPal inválida");
-                        await capturePayPalOrder(data.orderID, paymentMethod);
+                        await capturePayPalOrder(data.orderID, "paypal");
                       }}
                       onError={(error) => {
                         console.error("PayPal checkout error:", error);
@@ -1271,9 +1240,7 @@ export function CheckoutModal({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Método</span>
-                    <span className="text-foreground capitalize">
-                      {paymentMethod === "card" ? "Tarjeta" : "PayPal"}
-                    </span>
+                    <span className="text-foreground">PayPal</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Artículos</span>

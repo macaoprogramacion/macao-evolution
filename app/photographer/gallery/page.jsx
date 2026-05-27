@@ -283,7 +283,7 @@ function ClientGallery() {
   const [visibleCount, setVisibleCount] = useState(4);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [purchaseTarget, setPurchaseTarget] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState('card');
+  const [paymentMethod, setPaymentMethod] = useState('paypal');
   const [paymentForm, setPaymentForm] = useState({
     name: '',
     cardNumber: '',
@@ -348,7 +348,7 @@ function ClientGallery() {
   const openPaymentForPlan = (plan) => {
     if (!isPlanActive(plan)) return;
     setPurchaseTarget({ type: 'plan', plan });
-    setPaymentMethod('card');
+    setPaymentMethod('paypal');
     setPaymentErrors({});
     setUseSavedCard(!!savedPayment);
     setSavedCardCvc('');
@@ -359,7 +359,7 @@ function ClientGallery() {
   const openPaymentForVideo = () => {
     if (videoSelected && portfolioVideo) {
       setPurchaseTarget({ type: 'video' });
-      setPaymentMethod('card');
+      setPaymentMethod('paypal');
       setPaymentErrors({});
       setUseSavedCard(!!savedPayment);
       setSavedCardCvc('');
@@ -452,7 +452,7 @@ function ClientGallery() {
 
     setShowPaymentModal(false);
     setPurchaseTarget(null);
-    setPaymentMethod('card');
+    setPaymentMethod('paypal');
     setPaymentErrors({});
     setPaymentForm({ name: '', cardNumber: '', exp: '', cvc: '' });
     setSavedCardCvc('');
@@ -1076,158 +1076,48 @@ function ClientGallery() {
                     : `Video Aventura - US$ ${videoPrice}`}
                 </p>
 
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <GlassButton
-                    variant={paymentMethod === 'card' ? 'primary' : 'secondary'}
-                    onClick={() => setPaymentMethod('card')}
-                  >
-                    Tarjeta
-                  </GlassButton>
-                  <GlassButton
-                    variant={paymentMethod === 'paypal' ? 'primary' : 'secondary'}
-                    onClick={() => setPaymentMethod('paypal')}
-                  >
-                    PayPal
-                  </GlassButton>
+                <div className="mb-4 rounded-xl border border-white/20 bg-white/5 p-3 text-center text-sm text-white/80">
+                  Método: PayPal (cuenta o tarjeta)
                 </div>
 
-                {/* Saved card banner */}
-                {paymentMethod === 'card' && savedPayment && (
-                  <div className="mb-4 p-4 rounded-xl border border-white/20 bg-white/5">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-white text-sm font-medium">Tarjeta guardada</p>
-                        <p className="text-white/50 text-xs mt-0.5">
-                          {savedPayment.cardholder_name}&nbsp;&nbsp;••••&nbsp;{savedPayment.last4}
-                          {savedPayment.exp ? `  ${savedPayment.exp}` : ''}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => { setUseSavedCard(!useSavedCard); setSavedCardCvc(''); setSavedCardCvcError(''); }}
-                        className="text-xs text-red-400 underline ml-3 shrink-0"
-                      >
-                        {useSavedCard ? 'Usar otra tarjeta' : 'Usar esta tarjeta'}
-                      </button>
-                    </div>
-                    {useSavedCard && (
-                      <div className="mt-3">
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          placeholder="CVC"
-                          value={savedCardCvc}
-                          onChange={(e) => {
-                            setSavedCardCvcError('');
-                            setSavedCardCvc(e.target.value.replace(/[^0-9]/g, '').slice(0, 4));
-                          }}
-                          className="w-full px-4 py-3 bg-black/30 rounded-xl border border-white/20 text-white placeholder:text-white/40 focus:outline-none"
-                        />
-                        {savedCardCvcError && <p className="text-xs text-red-400 mt-1">{savedCardCvcError}</p>}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {paymentMethod === 'card' && (!savedPayment || !useSavedCard) && (
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    placeholder="Nombre en tarjeta"
-                    value={paymentForm.name}
-                    onChange={(e) => {
-                      setPaymentErrors((prev) => ({ ...prev, name: '' }));
-                      setPaymentForm((prev) => ({ ...prev, name: sanitizeCardholderName(e.target.value) }));
-                    }}
-                    className="w-full px-4 py-3 bg-black/30 rounded-xl border border-white/20 text-white placeholder:text-white/40 focus:outline-none"
-                  />
-                  {paymentErrors.name && <p className="text-xs text-red-400">{paymentErrors.name}</p>}
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="Numero de tarjeta"
-                    value={paymentForm.cardNumber}
-                    onChange={(e) => {
-                      setPaymentErrors((prev) => ({ ...prev, cardNumber: '' }));
-                      setPaymentForm((prev) => ({ ...prev, cardNumber: e.target.value.replace(/[^0-9\s]/g, '').slice(0, 23) }));
-                    }}
-                    className="w-full px-4 py-3 bg-black/30 rounded-xl border border-white/20 text-white placeholder:text-white/40 focus:outline-none"
-                  />
-                  {paymentErrors.cardNumber && <p className="text-xs text-red-400">{paymentErrors.cardNumber}</p>}
-                  <div className="grid grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      placeholder="MM/AA"
-                      value={paymentForm.exp}
-                      onChange={(e) => {
-                        setPaymentErrors((prev) => ({ ...prev, exp: '' }));
-                        setPaymentForm((prev) => ({ ...prev, exp: formatExpiryInput(e.target.value) }));
-                      }}
-                      className="w-full px-4 py-3 bg-black/30 rounded-xl border border-white/20 text-white placeholder:text-white/40 focus:outline-none"
-                    />
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="CVC"
-                      value={paymentForm.cvc}
-                      onChange={(e) => {
-                        setPaymentErrors((prev) => ({ ...prev, cvc: '' }));
-                        setPaymentForm((prev) => ({ ...prev, cvc: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) }));
-                      }}
-                      className="w-full px-4 py-3 bg-black/30 rounded-xl border border-white/20 text-white placeholder:text-white/40 focus:outline-none"
-                    />
-                  </div>
-                  {(paymentErrors.exp || paymentErrors.cvc) && (
-                    <p className="text-xs text-red-400">{paymentErrors.exp || paymentErrors.cvc}</p>
+                <div className="rounded-xl border border-white/15 p-3 bg-black/20">
+                  {!PAYPAL_CLIENT_ID ? (
+                    <p className="text-sm text-yellow-300">Falta configurar PayPal. Define `NEXT_PUBLIC_PAYPAL_CLIENT_ID` para habilitarlo.</p>
+                  ) : (
+                    <PayPalScriptProvider options={PAYPAL_OPTIONS}>
+                      <p className="text-xs text-white/70 mb-3">
+                        Puedes pagar con cuenta PayPal o con tarjeta sin crear cuenta.
+                      </p>
+                      <PayPalButtons
+                        style={{ layout: 'vertical', shape: 'pill', label: 'pay' }}
+                        forceReRender={[getPaymentAmount()]}
+                        createOrder={async () => createPayPalOrderFromApi(getPaymentAmount())}
+                        onApprove={async (data) => {
+                          if (!data?.orderID) throw new Error('Orden de PayPal inválida');
+                          setIsProcessingPayment(true);
+                          try {
+                            await capturePayPalOrderFromApi(data.orderID);
+                            await completePurchase('paypal');
+                          } finally {
+                            setIsProcessingPayment(false);
+                          }
+                        }}
+                        onError={(err) => {
+                          console.error('PayPal error:', err);
+                          alert('No se pudo completar el pago con PayPal. Intenta de nuevo.');
+                        }}
+                      />
+                    </PayPalScriptProvider>
                   )}
                 </div>
-                )}
-
-                {paymentMethod === 'paypal' && (
-                  <div className="rounded-xl border border-white/15 p-3 bg-black/20">
-                    {!PAYPAL_CLIENT_ID ? (
-                      <p className="text-sm text-yellow-300">Falta configurar PayPal. Define `NEXT_PUBLIC_PAYPAL_CLIENT_ID` para habilitarlo.</p>
-                    ) : (
-                      <PayPalScriptProvider options={PAYPAL_OPTIONS}>
-                        <p className="text-xs text-white/70 mb-3">
-                          Puedes pagar con cuenta PayPal o con tarjeta sin crear cuenta.
-                        </p>
-                        <PayPalButtons
-                          style={{ layout: 'vertical', shape: 'pill', label: 'pay' }}
-                          forceReRender={[paymentMethod, getPaymentAmount()]}
-                          createOrder={async () => createPayPalOrderFromApi(getPaymentAmount())}
-                          onApprove={async (data) => {
-                            if (!data?.orderID) throw new Error('Orden de PayPal inválida');
-                            setIsProcessingPayment(true);
-                            try {
-                              await capturePayPalOrderFromApi(data.orderID);
-                              await completePurchase('paypal');
-                            } finally {
-                              setIsProcessingPayment(false);
-                            }
-                          }}
-                          onError={(err) => {
-                            console.error('PayPal error:', err);
-                            alert('No se pudo completar el pago con PayPal. Intenta de nuevo.');
-                          }}
-                        />
-                      </PayPalScriptProvider>
-                    )}
-                  </div>
-                )}
 
                 <div className="flex gap-3 mt-6">
                   <GlassButton variant="secondary" className="flex-1" onClick={() => { setShowPaymentModal(false); setSavedCardCvc(''); setSavedCardCvcError(''); }}>
                     Cancelar
                   </GlassButton>
-                  {paymentMethod === 'card' ? (
-                    <GlassButton variant="primary" className="flex-1" onClick={handleConfirmPayment} disabled={isProcessingPayment}>
-                      {isProcessingPayment ? 'Procesando...' : 'Pagar'}
-                    </GlassButton>
-                  ) : (
-                    <GlassButton variant="primary" className="flex-1" disabled>
-                      PayPal
-                    </GlassButton>
-                  )}
+                  <GlassButton variant="primary" className="flex-1" disabled>
+                    Completa el pago arriba
+                  </GlassButton>
                 </div>
               </GlassCard>
             </motion.div>

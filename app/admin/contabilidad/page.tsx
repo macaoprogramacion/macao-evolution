@@ -26,8 +26,76 @@ type PhotoReturnRequest = {
   updatedAt: string
 }
 
+type BuggyOpsReservation = {
+  id: string
+  date: string
+  status: string
+  guests: number
+  children: number
+  notes: string
+}
+
+type TourOpsReservation = {
+  id: string
+  date: string
+  status: string
+  guests: number
+  children: number
+}
+
+type OpsPeriodStats = {
+  machines: number
+  horses: number
+  saonaPeople: number
+  samanaPeople: number
+}
+
 function fmtMoney(amount: number) {
   return `US$ ${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function getLocalISODate() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, "0")
+  const day = String(now.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+function startOfWeekISO(dateISO: string) {
+  const d = new Date(`${dateISO}T12:00:00`)
+  d.setDate(d.getDate() - d.getDay())
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+function startOfMonthISO(dateISO: string) {
+  return `${dateISO.slice(0, 7)}-01`
+}
+
+function inRange(date: string, from: string, to: string) {
+  return date >= from && date <= to
+}
+
+function parseCountFromNotes(notes: string, label: "maquinas" | "caballos") {
+  const match = (notes || "").match(new RegExp(`${label}\\s*:\\s*(\\d+)`, "i"))
+  return match ? Number(match[1] || 0) : 0
+}
+
+function isSoldStatus(status: string) {
+  return status !== "cancelled" && status !== "rejected"
+}
+
+function sumPax(rows: Array<{ guests: number; children: number }>) {
+  return rows.reduce((sum, row) => sum + Number(row.guests || 0) + Number(row.children || 0), 0)
+}
+
+function statLabel(period: "day" | "week" | "month") {
+  if (period === "day") return "Hoy"
+  if (period === "week") return "Semana"
+  return "Mes"
 }
 
 function statusBadge(status: string) {
@@ -74,6 +142,9 @@ export default function AccountingRequestsPage() {
   const [savingReturnId, setSavingReturnId] = useState<string | null>(null)
   const [cancelRequests, setCancelRequests] = useState<CancellationRequest[]>([])
   const [photoReturns, setPhotoReturns] = useState<PhotoReturnRequest[]>([])
+  const [buggyOps, setBuggyOps] = useState<BuggyOpsReservation[]>([])
+  const [saonaOps, setSaonaOps] = useState<TourOpsReservation[]>([])
+  const [samanaOps, setSamanaOps] = useState<TourOpsReservation[]>([])
 
   const loadCancellationRequests = async () => {
     try {
@@ -102,9 +173,63 @@ export default function AccountingRequestsPage() {
     }
   }
 
+  const loadOperationsAnalytics = async () => {
+    try {
+      const [buggyRes, saonaRes, samanaRes] = await Promise.all([
+        supabase
+          .from("reservations")
+          .select("id, date, status, guests, children, notes")
+          .order("date", { ascending: false })
+          .limit(4000),
+        supabase
+          .from("saona_reservations")
+          .select("id, date, status, guests, children")
+          .order("date", { ascending: false })
+          .limit(4000),
+        supabase
+          .from("samana_reservations")
+          .select("id, date, status, guests, children")
+          .order("date", { ascending: false })
+          .limit(4000),
+      ])
+
+      if (buggyRes.error) throw buggyRes.error
+      if (saonaRes.error) throw saonaRes.error
+      if (samanaRes.error) throw samanaRes.error
+
+      setBuggyOps(
+        (buggyRes.data || []).map((row: any) => ({
+          id: String(row.id),
+          date: row.date || "",
+          status: row.status || "pending",
+          guests: Number(row.guests || 0),
+          children: Number(row.children || 0),
+          notes: row.notes || "",
+        })),
+      )
+
+      const mapTourRows = (rows: any[]): TourOpsReservation[] =>
+        rows.map((row) => ({
+          id: String(row.id),
+          date: row.date || "",
+          status: row.status || "pending",
+          guests: Number(row.guests || 0),
+          children: Number(row.children || 0),
+        }))
+
+      setSaonaOps(mapTourRows(saonaRes.data || []))
+      setSamanaOps(mapTourRows(samanaRes.data || []))
+    } catch (error) {
+      console.error("Error loading operations analytics:", error)
+      setBuggyOps([])
+      setSaonaOps([])
+      setSamanaOps([])
+    }
+  }
+
   const reloadAll = async () => {
     setLoading(true)
-    await Promise.all([loadCancellationRequests(), loadPhotoReturns()])
+    await Promise.all([loadCancellationRequests(), loadPhotoReturns(), loadOperationsAnalytics()])
     setLoading(false)
   }
 
@@ -112,7 +237,7 @@ export default function AccountingRequestsPage() {
     void reloadAll()
 
     const interval = window.setInterval(() => {
-      void Promise.all([loadCancellationRequests(), loadPhotoReturns()])
+      void Promise.all([loadCancellationRequests(), loadPhotoReturns(), loadOperationsAnalytics()])
     }, 7000)
 
     return () => window.clearInterval(interval)
@@ -131,6 +256,35 @@ export default function AccountingRequestsPage() {
     const rejected = photoReturns.filter((item) => item.status === "rechazada").length
     return { total: photoReturns.length, pending, approved, rejected }
   }, [photoReturns])
+
+  const opsStats = useMemo(() => {
+    const today = getLocalISODate()
+    const weekStart = startOfWeekISO(today)
+    const monthStart = startOfMonthISO(today)
+
+    const soldBuggy = buggyOps.filter((row) => row.date && isSoldStatus(row.status))
+    const soldSaona = saonaOps.filter((row) => row.date && isSoldStatus(row.status))
+    const soldSamana = samanaOps.filter((row) => row.date && isSoldStatus(row.status))
+
+    const buildPeriodStats = (fromDate: string): OpsPeriodStats => {
+      const buggyRows = soldBuggy.filter((row) => inRange(row.date, fromDate, today))
+      const saonaRows = soldSaona.filter((row) => inRange(row.date, fromDate, today))
+      const samanaRows = soldSamana.filter((row) => inRange(row.date, fromDate, today))
+
+      return {
+        machines: buggyRows.reduce((sum, row) => sum + parseCountFromNotes(row.notes, "maquinas"), 0),
+        horses: buggyRows.reduce((sum, row) => sum + parseCountFromNotes(row.notes, "caballos"), 0),
+        saonaPeople: sumPax(saonaRows),
+        samanaPeople: sumPax(samanaRows),
+      }
+    }
+
+    return {
+      day: buildPeriodStats(today),
+      week: buildPeriodStats(weekStart),
+      month: buildPeriodStats(monthStart),
+    }
+  }, [buggyOps, saonaOps, samanaOps])
 
   const handleCancellationDecision = async (
     request: CancellationRequest,
@@ -270,6 +424,43 @@ export default function AccountingRequestsPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Analíticas operativas para contabilidad</CardTitle>
+            <CardDescription>
+              Cantidades vendidas de máquinas, caballos y personas en Saona/Samaná por período.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {(["day", "week", "month"] as const).map((period) => {
+                const stats = opsStats[period]
+                return (
+                  <div key={period} className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-2">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{statLabel(period)}</p>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Máquinas vendidas</span>
+                      <span className="font-semibold">{stats.machines}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Caballos vendidos</span>
+                      <span className="font-semibold">{stats.horses}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Personas Saona</span>
+                      <span className="font-semibold">{stats.saonaPeople}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Personas Samaná</span>
+                      <span className="font-semibold">{stats.samanaPeople}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

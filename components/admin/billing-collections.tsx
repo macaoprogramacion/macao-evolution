@@ -21,6 +21,7 @@ import { supabase } from "@/lib/supabase"
 import { createPickupReservationCode, parsePickupReservationCode } from "@/lib/pickup-reservation-code"
 import { addPickupSheetRows, getOrCreateDraftPickupSheet } from "@/lib/pickup-sheets"
 import { getDashboardSession } from "@/lib/dashboard-session"
+import { hotelDirectory } from "@/lib/hotel-locations"
 import {
   listCancellationRequests,
   updateCancellationRequestDecision,
@@ -52,6 +53,15 @@ interface ServiceLine {
 }
 
 const SERVICE_OPTIONS = [
+  "Buggy Doble",
+  "Buggy Familiar",
+  "Moto",
+  "Predactor Doble",
+  "Predactor Familiar",
+  "Kayo",
+  "Polari Doble",
+  "Polari Familiar",
+  "Caballo",
   "Single Buggy",
   "Doble Buggy",
   "Family Buggy",
@@ -62,6 +72,88 @@ const SERVICE_OPTIONS = [
   "Sunset Ride",
   "Full Ride",
 ]
+
+const CREDIT_VENDORS = [
+  "ANDY PERDOMO",
+  "ANDY VALDEZ",
+  "DAVID FELIX (BUEY TOUR)",
+  "ALE HUERTA",
+  "BUEY TOUR",
+]
+
+const DEFAULT_VENDOR_SERVICE_PRICES: Record<string, Record<string, number>> = {
+  "ALE HUERTA": {
+    "Buggy Doble": 30,
+    "Buggy Familiar": 60,
+    "Moto": 30,
+    "Predactor Doble": 55,
+    "Predactor Familiar": 85,
+    "Kayo": 55,
+    "Polari Doble": 70,
+    "Polari Familiar": 110,
+    "Caballo": 25,
+  },
+  "DAVID FELIX (BUEY TOUR)": {
+    "Buggy Doble": 35,
+    "Buggy Familiar": 65,
+    "Moto": 35,
+    "Predactor Doble": 60,
+    "Predactor Familiar": 90,
+    "Kayo": 60,
+    "Polari Doble": 75,
+    "Polari Familiar": 115,
+    "Caballo": 30,
+  },
+  "BUEY TOUR": {
+    "Buggy Doble": 30,
+    "Buggy Familiar": 60,
+    "Moto": 30,
+    "Predactor Doble": 55,
+    "Predactor Familiar": 85,
+    "Kayo": 55,
+    "Polari Doble": 70,
+    "Polari Familiar": 110,
+    "Caballo": 25,
+  },
+  "ANDY VALDEZ": {
+    "Buggy Doble": 30,
+    "Buggy Familiar": 60,
+    "Moto": 30,
+    "Predactor Doble": 55,
+    "Predactor Familiar": 85,
+    "Kayo": 55,
+    "Polari Doble": 70,
+    "Polari Familiar": 110,
+    "Caballo": 25,
+  },
+  "ANDY PERDOMO": {
+    "Buggy Doble": 30,
+    "Buggy Familiar": 60,
+    "Moto": 30,
+    "Predactor Doble": 55,
+    "Predactor Familiar": 85,
+    "Kayo": 55,
+    "Polari Doble": 70,
+    "Polari Familiar": 110,
+    "Caballo": 25,
+  },
+}
+
+function normalizeServiceName(serviceType: string) {
+  const raw = (serviceType || "").trim().toLowerCase()
+  if (raw === "doble buggy") return "Buggy Doble"
+  if (raw === "family buggy") return "Buggy Familiar"
+  if (raw === "single moto" || raw === "doble moto") return "Moto"
+  if (raw === "predator doble") return "Predactor Doble"
+  if (raw === "predator familiar") return "Predactor Familiar"
+  return serviceType
+}
+
+function getDefaultVendorPrice(vendor: string, serviceType: string) {
+  const vendorPrices = DEFAULT_VENDOR_SERVICE_PRICES[vendor] || {}
+  const normalized = normalizeServiceName(serviceType)
+  return vendorPrices[normalized]
+}
 
 const CURRENCY_SYMBOLS: Record<"USD" | "DOP" | "EUR" | "GBP", string> = {
   USD: "US$",
@@ -132,6 +224,10 @@ function parseServiceItemsFromNotes(rawNotes?: string) {
   }
 }
 
+const HOTEL_OPTIONS = Array.from(new Set(Object.values(hotelDirectory).map((hotel) => hotel.name))).sort((a, b) =>
+  a.localeCompare(b),
+)
+
 export function BillingCollections() {
   const [records, setRecords] = useState<BillingRecord[]>([])
   const [closureFeedback, setClosureFeedback] = useState<string>("")
@@ -149,7 +245,6 @@ export function BillingCollections() {
   const [paymentMethod, setPaymentMethod] = useState<"tarjeta" | "paypal" | "efectivo">("efectivo")
   const [courtesy, setCourtesy] = useState(false)
   const [serviceLines, setServiceLines] = useState<ServiceLine[]>([{ serviceType: "", quantity: 1, unitAmount: "" }])
-  const [pickupCode, setPickupCode] = useState("")
   const [pickupHotel, setPickupHotel] = useState("")
   const [pickupTime, setPickupTime] = useState("")
   const [pickupRoom, setPickupRoom] = useState("")
@@ -226,6 +321,26 @@ export function BillingCollections() {
     }, 5000)
     return () => window.clearInterval(interval)
   }, [canManageAccountingRequests])
+
+  useEffect(() => {
+    if (type !== "credito_vendedor") return
+
+    if (!vendorName && CREDIT_VENDORS.length > 0) {
+      setVendorName(CREDIT_VENDORS[0])
+    }
+  }, [type, vendorName])
+
+  useEffect(() => {
+    if (type !== "credito_vendedor" || !vendorName) return
+
+    setServiceLines((prev) =>
+      prev.map((line) => {
+        const defaultPrice = getDefaultVendorPrice(vendorName, line.serviceType)
+        if (defaultPrice == null) return line
+        return { ...line, unitAmount: String(defaultPrice) }
+      }),
+    )
+  }, [type, vendorName])
 
   const supportsMultiCurrency = type === "pago_al_llegar" || type === "venta_directa"
 
@@ -386,8 +501,8 @@ export function BillingCollections() {
       return
     }
 
-    if (!pickupCode.trim() && (!pickupHotel.trim() || !pickupTime.trim())) {
-      alert("Para generar codigo MRC1 automatico debes completar Hotel y Hora de recogida, o pegar un codigo MRC1 manual.")
+    if (!pickupHotel.trim() || !pickupTime.trim()) {
+      alert("Para generar codigo MRC1 automatico debes completar Hotel y Hora de recogida.")
       return
     }
 
@@ -424,21 +539,19 @@ export function BillingCollections() {
         vendor_name: type === "credito_vendedor" ? vendorName : null,
       })
 
-      let effectivePickupCode = pickupCode.trim()
+      let effectivePickupCode = ""
 
       if (inserted) {
-        if (!effectivePickupCode) {
-          effectivePickupCode = createPickupReservationCode({
-            reservationId: inserted.id,
-            customerName: clientName,
-            hotel: pickupHotel.trim(),
-            pickupTime: pickupTime.trim(),
-            agency: type === "credito_vendedor" ? vendorName.trim() : "Facturacion",
-            persons: Math.max(1, Number(pickupPax || "1")),
-            room: pickupRoom.trim(),
-            serviceType: serviceSummary,
-          })
-        }
+        effectivePickupCode = createPickupReservationCode({
+          reservationId: inserted.id,
+          customerName: clientName,
+          hotel: pickupHotel.trim(),
+          pickupTime: pickupTime.trim(),
+          agency: type === "credito_vendedor" ? vendorName.trim() : "Facturacion",
+          persons: Math.max(1, Number(pickupPax || "1")),
+          room: pickupRoom.trim(),
+          serviceType: serviceSummary,
+        })
 
         if (effectivePickupCode) {
           const notesWithCode = [
@@ -519,7 +632,6 @@ export function BillingCollections() {
     setPaymentMethod("efectivo")
     setCourtesy(false)
     setServiceLines([{ serviceType: "", quantity: 1, unitAmount: "" }])
-    setPickupCode("")
     setPickupHotel("")
     setPickupTime("")
     setPickupRoom("")
@@ -531,6 +643,17 @@ export function BillingCollections() {
     setServiceLines((prev) =>
       prev.map((line, i) => (i === index ? { ...line, ...updates } : line)),
     )
+  }
+
+  const handleServiceTypeChange = (index: number, serviceType: string) => {
+    const updates: Partial<ServiceLine> = { serviceType }
+    if (type === "credito_vendedor" && vendorName) {
+      const defaultPrice = getDefaultVendorPrice(vendorName, serviceType)
+      if (defaultPrice != null) {
+        updates.unitAmount = String(defaultPrice)
+      }
+    }
+    updateServiceLine(index, updates)
   }
 
   const addServiceLine = () => {
@@ -838,7 +961,7 @@ export function BillingCollections() {
                 {serviceLines.map((line, idx) => (
                   <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center rounded-md border border-gray-200 dark:border-gray-700 p-2">
                     <div className="md:col-span-6">
-                      <Select value={line.serviceType} onValueChange={(v) => updateServiceLine(idx, { serviceType: v })}>
+                      <Select value={line.serviceType} onValueChange={(v) => handleServiceTypeChange(idx, v)}>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecciona servicio" />
                         </SelectTrigger>
@@ -941,11 +1064,19 @@ export function BillingCollections() {
             {type === "credito_vendedor" && (
               <div className="space-y-1.5">
                 <Label>Nombre Vendedor *</Label>
-                <Input
+                <Select
                   value={vendorName}
-                  onChange={(e) => setVendorName(e.target.value)}
-                  placeholder="Nombre del vendedor"
-                />
+                  onValueChange={setVendorName}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona vendedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CREDIT_VENDORS.map((vendor) => (
+                      <SelectItem key={vendor} value={vendor}>{vendor}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
 
@@ -982,11 +1113,19 @@ export function BillingCollections() {
 
             <div className="space-y-1.5">
               <Label>Hotel / Punto de recogida *</Label>
-              <Input
+              <Select
                 value={pickupHotel}
-                onChange={(e) => setPickupHotel(e.target.value)}
-                placeholder="Ej: Vista Sol Punta Cana"
-              />
+                onValueChange={setPickupHotel}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona hotel" />
+                </SelectTrigger>
+                <SelectContent>
+                  {HOTEL_OPTIONS.map((hotelName) => (
+                    <SelectItem key={hotelName} value={hotelName}>{hotelName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">
@@ -1019,15 +1158,10 @@ export function BillingCollections() {
             </div>
 
             <div className="space-y-1.5 md:col-span-2">
-              <Label>Codigo de Reserva MRC1 (opcional)</Label>
-              <Input
-                value={pickupCode}
-                onChange={(e) => setPickupCode(e.target.value)}
-                placeholder="MRC1:..."
-              />
-              <p className="text-xs text-gray-500">
-                Si lo dejas vacio, el sistema lo genera automaticamente con los datos de recogida.
-              </p>
+              <Label>Codigo de Reserva MRC1</Label>
+              <div className="rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/40">
+                Se genera automaticamente al registrar. Luego puedes copiarlo en la lista de transacciones.
+              </div>
             </div>
           </div>
 
