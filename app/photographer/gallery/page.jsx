@@ -39,6 +39,40 @@ const PAYPAL_OPTIONS = {
   locale: 'es_DO',
 };
 
+async function createPayPalOrderFromApi(amount) {
+  const response = await fetch('/api/paypal/create-order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      amount,
+      currency: 'USD',
+      description: 'Compra de fotografia - Macao Evolution',
+    }),
+  });
+
+  const payload = await response.json();
+  if (!response.ok || !payload?.id) {
+    throw new Error(payload?.error || 'No se pudo crear la orden de PayPal');
+  }
+
+  return payload.id;
+}
+
+async function capturePayPalOrderFromApi(orderId) {
+  const response = await fetch('/api/paypal/capture-order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId }),
+  });
+
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.error || 'No se pudo capturar el pago de PayPal');
+  }
+
+  return payload;
+}
+
 function formatExpiryInput(value) {
   const digits = value.replace(/\D/g, '').slice(0, 4);
   if (digits.length <= 2) return digits;
@@ -1159,13 +1193,13 @@ function ClientGallery() {
                         </p>
                         <PayPalButtons
                           style={{ layout: 'vertical', shape: 'pill', label: 'pay' }}
-                          createOrder={(_data, actions) => actions.order.create({
-                            purchase_units: [{ amount: { value: getPaymentAmount().toFixed(2), currency_code: 'USD' } }],
-                          })}
-                          onApprove={async (_data, actions) => {
+                          forceReRender={[paymentMethod, getPaymentAmount()]}
+                          createOrder={async () => createPayPalOrderFromApi(getPaymentAmount())}
+                          onApprove={async (data) => {
+                            if (!data?.orderID) throw new Error('Orden de PayPal inválida');
                             setIsProcessingPayment(true);
                             try {
-                              await actions.order.capture();
+                              await capturePayPalOrderFromApi(data.orderID);
                               await completePurchase('paypal');
                             } finally {
                               setIsProcessingPayment(false);
