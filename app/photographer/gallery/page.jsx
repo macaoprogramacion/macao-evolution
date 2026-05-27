@@ -1158,7 +1158,6 @@ function ClientGallery() {
                           Puedes pagar con cuenta PayPal o con tarjeta sin crear cuenta.
                         </p>
                         <PayPalButtons
-                          fundingSource="paypal"
                           style={{ layout: 'vertical', shape: 'pill', label: 'pay' }}
                           createOrder={(_data, actions) => actions.order.create({
                             purchase_units: [{ amount: { value: getPaymentAmount().toFixed(2), currency_code: 'USD' } }],
@@ -1177,28 +1176,6 @@ function ClientGallery() {
                             alert('No se pudo completar el pago con PayPal. Intenta de nuevo.');
                           }}
                         />
-                        <div className="mt-2">
-                          <PayPalButtons
-                            fundingSource="card"
-                            style={{ layout: 'vertical', shape: 'pill', label: 'pay' }}
-                            createOrder={(_data, actions) => actions.order.create({
-                              purchase_units: [{ amount: { value: getPaymentAmount().toFixed(2), currency_code: 'USD' } }],
-                            })}
-                            onApprove={async (_data, actions) => {
-                              setIsProcessingPayment(true);
-                              try {
-                                await actions.order.capture();
-                                await completePurchase('paypal');
-                              } finally {
-                                setIsProcessingPayment(false);
-                              }
-                            }}
-                            onError={(err) => {
-                              console.error('PayPal Card error:', err);
-                              alert('No se pudo completar el pago con tarjeta. Intenta de nuevo.');
-                            }}
-                          />
-                        </div>
                       </PayPalScriptProvider>
                     )}
                   </div>

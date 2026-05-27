@@ -1157,9 +1157,9 @@ export function CheckoutModal({
                         : "Paga con tarjeta de crédito o débito, procesada por PayPal."}
                     </p>
                     <PayPalButtons
-                      fundingSource={paymentMethod === "paypal" ? "paypal" : "card"}
                       style={{ layout: "vertical", shape: "pill", label: "pay" }}
                       disabled={isProcessing}
+                      forceReRender={[paymentMethod, amountToPay]}
                       createOrder={async () => createPayPalOrder()}
                       onApprove={async (data) => {
                         if (!data.orderID) throw new Error("Orden de PayPal inválida");

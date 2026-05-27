@@ -85,21 +85,22 @@ type ServiceRule = {
   label: string
   minPeople: number
   maxPeople: number
+  machineCapacity?: number
   horseRule: "none" | "range" | "equal_people"
   horseMin?: number
   horseMax?: number
 }
 
 const SERVICE_RULES: ServiceRule[] = [
-  { id: "buggy_single", label: "Buggy Single", minPeople: 1, maxPeople: 1, horseRule: "none" },
-  { id: "buggy_double", label: "Buggy Doble", minPeople: 1, maxPeople: 2, horseRule: "none" },
-  { id: "vip_buggy_double", label: "VIP Shared Predator", minPeople: 1, maxPeople: 2, horseRule: "none" },
-  { id: "buggy_family", label: "Family Buggy", minPeople: 3, maxPeople: 4, horseRule: "none" },
-  { id: "vip_buggy_family", label: "VIP Family Predator", minPeople: 3, maxPeople: 4, horseRule: "none" },
-  { id: "moto_single", label: "Single Moto", minPeople: 1, maxPeople: 1, horseRule: "none" },
-  { id: "moto_double", label: "Doble Moto", minPeople: 1, maxPeople: 2, horseRule: "none" },
-  { id: "horse15_buggy_double", label: "15 Min Caballos + Buggy Doble", minPeople: 1, maxPeople: 2, horseRule: "range", horseMin: 1, horseMax: 2 },
-  { id: "horse15_buggy_family", label: "15 Min Caballos + Family Buggy", minPeople: 3, maxPeople: 4, horseRule: "range", horseMin: 3, horseMax: 4 },
+  { id: "buggy_single", label: "Buggy Single", minPeople: 1, maxPeople: 1, machineCapacity: 1, horseRule: "none" },
+  { id: "buggy_double", label: "Buggy Doble", minPeople: 1, maxPeople: 2, machineCapacity: 2, horseRule: "none" },
+  { id: "vip_buggy_double", label: "VIP Shared Predator", minPeople: 1, maxPeople: 2, machineCapacity: 2, horseRule: "none" },
+  { id: "buggy_family", label: "Family Buggy", minPeople: 3, maxPeople: 4, machineCapacity: 4, horseRule: "none" },
+  { id: "vip_buggy_family", label: "VIP Family Predator", minPeople: 3, maxPeople: 4, machineCapacity: 4, horseRule: "none" },
+  { id: "moto_single", label: "Single Moto", minPeople: 1, maxPeople: 1, machineCapacity: 1, horseRule: "none" },
+  { id: "moto_double", label: "Doble Moto", minPeople: 1, maxPeople: 2, machineCapacity: 2, horseRule: "none" },
+  { id: "horse15_buggy_double", label: "15 Min Caballos + Buggy Doble", minPeople: 1, maxPeople: 2, machineCapacity: 2, horseRule: "range", horseMin: 1, horseMax: 2 },
+  { id: "horse15_buggy_family", label: "15 Min Caballos + Family Buggy", minPeople: 3, maxPeople: 4, machineCapacity: 4, horseRule: "range", horseMin: 3, horseMax: 4 },
   { id: "sunset_ride", label: "Sunset Ride", minPeople: 1, maxPeople: 12, horseRule: "equal_people" },
   { id: "sunset_tour", label: "Sunset Tour", minPeople: 1, maxPeople: 12, horseRule: "equal_people" },
   { id: "caballos", label: "Caballos", minPeople: 1, maxPeople: 12, horseRule: "equal_people" },
@@ -516,6 +517,7 @@ export default function OperationPage() {
     pickup_point: "lobby",
     transport_type: "included",
     experience: "",
+    machine_count: 0,
     horses: 0,
     channel: "phone",
     channel_url: "",
@@ -543,6 +545,7 @@ export default function OperationPage() {
     pickup_point: "lobby",
     transport_type: "included",
     experience: "",
+    machine_count: 0,
     horses: 0,
     channel: "phone",
     channel_url: "",
@@ -566,6 +569,7 @@ export default function OperationPage() {
       pickup_point: "lobby",
       transport_type: "included",
       experience: "",
+      machine_count: 0,
       horses: 0,
       channel: "phone",
       channel_url: "",
@@ -636,6 +640,7 @@ export default function OperationPage() {
       const nextHorses = nextRule?.horseRule === "equal_people"
         ? totalPeople
         : prev.horses
+      const nextMachineCount = parsed.machineCount || Math.max(prev.machine_count, getSuggestedMachineCount(nextExperience, nextGuests, nextChildren))
 
       if (nextRule?.horseRule === "equal_people") {
         nextHorseAutoSummary = `Caballos auto: ${nextHorses} (${nextExperience})`
@@ -657,6 +662,7 @@ export default function OperationPage() {
         channel: "ota",
         channel_url: parsed.bookingReference || prev.channel_url,
         experience: nextExperience,
+        machine_count: nextMachineCount,
         horses: nextHorses,
         notes: [prev.notes, notesFromPaste].filter(Boolean).join(prev.notes && notesFromPaste ? "\n" : ""),
       })
@@ -682,10 +688,10 @@ export default function OperationPage() {
     setSaving(true)
     try {
       console.log("Attempting to save reservation:", newRes)
-      const { horses, ...newResWithoutHorses } = newRes
+      const { horses, machine_count, ...newResWithoutCounts } = newRes
       const insertPayload = {
-        ...newResWithoutHorses,
-        notes: upsertHorseCountInNotes(newRes.notes, horses),
+        ...newResWithoutCounts,
+        notes: upsertReservationCountsInNotes(newRes.notes, horses, machine_count),
         channel_color: channelColors[newRes.channel] || "#6b7280",
       }
       console.log("Insert payload:", insertPayload)
@@ -904,22 +910,56 @@ export default function OperationPage() {
     return match ? Number(match[1]) : 0
   }
 
-  const upsertHorseCountInNotes = (notes: string, horses: number) => {
-    const base = (notes || "").replace(/\n?caballos\s*:\s*\d+/gi, "").trim()
-    if (!horses || horses <= 0) return base
-    return [base, `Caballos: ${horses}`].filter(Boolean).join(base ? "\n" : "")
+  const parseMachineCountFromNotes = (notes: string) => {
+    const match = (notes || "").match(/maquinas\s*:\s*(\d+)/i)
+    return match ? Number(match[1]) : 0
   }
 
   const getTotalPeople = (draft: { guests: number; children: number }) => {
     return Math.max(0, Number(draft.guests || 0) + Number(draft.children || 0))
   }
 
-  const validateServiceCapacity = (draft: { experience: string; guests: number; children: number; horses: number }) => {
+  const getSuggestedMachineCount = (experience: string, guests: number, children: number) => {
+    const rule = getServiceRule(experience)
+    if (!rule?.machineCapacity) return 0
+
+    const totalPeople = Math.max(0, Number(guests || 0) + Number(children || 0))
+    if (totalPeople <= 0) return 0
+
+    return Math.max(1, Math.ceil(totalPeople / rule.machineCapacity))
+  }
+
+  const upsertReservationCountsInNotes = (notes: string, horses: number, machineCount: number) => {
+    const base = (notes || "")
+      .replace(/\n?caballos\s*:\s*\d+/gi, "")
+      .replace(/\n?maquinas\s*:\s*\d+/gi, "")
+      .trim()
+
+    return [
+      base,
+      machineCount > 0 ? `Maquinas: ${machineCount}` : "",
+      horses > 0 ? `Caballos: ${horses}` : "",
+    ].filter(Boolean).join("\n")
+  }
+
+  const validateServiceCapacity = (draft: { experience: string; guests: number; children: number; horses: number; machine_count: number }) => {
     const rule = getServiceRule(draft.experience)
     if (!rule) return null
 
     const totalPeople = getTotalPeople(draft)
-    if (totalPeople < rule.minPeople || totalPeople > rule.maxPeople) {
+    const machineCount = Math.max(0, Number(draft.machine_count || 0))
+    const maxPeopleAllowed = rule.machineCapacity && machineCount > 0
+      ? rule.machineCapacity * machineCount
+      : rule.maxPeople
+
+    if (rule.machineCapacity && machineCount <= 0) {
+      return `${rule.label}: debes indicar la cantidad de maquinas.`
+    }
+
+    if (totalPeople < rule.minPeople || totalPeople > maxPeopleAllowed) {
+      if (rule.machineCapacity && machineCount > 0) {
+        return `${rule.label}: permitido hasta ${maxPeopleAllowed} persona(s) con ${machineCount} maquina(s). Actual: ${totalPeople}.`
+      }
       return `${rule.label}: permitido ${rule.minPeople}-${rule.maxPeople} persona(s). Actual: ${totalPeople}.`
     }
 
@@ -985,6 +1025,7 @@ export default function OperationPage() {
       pickup_point: reservation.pickupPoint || "lobby",
       transport_type: reservation.transportType || "included",
       experience: reservation.experience || "",
+      machine_count: parseMachineCountFromNotes(reservation.notes || "") || getSuggestedMachineCount(reservation.experience || "", reservation.guests || 1, reservation.children || 0),
       horses: parseHorseCountFromNotes(reservation.notes || ""),
       channel: reservation.channel || "phone",
       channel_url: reservation.channelUrl || "",
@@ -1028,7 +1069,7 @@ export default function OperationPage() {
         channel_color: channelColors[editRes.channel] || "#6b7280",
         date: editRes.date,
         amount: editRes.amount || 0,
-        notes: upsertHorseCountInNotes(editRes.notes, editRes.horses) || null,
+        notes: upsertReservationCountsInNotes(editRes.notes, editRes.horses, editRes.machine_count) || null,
       }
 
       const { error } = await supabase
@@ -2029,9 +2070,11 @@ export default function OperationPage() {
                   const nextGuests = parseInt(e.target.value) || 1
                   const totalPeople = nextGuests + editRes.children
                   const rule = getServiceRule(editRes.experience)
+                  const suggestedMachineCount = getSuggestedMachineCount(editRes.experience, nextGuests, editRes.children)
                   setEditRes({
                     ...editRes,
                     guests: nextGuests,
+                    machine_count: suggestedMachineCount > 0 ? Math.max(editRes.machine_count, suggestedMachineCount) : editRes.machine_count,
                     horses: rule?.horseRule === "equal_people" ? totalPeople : editRes.horses,
                   })
                 }}
@@ -2047,9 +2090,11 @@ export default function OperationPage() {
                   const nextChildren = parseInt(e.target.value) || 0
                   const totalPeople = editRes.guests + nextChildren
                   const rule = getServiceRule(editRes.experience)
+                  const suggestedMachineCount = getSuggestedMachineCount(editRes.experience, editRes.guests, nextChildren)
                   setEditRes({
                     ...editRes,
                     children: nextChildren,
+                    machine_count: suggestedMachineCount > 0 ? Math.max(editRes.machine_count, suggestedMachineCount) : editRes.machine_count,
                     horses: rule?.horseRule === "equal_people" ? totalPeople : editRes.horses,
                   })
                 }}
@@ -2067,9 +2112,10 @@ export default function OperationPage() {
                   const rule = getServiceRule(v)
                   const totalPeople = editRes.guests + editRes.children
                   let nextHorses = editRes.horses
+                  const nextMachineCount = getSuggestedMachineCount(v, editRes.guests, editRes.children)
                   if (rule?.horseRule === "equal_people") nextHorses = totalPeople
                   if (rule?.horseRule === "range") nextHorses = Math.min(Math.max(totalPeople, rule.horseMin || 1), rule.horseMax || totalPeople)
-                  setEditRes({ ...editRes, experience: v, horses: nextHorses })
+                  setEditRes({ ...editRes, experience: v, machine_count: nextMachineCount, horses: nextHorses })
                 }}
               >
                 <SelectTrigger><SelectValue placeholder="Seleccionar experiencia" /></SelectTrigger>
@@ -2081,6 +2127,22 @@ export default function OperationPage() {
                 </SelectContent>
               </Select>
             </div>
+            {(() => {
+              const rule = getServiceRule(editRes.experience)
+              if (!rule?.machineCapacity) return null
+              return (
+                <div className="space-y-1.5">
+                  <Label>Cantidad de maquinas</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={editRes.machine_count}
+                    onChange={(e) => setEditRes({ ...editRes, machine_count: parseInt(e.target.value) || 0 })}
+                  />
+                  <p className="text-xs text-muted-foreground">Sugerido: {getSuggestedMachineCount(editRes.experience, editRes.guests, editRes.children)} maquina(s).</p>
+                </div>
+              )
+            })()}
             {(() => {
               const rule = getServiceRule(editRes.experience)
               if (!rule || rule.horseRule === "none") return null
@@ -2260,9 +2322,11 @@ export default function OperationPage() {
                   const nextGuests = parseInt(e.target.value) || 1
                   const totalPeople = nextGuests + newRes.children
                   const rule = getServiceRule(newRes.experience)
+                  const suggestedMachineCount = getSuggestedMachineCount(newRes.experience, nextGuests, newRes.children)
                   setNewRes({
                     ...newRes,
                     guests: nextGuests,
+                    machine_count: suggestedMachineCount > 0 ? Math.max(newRes.machine_count, suggestedMachineCount) : newRes.machine_count,
                     horses: rule?.horseRule === "equal_people" ? totalPeople : newRes.horses,
                   })
                 }}
@@ -2280,9 +2344,11 @@ export default function OperationPage() {
                   const nextChildren = parseInt(e.target.value) || 0
                   const totalPeople = newRes.guests + nextChildren
                   const rule = getServiceRule(newRes.experience)
+                  const suggestedMachineCount = getSuggestedMachineCount(newRes.experience, newRes.guests, nextChildren)
                   setNewRes({
                     ...newRes,
                     children: nextChildren,
+                    machine_count: suggestedMachineCount > 0 ? Math.max(newRes.machine_count, suggestedMachineCount) : newRes.machine_count,
                     horses: rule?.horseRule === "equal_people" ? totalPeople : newRes.horses,
                   })
                 }}
@@ -2315,13 +2381,14 @@ export default function OperationPage() {
                   const rule = getServiceRule(v)
                   const totalPeople = newRes.guests + newRes.children
                   let nextHorses = newRes.horses
+                  const nextMachineCount = getSuggestedMachineCount(v, newRes.guests, newRes.children)
                   if (rule?.horseRule === "equal_people") {
                     nextHorses = totalPeople
                   }
                   if (rule?.horseRule === "range") {
                     nextHorses = Math.min(Math.max(totalPeople, rule.horseMin || 1), rule.horseMax || totalPeople)
                   }
-                  setNewRes({ ...newRes, experience: v, horses: nextHorses })
+                  setNewRes({ ...newRes, experience: v, machine_count: nextMachineCount, horses: nextHorses })
                 }}
               >
                 <SelectTrigger><SelectValue placeholder="Seleccionar experiencia" /></SelectTrigger>
@@ -2340,6 +2407,23 @@ export default function OperationPage() {
                 />
               )}
             </div>
+
+            {(() => {
+              const rule = getServiceRule(newRes.experience)
+              if (!rule?.machineCapacity) return null
+              return (
+                <div className="space-y-1.5">
+                  <Label>Cantidad de maquinas</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={newRes.machine_count}
+                    onChange={(e) => setNewRes({ ...newRes, machine_count: parseInt(e.target.value) || 0 })}
+                  />
+                  <p className="text-xs text-muted-foreground">Sugerido: {getSuggestedMachineCount(newRes.experience, newRes.guests, newRes.children)} maquina(s).</p>
+                </div>
+              )
+            })()}
 
             {(() => {
               const rule = getServiceRule(newRes.experience)
