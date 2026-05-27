@@ -23,6 +23,7 @@ import { addPickupSheetRows, getOrCreateDraftPickupSheet } from "@/lib/pickup-sh
 import { getDashboardSession } from "@/lib/dashboard-session"
 import { hotelDirectory } from "@/lib/hotel-locations"
 import { getBuggyPickupSuggestion } from "@/lib/hotel-pickup-schedules"
+import type { TurnSlot } from "@/lib/hotel-pickup-schedules"
 import {
   listCancellationRequests,
   updateCancellationRequestDecision,
@@ -229,7 +230,12 @@ const HOTEL_OPTIONS = Array.from(new Set(Object.values(hotelDirectory).map((hote
   a.localeCompare(b),
 )
 
-const UNKNOWN_PICKUP_TIME_OPTIONS = ["8:00 AM", "11:00 AM", "2:00 PM"]
+const TURN_OPTIONS: TurnSlot[] = ["8 AM", "11 AM", "3 PM"]
+const UNKNOWN_PICKUP_TIME_BY_TURN: Record<TurnSlot, string> = {
+  "8 AM": "8:00 AM",
+  "11 AM": "11:00 AM",
+  "3 PM": "2:00 PM",
+}
 
 function normalizeLooseText(value: string) {
   return value
@@ -259,6 +265,7 @@ export function BillingCollections() {
   const [serviceLines, setServiceLines] = useState<ServiceLine[]>([{ serviceType: "", quantity: 1, unitAmount: "" }])
   const [pickupHotel, setPickupHotel] = useState("")
   const [showHotelSuggestions, setShowHotelSuggestions] = useState(false)
+  const [pickupTurn, setPickupTurn] = useState<TurnSlot>("8 AM")
   const [pickupTime, setPickupTime] = useState("")
   const [pickupRoom, setPickupRoom] = useState("")
   const [pickupPax, setPickupPax] = useState("1")
@@ -382,10 +389,10 @@ export function BillingCollections() {
 
   const pickupScheduleSuggestion = useMemo(() => {
     if (!pickupHotel.trim()) return null
-    const suggestion = getBuggyPickupSuggestion(pickupHotel, "8 AM")
+    const suggestion = getBuggyPickupSuggestion(pickupHotel, pickupTurn)
     if (!suggestion || suggestion.score < 0.6) return null
     return suggestion
-  }, [pickupHotel])
+  }, [pickupHotel, pickupTurn])
 
   useEffect(() => {
     if (!pickupHotel.trim()) return
@@ -395,12 +402,21 @@ export function BillingCollections() {
       return
     }
 
-    setPickupTime((prev) => (prev.trim() ? prev : UNKNOWN_PICKUP_TIME_OPTIONS[0]))
-  }, [pickupHotel, pickupScheduleSuggestion])
+    setPickupTime((prev) => (prev.trim() ? prev : UNKNOWN_PICKUP_TIME_BY_TURN[pickupTurn]))
+  }, [pickupHotel, pickupScheduleSuggestion, pickupTurn])
 
   const chooseHotel = (value: string) => {
     setPickupHotel(value)
     setShowHotelSuggestions(false)
+  }
+
+  const handleSelectPickupTurn = (turn: TurnSlot) => {
+    setPickupTurn(turn)
+    if (pickupScheduleSuggestion?.pickupTime) {
+      setPickupTime(pickupScheduleSuggestion.pickupTime)
+      return
+    }
+    setPickupTime(UNKNOWN_PICKUP_TIME_BY_TURN[turn])
   }
 
   const supportsMultiCurrency = type === "pago_al_llegar" || type === "venta_directa"
@@ -694,6 +710,7 @@ export function BillingCollections() {
     setCourtesy(false)
     setServiceLines([{ serviceType: "", quantity: 1, unitAmount: "" }])
     setPickupHotel("")
+    setPickupTurn("8 AM")
     setPickupTime("")
     setPickupRoom("")
     setPickupPax("1")
@@ -1217,6 +1234,23 @@ export function BillingCollections() {
             </div>
 
             <div className="space-y-1.5">
+              <Label>Turno de recogida</Label>
+              <div className="flex flex-wrap gap-2">
+                {TURN_OPTIONS.map((turn) => (
+                  <Button
+                    key={turn}
+                    type="button"
+                    variant={pickupTurn === turn ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleSelectPickupTurn(turn)}
+                  >
+                    {turn}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
               <Label>Hora de recogida *</Label>
               <Input
                 value={pickupTime}
@@ -1225,15 +1259,15 @@ export function BillingCollections() {
               />
               {!pickupScheduleSuggestion ? (
                 <div className="flex flex-wrap gap-2">
-                  {UNKNOWN_PICKUP_TIME_OPTIONS.map((timeOption) => (
+                  {TURN_OPTIONS.map((turn) => (
                     <Button
-                      key={timeOption}
+                      key={turn}
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => setPickupTime(timeOption)}
+                      onClick={() => handleSelectPickupTurn(turn)}
                     >
-                      {timeOption}
+                      {UNKNOWN_PICKUP_TIME_BY_TURN[turn]}
                     </Button>
                   ))}
                 </div>
