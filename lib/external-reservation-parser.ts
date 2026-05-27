@@ -86,14 +86,14 @@ const MACHINE_CATALOG: MachineCatalogRule[] = [
     machineType: "vip_shared_predator",
     machineLabel: "Shared VIP Predator",
     machineCapacity: 2,
-    normalizedExperience: "Buggy Doble",
+    normalizedExperience: "VIP Shared Predator",
     perPersonPrice: 69,
   },
   {
     machineType: "vip_family_predator",
     machineLabel: "VIP Family Predator",
     machineCapacity: 4,
-    normalizedExperience: "Family Buggy",
+    normalizedExperience: "VIP Family Predator",
     perPersonPrice: 69,
   },
 ]
