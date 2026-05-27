@@ -104,10 +104,11 @@ type MachineAliasRule = {
 }
 
 const MACHINE_OPTION_ALIASES: MachineAliasRule[] = [
-  { pattern: /shared\s*vip\s*(predator|predactor|predacter)/i, machineType: "vip_shared_predator" },
+  { pattern: /shared\s*vip\s*(predator|predactor|predacter)|vip\s*(predator|predactor|predacter)\s*shared|predator\s*vip\s*shared|predactor\s*vip\s*shared/i, machineType: "vip_shared_predator" },
   { pattern: /shared\s*atv/i, machineType: "shared_atv" },
   { pattern: /shared\s*buggy/i, machineType: "shared_buggy" },
-  { pattern: /vip\s*family|family\s*vip|vip\s*family\s*(predator|predactor|predacter)/i, machineType: "vip_family_predator" },
+  { pattern: /vip\s*family|family\s*vip|vip\s*family\s*(predator|predactor|predacter)|vip\s*(predator|predactor|predacter)\s*family|predator\s*vip\s*family|predactor\s*vip\s*family/i, machineType: "vip_family_predator" },
+  { pattern: /\bvip\b.*\b(predator|predactor|predacter)\b/i, machineType: "vip_shared_predator" },
   { pattern: /family\s*buggy|familiar\s*predator|familiar\s*predactor/i, machineType: "family_buggy" },
   { pattern: /single\s*buggy|individual\s*buggy|individual\b.*\bbuggy/i, machineType: "single_buggy" },
   { pattern: /\batv\b|quad\s*four\s*wheeler/i, machineType: "single_atv" },
@@ -131,6 +132,13 @@ function inferMachineTypeFromText(optionTitle?: string, productTitle?: string) {
     }
   }
 
+  for (const alias of MACHINE_OPTION_ALIASES) {
+    if (alias.pattern.test(source)) {
+      if (alias.machineType === null) return null
+      return getRuleByType(alias.machineType)
+    }
+  }
+
   const hasShared = /\bshared\b/.test(source)
   const hasAtv = /\batv\b|quad\s*four\s*wheeler/.test(source)
   const hasBuggy = /\bbuggy\b/.test(source)
@@ -139,12 +147,24 @@ function inferMachineTypeFromText(optionTitle?: string, productTitle?: string) {
   const hasPredator = /predator|predactor|predacter/.test(source)
   const hasSingle = /\bsingle\b|\bindividual\b|1\s*pax/.test(source)
 
-  if ((hasVip && hasFamily && hasPredator) || (hasFamily && hasPredator)) {
+  if (hasVip && hasFamily && hasPredator) {
     return getRuleByType("vip_family_predator")
   }
 
   if (hasVip && hasShared && hasPredator) {
     return getRuleByType("vip_shared_predator")
+  }
+
+  if (hasVip && hasPredator && hasFamily) {
+    return getRuleByType("vip_family_predator")
+  }
+
+  if (hasVip && hasPredator) {
+    return getRuleByType("vip_shared_predator")
+  }
+
+  if (hasFamily && hasPredator && !hasVip) {
+    return getRuleByType("family_buggy")
   }
 
   if ((hasFamily && hasBuggy) || /punta\s*cana\s*family\s*buggy/.test(source)) {

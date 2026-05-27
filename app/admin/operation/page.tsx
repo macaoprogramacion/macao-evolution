@@ -93,7 +93,9 @@ type ServiceRule = {
 const SERVICE_RULES: ServiceRule[] = [
   { id: "buggy_single", label: "Buggy Single", minPeople: 1, maxPeople: 1, horseRule: "none" },
   { id: "buggy_double", label: "Buggy Doble", minPeople: 1, maxPeople: 2, horseRule: "none" },
+  { id: "vip_buggy_double", label: "VIP Shared Predator", minPeople: 1, maxPeople: 2, horseRule: "none" },
   { id: "buggy_family", label: "Family Buggy", minPeople: 3, maxPeople: 4, horseRule: "none" },
+  { id: "vip_buggy_family", label: "VIP Family Predator", minPeople: 3, maxPeople: 4, horseRule: "none" },
   { id: "moto_single", label: "Single Moto", minPeople: 1, maxPeople: 1, horseRule: "none" },
   { id: "moto_double", label: "Doble Moto", minPeople: 1, maxPeople: 2, horseRule: "none" },
   { id: "horse15_buggy_double", label: "15 Min Caballos + Buggy Doble", minPeople: 1, maxPeople: 2, horseRule: "range", horseMin: 1, horseMax: 2 },
