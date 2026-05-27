@@ -1,6 +1,6 @@
 "use client";
 
-import { type SyntheticEvent, useRef, useState } from "react";
+import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 const STORAGE_BUCKET = "portfolio-media";
@@ -33,9 +33,30 @@ const specs = [
 ];
 
 export function EditorialSection() {
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(false);
   const bucketVideoSrc = getStoragePublicUrl("videos/video-grande.mp4");
+
+  useEffect(() => {
+    const target = wrapperRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry?.isIntersecting) {
+          setShouldLoad(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "300px 0px" },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, []);
 
   const toggle = () => {
     const v = videoRef.current;
@@ -70,6 +91,7 @@ export function EditorialSection() {
 
       {/* Full-width Video — edge to edge, no padding */}
       <div
+        ref={wrapperRef}
         className="relative w-full aspect-[9/16] md:aspect-[16/9] lg:aspect-[21/9] cursor-pointer group/vid overflow-hidden"
         onClick={toggle}
       >
@@ -81,7 +103,7 @@ export function EditorialSection() {
           preload="metadata"
           poster="/images/foto-con-dimecion-arreglada/imagen-cuadrada-alta-calidad.webp"
           className="absolute inset-0 h-full w-full object-cover"
-          src={bucketVideoSrc}
+          src={shouldLoad ? bucketVideoSrc : undefined}
           onError={handleVideoError}
           onEnded={() => setPlaying(false)}
         />

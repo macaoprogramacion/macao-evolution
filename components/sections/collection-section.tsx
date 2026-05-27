@@ -91,8 +91,29 @@ function VideoCard({
   className?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [pendingPlay, setPendingPlay] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  useEffect(() => {
+    const target = wrapperRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry?.isIntersecting) {
+          setShouldLoad(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "300px 0px" },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, []);
 
   const requestPlay = () => {
     const v = videoRef.current;
@@ -137,6 +158,7 @@ function VideoCard({
 
   return (
     <div
+      ref={wrapperRef}
       className={`relative overflow-hidden rounded-2xl bg-secondary cursor-pointer group/vid ${className}`}
       onClick={toggle}
     >
@@ -145,9 +167,9 @@ function VideoCard({
         loop
         muted
         playsInline
-        preload="auto"
+        preload="metadata"
         className="absolute inset-0 h-full w-full object-cover"
-        src={src}
+        src={shouldLoad ? src : undefined}
         poster={poster}
         onError={(e) => handleVideoError(e, fallbackSrc)}
         onPlay={() => setPlaying(true)}
