@@ -18,6 +18,175 @@ export type ParsedExternalReservation = {
   includesLunch?: boolean
   includesOpenBar?: boolean
   boatType?: "catamaran" | "speedboat"
+  machineType?: "shared_atv" | "single_atv" | "shared_buggy" | "family_buggy" | "single_buggy" | "vip_shared_predator" | "vip_family_predator"
+  machineLabel?: string
+  machineCapacity?: number
+  machineCount?: number
+  normalizedExperience?: string
+}
+
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+}
+
+type MachineCatalogRule = {
+  machineType: NonNullable<ParsedExternalReservation["machineType"]>
+  machineLabel: string
+  machineCapacity: number
+  normalizedExperience: string
+  perPersonPrice?: number
+  groupPriceByPeople?: Record<number, number>
+}
+
+const MACHINE_CATALOG: MachineCatalogRule[] = [
+  {
+    machineType: "shared_atv",
+    machineLabel: "Shared ATV",
+    machineCapacity: 2,
+    normalizedExperience: "Doble Moto",
+    perPersonPrice: 69,
+  },
+  {
+    machineType: "single_atv",
+    machineLabel: "ATV",
+    machineCapacity: 1,
+    normalizedExperience: "Single Moto",
+    perPersonPrice: 75,
+  },
+  {
+    machineType: "shared_buggy",
+    machineLabel: "Shared Buggy",
+    machineCapacity: 2,
+    normalizedExperience: "Buggy Doble",
+    perPersonPrice: 75,
+  },
+  {
+    machineType: "family_buggy",
+    machineLabel: "Family Buggy",
+    machineCapacity: 4,
+    normalizedExperience: "Family Buggy",
+    groupPriceByPeople: {
+      1: 75,
+      2: 90,
+      3: 98.01,
+      4: 110,
+    },
+  },
+  {
+    machineType: "single_buggy",
+    machineLabel: "Single Buggy",
+    machineCapacity: 1,
+    normalizedExperience: "Buggy Single",
+    perPersonPrice: 96,
+  },
+  {
+    machineType: "vip_shared_predator",
+    machineLabel: "Shared VIP Predator",
+    machineCapacity: 2,
+    normalizedExperience: "Buggy Doble",
+    perPersonPrice: 69,
+  },
+  {
+    machineType: "vip_family_predator",
+    machineLabel: "VIP Family Predator",
+    machineCapacity: 4,
+    normalizedExperience: "Family Buggy",
+    perPersonPrice: 69,
+  },
+]
+
+function getRuleByType(machineType: NonNullable<ParsedExternalReservation["machineType"]>) {
+  return MACHINE_CATALOG.find((rule) => rule.machineType === machineType) || null
+}
+
+function inferMachineTypeFromText(optionTitle?: string, productTitle?: string) {
+  const source = normalizeText(`${optionTitle || ""} ${productTitle || ""}`)
+
+  const hasShared = /\bshared\b/.test(source)
+  const hasAtv = /\batv\b|quad\s*four\s*wheeler/.test(source)
+  const hasBuggy = /\bbuggy\b/.test(source)
+  const hasFamily = /\bfamily\b|\bfamiliar\b/.test(source)
+  const hasVip = /\bvip\b/.test(source)
+  const hasPredator = /predator|predactor|predacter/.test(source)
+  const hasSingle = /\bsingle\b|\bindividual\b|1\s*pax/.test(source)
+
+  if ((hasVip && hasFamily && hasPredator) || (hasFamily && hasPredator)) {
+    return getRuleByType("vip_family_predator")
+  }
+
+  if (hasVip && hasShared && hasPredator) {
+    return getRuleByType("vip_shared_predator")
+  }
+
+  if ((hasFamily && hasBuggy) || /punta\s*cana\s*family\s*buggy/.test(source)) {
+    return getRuleByType("family_buggy")
+  }
+
+  if (hasBuggy && hasSingle) {
+    return getRuleByType("single_buggy")
+  }
+
+  if (hasShared && hasBuggy) {
+    return getRuleByType("shared_buggy")
+  }
+
+  if (hasAtv && hasShared) {
+    return getRuleByType("shared_atv")
+  }
+
+  if (hasAtv) {
+    return getRuleByType("single_atv")
+  }
+
+  return null
+}
+
+function getAmountDistance(rule: MachineCatalogRule, totalPeople: number, amount: number) {
+  const expectedValues: number[] = []
+
+  if (rule.groupPriceByPeople && totalPeople > 0) {
+    const direct = rule.groupPriceByPeople[totalPeople]
+    if (direct != null) expectedValues.push(direct)
+  }
+
+  if (rule.perPersonPrice && totalPeople > 0) {
+    expectedValues.push(rule.perPersonPrice)
+    expectedValues.push(rule.perPersonPrice * totalPeople)
+  }
+
+  if (expectedValues.length === 0) return Number.POSITIVE_INFINITY
+
+  return expectedValues.reduce((best, expected) => {
+    const normalized = Math.abs(amount - expected) / Math.max(1, expected)
+    return Math.min(best, normalized)
+  }, Number.POSITIVE_INFINITY)
+}
+
+function inferMachineTypeFromPeopleAndPrice(totalPeople: number, amount?: number, hint?: MachineCatalogRule | null) {
+  if (totalPeople <= 0) return hint || null
+  if (amount == null || !Number.isFinite(amount) || amount <= 0) return hint || null
+
+  const candidates = hint
+    ? MACHINE_CATALOG.filter((rule) => rule.machineType === hint.machineType || rule.machineType === "family_buggy" || rule.machineType === "vip_family_predator")
+    : MACHINE_CATALOG
+
+  let selected: MachineCatalogRule | null = hint || null
+  let bestScore = hint ? getAmountDistance(hint, totalPeople, amount) : Number.POSITIVE_INFINITY
+
+  for (const rule of candidates) {
+    const score = getAmountDistance(rule, totalPeople, amount)
+    if (score < bestScore) {
+      bestScore = score
+      selected = rule
+    }
+  }
+
+  // Avoid wild guesses when price clearly doesn't match any known rule.
+  if (!selected || bestScore > 0.45) return hint || null
+  return selected
 }
 
 function toDateInputValue(date: Date) {
@@ -272,6 +441,20 @@ export function parseExternalReservationText(rawText: string): ParsedExternalRes
   const shortCodes = text.match(/\b(?:BR-\d{6,}|VIA-\d{6,}|GYG[A-Z0-9]{6,})\b/gi) || []
 
   result.ticketCodes = Array.from(new Set([...longCodes, ...shortCodes]))
+
+  const totalPeople = Math.max(0, Number(result.guests || 0) + Number(result.children || 0))
+  const machineByText = inferMachineTypeFromText(result.optionTitle, result.productTitle)
+  const machine = inferMachineTypeFromPeopleAndPrice(totalPeople, result.amount, machineByText)
+  if (machine) {
+    result.machineType = machine.machineType
+    result.machineLabel = machine.machineLabel
+    result.machineCapacity = machine.machineCapacity
+    result.normalizedExperience = machine.normalizedExperience
+
+    if (totalPeople > 0) {
+      result.machineCount = Math.max(1, Math.ceil(totalPeople / machine.machineCapacity))
+    }
+  }
 
   return result
 }

@@ -99,11 +99,20 @@ const SERVICE_RULES: ServiceRule[] = [
   { id: "horse15_buggy_double", label: "15 Min Caballos + Buggy Doble", minPeople: 1, maxPeople: 2, horseRule: "range", horseMin: 1, horseMax: 2 },
   { id: "horse15_buggy_family", label: "15 Min Caballos + Family Buggy", minPeople: 3, maxPeople: 4, horseRule: "range", horseMin: 3, horseMax: 4 },
   { id: "sunset_ride", label: "Sunset Ride", minPeople: 1, maxPeople: 12, horseRule: "equal_people" },
+  { id: "sunset_tour", label: "Sunset Tour", minPeople: 1, maxPeople: 12, horseRule: "equal_people" },
+  { id: "caballos", label: "Caballos", minPeople: 1, maxPeople: 12, horseRule: "equal_people" },
   { id: "full_ride", label: "Full Ride", minPeople: 1, maxPeople: 12, horseRule: "equal_people" },
 ]
 
 function getServiceRule(experience: string) {
   return SERVICE_RULES.find((rule) => rule.label === experience) || null
+}
+
+function inferHorseExperienceFromExternalOption(optionTitle?: string, productTitle?: string) {
+  const source = `${optionTitle || ""} ${productTitle || ""}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  if (/sunset\s*tour|sunset\s*ride/.test(source)) return "Sunset Tour"
+  if (/\bcaballos\b|horseback|horse\s*ride|equestrian/.test(source)) return "Caballos"
+  return ""
 }
 
 type Reservation = {
@@ -518,6 +527,7 @@ export default function OperationPage() {
   const [saving, setSaving] = useState(false)
   const [externalReservationText, setExternalReservationText] = useState("")
   const [externalParseSummary, setExternalParseSummary] = useState<string | null>(null)
+  const [externalHorseAutoSummary, setExternalHorseAutoSummary] = useState<string | null>(null)
   const [newRes, setNewRes] = useState({
     customer_name: "",
     phone: "",
@@ -564,6 +574,7 @@ export default function OperationPage() {
     })
     setExternalReservationText("")
     setExternalParseSummary(null)
+    setExternalHorseAutoSummary(null)
   }
 
   const channelColors: Record<string, string> = {
@@ -604,32 +615,55 @@ export default function OperationPage() {
 
     const parsed = parseExternalReservationText(externalReservationText)
     const pickupValue = parsed.pickupWindow || parsed.pickupTime || ""
+    const inferredHorseExperience = inferHorseExperienceFromExternalOption(parsed.optionTitle, parsed.productTitle)
     const notesFromPaste = [
       parsed.bookingReference ? `Booking ref: ${parsed.bookingReference}` : "",
       parsed.ticketCodes.length > 0 ? `Tickets: ${parsed.ticketCodes.join(" | ")}` : "",
+      parsed.machineCount ? `Maquinas: ${parsed.machineCount}` : "",
+      parsed.machineLabel ? `Tipo maquina: ${parsed.machineLabel}` : "",
     ].filter(Boolean).join("\n")
 
-    setNewRes((prev) => withBuggyAutoPickup({
-      ...prev,
-      customer_name: parsed.customerName || prev.customer_name,
-      phone: parsed.phone || prev.phone,
-      hotel: parsed.hotel || prev.hotel,
-      location: parsed.location || prev.location,
-      date: parsed.reservationDate || prev.date,
-      pickup_time: pickupValue || prev.pickup_time,
-      timeslot: pickupValue ? inferTimeslotFromPickup(pickupValue) : prev.timeslot,
-      pickup_point: /barrera/i.test(`${parsed.location || ""} ${parsed.hotel || ""}`) ? "barrera" : prev.pickup_point,
-      guests: parsed.guests || prev.guests,
-      children: parsed.children ?? prev.children,
-      amount: parsed.amount ?? prev.amount,
-      channel: "ota",
-      channel_url: parsed.bookingReference || prev.channel_url,
-      experience: parsed.optionTitle || parsed.productTitle || prev.experience,
-      notes: [prev.notes, notesFromPaste].filter(Boolean).join(prev.notes && notesFromPaste ? "\n" : ""),
-    }))
+    let nextHorseAutoSummary: string | null = null
+
+    setNewRes((prev) => {
+      const nextGuests = parsed.guests || prev.guests
+      const nextChildren = parsed.children ?? prev.children
+      const nextExperience = inferredHorseExperience || parsed.normalizedExperience || parsed.optionTitle || parsed.productTitle || prev.experience
+      const totalPeople = nextGuests + nextChildren
+      const nextRule = getServiceRule(nextExperience)
+      const nextHorses = nextRule?.horseRule === "equal_people"
+        ? totalPeople
+        : prev.horses
+
+      if (nextRule?.horseRule === "equal_people") {
+        nextHorseAutoSummary = `Caballos auto: ${nextHorses} (${nextExperience})`
+      }
+
+      return withBuggyAutoPickup({
+        ...prev,
+        customer_name: parsed.customerName || prev.customer_name,
+        phone: parsed.phone || prev.phone,
+        hotel: parsed.hotel || prev.hotel,
+        location: parsed.location || prev.location,
+        date: parsed.reservationDate || prev.date,
+        pickup_time: pickupValue || prev.pickup_time,
+        timeslot: pickupValue ? inferTimeslotFromPickup(pickupValue) : prev.timeslot,
+        pickup_point: /barrera/i.test(`${parsed.location || ""} ${parsed.hotel || ""}`) ? "barrera" : prev.pickup_point,
+        guests: nextGuests,
+        children: nextChildren,
+        amount: parsed.amount ?? prev.amount,
+        channel: "ota",
+        channel_url: parsed.bookingReference || prev.channel_url,
+        experience: nextExperience,
+        horses: nextHorses,
+        notes: [prev.notes, notesFromPaste].filter(Boolean).join(prev.notes && notesFromPaste ? "\n" : ""),
+      })
+    })
+
+    setExternalHorseAutoSummary(nextHorseAutoSummary)
 
     setExternalParseSummary(
-      `Autocompletado: ${parsed.source.toUpperCase()}${parsed.bookingReference ? ` | Ref: ${parsed.bookingReference}` : ""}${parsed.customerName ? ` | Cliente: ${parsed.customerName}` : ""}`
+      `Autocompletado: ${parsed.source.toUpperCase()}${parsed.bookingReference ? ` | Ref: ${parsed.bookingReference}` : ""}${parsed.customerName ? ` | Cliente: ${parsed.customerName}` : ""}${parsed.machineCount ? ` | Maquinas: ${parsed.machineCount}` : ""}${parsed.machineLabel ? ` (${parsed.machineLabel})` : ""}`
     )
   }
 
@@ -2111,6 +2145,9 @@ export default function OperationPage() {
                 </Button>
                 {externalParseSummary && <p className="text-xs text-blue-700 dark:text-blue-300">{externalParseSummary}</p>}
               </div>
+              {externalHorseAutoSummary ? (
+                <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">{externalHorseAutoSummary}</p>
+              ) : null}
             </div>
 
             {/* Nombre */}

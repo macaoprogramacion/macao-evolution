@@ -20,6 +20,7 @@ import type { BillingRecord as DBBillingRecord } from "@/lib/billing-records"
 import { supabase } from "@/lib/supabase"
 import { createPickupReservationCode, parsePickupReservationCode } from "@/lib/pickup-reservation-code"
 import { addPickupSheetRows, getOrCreateDraftPickupSheet } from "@/lib/pickup-sheets"
+import { getDashboardSession } from "@/lib/dashboard-session"
 import {
   listCancellationRequests,
   updateCancellationRequestDecision,
@@ -155,6 +156,7 @@ export function BillingCollections() {
   const [pickupPax, setPickupPax] = useState("1")
   const [notes, setNotes] = useState("")
   const [cancelRequests, setCancelRequests] = useState<CancellationRequest[]>([])
+  const [canManageAccountingRequests, setCanManageAccountingRequests] = useState(false)
 
   // Load records from Supabase on mount
   useEffect(() => {
@@ -195,12 +197,35 @@ export function BillingCollections() {
   }, [])
 
   useEffect(() => {
+    let mounted = true
+
+    const resolveRole = async () => {
+      const session = await getDashboardSession()
+      if (!mounted) return
+      const role = session?.role || ""
+      const allowed = role === "contabilidad" || role === "admin" || role === "both"
+      setCanManageAccountingRequests(allowed)
+    }
+
+    void resolveRole()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!canManageAccountingRequests) {
+      setCancelRequests([])
+      return
+    }
+
     void loadCancelRequests()
     const interval = window.setInterval(() => {
       void loadCancelRequests()
     }, 5000)
     return () => window.clearInterval(interval)
-  }, [])
+  }, [canManageAccountingRequests])
 
   const supportsMultiCurrency = type === "pago_al_llegar" || type === "venta_directa"
 
@@ -707,70 +732,72 @@ export function BillingCollections() {
         </CardContent>
       </Card>
 
-      <Card className="border-gray-200 dark:border-gray-800">
-        <CardHeader>
-          <CardTitle className="text-base">Solicitudes de cancelación (Contabilidad)</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {cancelRequests.length === 0 ? (
-            <p className="text-sm text-gray-500">No hay solicitudes de cancelación registradas.</p>
-          ) : (
-            cancelRequests
-              .slice()
-              .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
-              .map((request) => (
-                <div key={request.id} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold">{request.customerName}</p>
-                      <p className="text-xs text-gray-500">
-                        {request.operationType.toUpperCase()} • Reserva {request.reservationId}
-                      </p>
+      {canManageAccountingRequests ? (
+        <Card className="border-gray-200 dark:border-gray-800">
+          <CardHeader>
+            <CardTitle className="text-base">Solicitudes de cancelación (Contabilidad)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {cancelRequests.length === 0 ? (
+              <p className="text-sm text-gray-500">No hay solicitudes de cancelación registradas.</p>
+            ) : (
+              cancelRequests
+                .slice()
+                .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
+                .map((request) => (
+                  <div key={request.id} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold">{request.customerName}</p>
+                        <p className="text-xs text-gray-500">
+                          {request.operationType.toUpperCase()} • Reserva {request.reservationId}
+                        </p>
+                      </div>
+                      <Badge
+                        className={
+                          request.status === "approved"
+                            ? "bg-green-100 text-green-800"
+                            : request.status === "rejected"
+                            ? "bg-red-100 text-red-800"
+                            : "bg-yellow-100 text-yellow-800"
+                        }
+                      >
+                        {request.status === "pending"
+                          ? "Pendiente"
+                          : request.status === "approved"
+                          ? "Aprobada"
+                          : "Rechazada"}
+                      </Badge>
                     </div>
-                    <Badge
-                      className={
-                        request.status === "approved"
-                          ? "bg-green-100 text-green-800"
-                          : request.status === "rejected"
-                          ? "bg-red-100 text-red-800"
-                          : "bg-yellow-100 text-yellow-800"
-                      }
-                    >
-                      {request.status === "pending"
-                        ? "Pendiente"
-                        : request.status === "approved"
-                        ? "Aprobada"
-                        : "Rechazada"}
-                    </Badge>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">{request.reason}</p>
+                    {request.accountingNote ? (
+                      <p className="text-xs text-gray-500">Nota contabilidad: {request.accountingNote}</p>
+                    ) : null}
+                    {request.status === "pending" ? (
+                      <div className="flex items-center gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => handleCancelDecision(request, "approved")}
+                        >
+                          Aprobar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-red-300 text-red-700 hover:bg-red-50"
+                          onClick={() => handleCancelDecision(request, "rejected")}
+                        >
+                          Rechazar
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
-                  <p className="text-sm text-gray-700 dark:text-gray-300">{request.reason}</p>
-                  {request.accountingNote ? (
-                    <p className="text-xs text-gray-500">Nota contabilidad: {request.accountingNote}</p>
-                  ) : null}
-                  {request.status === "pending" ? (
-                    <div className="flex items-center gap-2 pt-1">
-                      <Button
-                        size="sm"
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                        onClick={() => handleCancelDecision(request, "approved")}
-                      >
-                        Aprobar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-red-300 text-red-700 hover:bg-red-50"
-                        onClick={() => handleCancelDecision(request, "rejected")}
-                      >
-                        Rechazar
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
-              ))
-          )}
-        </CardContent>
-      </Card>
+                ))
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {closureFeedback ? (
         <div className="text-sm text-green-700 dark:text-green-400">{closureFeedback}</div>

@@ -1,0 +1,378 @@
+"use client"
+
+import { useEffect, useMemo, useState } from "react"
+import { Calculator, Loader2, RotateCcw } from "lucide-react"
+import { DashboardLayout } from "@/components/admin/dashboard-layout"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  listCancellationRequests,
+  updateCancellationRequestDecision,
+  type CancellationRequest,
+} from "@/lib/cancellation-requests"
+import { supabase } from "@/lib/supabase"
+
+type ReturnDecision = "aprobada" | "rechazada"
+
+type PhotoReturnRequest = {
+  id: string
+  invoiceNumber: string
+  clientName: string
+  amount: number
+  reason: string
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
+function fmtMoney(amount: number) {
+  return `US$ ${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function statusBadge(status: string) {
+  if (status === "pending" || status === "pendiente") {
+    return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Pendiente</Badge>
+  }
+  if (status === "approved" || status === "aprobada") {
+    return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Aprobada</Badge>
+  }
+  if (status === "rejected" || status === "rechazada") {
+    return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Rechazada</Badge>
+  }
+  return <Badge variant="secondary">{status}</Badge>
+}
+
+function mapPhotoReturn(row: {
+  id?: string | number
+  invoice_number?: string | null
+  client_name?: string | null
+  amount?: number | string | null
+  reason?: string | null
+  status?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}): PhotoReturnRequest {
+  const invoice = row.invoice_number || ""
+  const createdAt = row.created_at || new Date().toISOString()
+
+  return {
+    id: String(row.id ?? `${invoice || "ret"}-${createdAt}`),
+    invoiceNumber: invoice,
+    clientName: row.client_name || "Cliente General",
+    amount: Number(row.amount || 0),
+    reason: row.reason || "",
+    status: row.status || "pendiente",
+    createdAt,
+    updatedAt: row.updated_at || createdAt,
+  }
+}
+
+export default function AccountingRequestsPage() {
+  const [loading, setLoading] = useState(true)
+  const [savingCancellationId, setSavingCancellationId] = useState<string | null>(null)
+  const [savingReturnId, setSavingReturnId] = useState<string | null>(null)
+  const [cancelRequests, setCancelRequests] = useState<CancellationRequest[]>([])
+  const [photoReturns, setPhotoReturns] = useState<PhotoReturnRequest[]>([])
+
+  const loadCancellationRequests = async () => {
+    try {
+      const requests = await listCancellationRequests()
+      setCancelRequests(requests)
+    } catch (error) {
+      console.error("Error loading cancellation requests:", error)
+      setCancelRequests([])
+    }
+  }
+
+  const loadPhotoReturns = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("photo_returns")
+        .select("id, invoice_number, client_name, amount, reason, status, created_at, updated_at")
+        .order("created_at", { ascending: false })
+        .limit(300)
+
+      if (error) throw error
+      const mapped = (data || []).map((row) => mapPhotoReturn(row))
+      setPhotoReturns(mapped)
+    } catch (error) {
+      console.error("Error loading photo returns:", error)
+      setPhotoReturns([])
+    }
+  }
+
+  const reloadAll = async () => {
+    setLoading(true)
+    await Promise.all([loadCancellationRequests(), loadPhotoReturns()])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    void reloadAll()
+
+    const interval = window.setInterval(() => {
+      void Promise.all([loadCancellationRequests(), loadPhotoReturns()])
+    }, 7000)
+
+    return () => window.clearInterval(interval)
+  }, [])
+
+  const cancellationStats = useMemo(() => {
+    const pending = cancelRequests.filter((item) => item.status === "pending").length
+    const approved = cancelRequests.filter((item) => item.status === "approved").length
+    const rejected = cancelRequests.filter((item) => item.status === "rejected").length
+    return { total: cancelRequests.length, pending, approved, rejected }
+  }, [cancelRequests])
+
+  const returnStats = useMemo(() => {
+    const pending = photoReturns.filter((item) => item.status === "pendiente").length
+    const approved = photoReturns.filter((item) => item.status === "aprobada").length
+    const rejected = photoReturns.filter((item) => item.status === "rechazada").length
+    return { total: photoReturns.length, pending, approved, rejected }
+  }, [photoReturns])
+
+  const handleCancellationDecision = async (
+    request: CancellationRequest,
+    status: "approved" | "rejected",
+  ) => {
+    const accountingNote = window.prompt(
+      status === "approved" ? "Nota de aprobación (opcional):" : "Motivo de rechazo (opcional):",
+      "",
+    )
+
+    setSavingCancellationId(request.id)
+
+    try {
+      if (status === "approved") {
+        if (request.operationType === "buggy") {
+          const { error } = await supabase.rpc("update_reservation_status", {
+            p_reservation_id: request.reservationId,
+            p_status: "cancelled",
+          })
+          if (error) throw error
+        } else if (request.operationType === "saona") {
+          const { error } = await supabase
+            .from("saona_reservations")
+            .update({ status: "cancelled", updated_at: new Date().toISOString() })
+            .eq("id", request.reservationId)
+          if (error) throw error
+        } else {
+          const { error } = await supabase
+            .from("samana_reservations")
+            .update({ status: "cancelled", updated_at: new Date().toISOString() })
+            .eq("id", request.reservationId)
+          if (error) throw error
+        }
+      }
+
+      await updateCancellationRequestDecision(
+        request.id,
+        status,
+        accountingNote?.trim() || undefined,
+        "Contabilidad",
+      )
+
+      await loadCancellationRequests()
+    } catch (error) {
+      console.error("Error updating cancellation request:", error)
+      alert("No se pudo actualizar la solicitud de cancelación")
+    } finally {
+      setSavingCancellationId(null)
+    }
+  }
+
+  const handlePhotoReturnDecision = async (item: PhotoReturnRequest, decision: ReturnDecision) => {
+    if (!item.invoiceNumber.trim()) {
+      alert("Esta devolución no tiene número de factura")
+      return
+    }
+
+    setSavingReturnId(item.id)
+
+    try {
+      const { error: returnError } = await supabase
+        .from("photo_returns")
+        .update({ status: decision, updated_at: new Date().toISOString() })
+        .eq("invoice_number", item.invoiceNumber)
+
+      if (returnError) throw returnError
+
+      if (decision === "aprobada") {
+        const { error: invoiceError } = await supabase
+          .from("photo_invoices")
+          .update({
+            status: "cancelled",
+            cancelled_at: new Date().toISOString(),
+            cancel_reason: item.reason || "Devolución aprobada",
+          })
+          .eq("invoice_number", item.invoiceNumber)
+
+        if (invoiceError) throw invoiceError
+      } else {
+        const { error: invoiceError } = await supabase
+          .from("photo_invoices")
+          .update({ status: "active", cancelled_at: null, cancel_reason: null })
+          .eq("invoice_number", item.invoiceNumber)
+
+        if (invoiceError) throw invoiceError
+      }
+
+      await loadPhotoReturns()
+    } catch (error) {
+      console.error("Error updating photo return:", error)
+      alert("No se pudo procesar la devolución de fotografía")
+    } finally {
+      setSavingReturnId(null)
+    }
+  }
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-title text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              <Calculator className="w-7 h-7 text-orange-600" />
+              Contabilidad
+            </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Solicitudes de cancelación de reservas y devoluciones de fotografía.
+            </p>
+          </div>
+          <Button variant="outline" onClick={() => void reloadAll()} disabled={loading}>
+            {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RotateCcw className="w-4 h-4 mr-2" />}
+            Actualizar
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Cancelaciones de reservas</CardTitle>
+              <CardDescription>
+                {cancellationStats.pending} pendientes · {cancellationStats.approved} aprobadas · {cancellationStats.rejected} rechazadas
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold">{cancellationStats.total}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Devoluciones de fotografía</CardTitle>
+              <CardDescription>
+                {returnStats.pending} pendientes · {returnStats.approved} aprobadas · {returnStats.rejected} rechazadas
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold">{returnStats.total}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Solicitudes de cancelación</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {cancelRequests.length === 0 ? (
+              <p className="text-sm text-gray-500">No hay solicitudes de cancelación registradas.</p>
+            ) : (
+              cancelRequests
+                .slice()
+                .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
+                .map((request) => (
+                  <div key={request.id} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold">{request.customerName}</p>
+                        <p className="text-xs text-gray-500">
+                          {request.operationType.toUpperCase()} · Reserva {request.reservationId}
+                        </p>
+                      </div>
+                      {statusBadge(request.status)}
+                    </div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">{request.reason}</p>
+                    {request.accountingNote ? (
+                      <p className="text-xs text-gray-500">Nota contabilidad: {request.accountingNote}</p>
+                    ) : null}
+                    {request.status === "pending" ? (
+                      <div className="flex items-center gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => void handleCancellationDecision(request, "approved")}
+                          disabled={savingCancellationId === request.id}
+                        >
+                          {savingCancellationId === request.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+                          Aprobar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-red-300 text-red-700 hover:bg-red-50"
+                          onClick={() => void handleCancellationDecision(request, "rejected")}
+                          disabled={savingCancellationId === request.id}
+                        >
+                          Rechazar
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Solicitudes de devolución de fotografía</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {photoReturns.length === 0 ? (
+              <p className="text-sm text-gray-500">No hay devoluciones registradas.</p>
+            ) : (
+              photoReturns.map((item) => (
+                <div key={item.id} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold">{item.clientName}</p>
+                      <p className="text-xs text-gray-500">Factura {item.invoiceNumber || "Sin factura"}</p>
+                    </div>
+                    {statusBadge(item.status)}
+                  </div>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    {fmtMoney(item.amount)} · {item.reason || "Sin motivo"}
+                  </p>
+                  {item.status === "pendiente" ? (
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => void handlePhotoReturnDecision(item, "aprobada")}
+                        disabled={savingReturnId === item.id}
+                      >
+                        {savingReturnId === item.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+                        Aprobar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-red-300 text-red-700 hover:bg-red-50"
+                        onClick={() => void handlePhotoReturnDecision(item, "rechazada")}
+                        disabled={savingReturnId === item.id}
+                      >
+                        Rechazar
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </DashboardLayout>
+  )
+}

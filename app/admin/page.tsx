@@ -9,7 +9,7 @@ const ROLE_DEFAULT_ROUTE: Record<string, string> = {
   both: "/admin/operation",
   operaciones: "/admin/operation",
   chofer: "/admin/chofer",
-  contabilidad: "/admin/photography",
+  contabilidad: "/admin/contabilidad",
 }
 
 export default function AdminIndexRedirectPage() {
