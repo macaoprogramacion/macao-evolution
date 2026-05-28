@@ -63,25 +63,44 @@ export async function getMonthBillingRecords(month: string) {
 export async function insertBillingRecord(record: Omit<BillingRecord, 'id' | 'created_at' | 'updated_at'>) {
   try {
     const id = `billing-${Date.now()}`;
-    const { data, error } = await supabase
+    
+    // Try inserting with customer_amount first
+    const insertPayload: any = {
+      id,
+      type: record.type,
+      client_name: record.client_name,
+      phone: record.phone || null,
+      vendor_name: record.vendor_name || null,
+      currency: record.currency,
+      amount: record.amount,
+      payment_method: record.payment_method,
+      courtesy: record.courtesy,
+      service_type: record.service_type,
+      status: record.status,
+      date: record.date,
+      notes: record.notes || null,
+    };
+    
+    // Only include customer_amount if provided
+    if (record.customer_amount !== undefined && record.customer_amount !== null) {
+      insertPayload.customer_amount = record.customer_amount;
+    }
+    
+    let { data, error } = await supabase
       .from('billing_records')
-      .insert({
-        id,
-        type: record.type,
-        client_name: record.client_name,
-        phone: record.phone || null,
-        vendor_name: record.vendor_name || null,
-        customer_amount: record.customer_amount ?? null,
-        currency: record.currency,
-        amount: record.amount,
-        payment_method: record.payment_method,
-        courtesy: record.courtesy,
-        service_type: record.service_type,
-        status: record.status,
-        date: record.date,
-        notes: record.notes || null,
-      })
+      .insert(insertPayload)
       .select();
+    
+    // If customer_amount column doesn't exist, try without it
+    if (error && error.message?.includes('customer_amount')) {
+      console.warn('customer_amount column not found, inserting without it:', error.message);
+      delete insertPayload.customer_amount;
+      
+      ({ data, error } = await supabase
+        .from('billing_records')
+        .insert(insertPayload)
+        .select());
+    }
     
     if (error) throw error;
     return data?.[0];

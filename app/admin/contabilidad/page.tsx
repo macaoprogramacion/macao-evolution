@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Calculator, Loader2, RotateCcw } from "lucide-react"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
 import { VendorReceivables } from "@/components/admin/vendor-receivables"
+import { GygProfitability } from "@/components/admin/gyg-profitability"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -464,6 +465,8 @@ export default function AccountingRequestsPage() {
         </Card>
 
         <VendorReceivables />
+
+        <GygProfitability />
 
         <Card>
           <CardHeader>
