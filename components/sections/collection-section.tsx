@@ -48,14 +48,14 @@ const localFallbackVideos = [
 const fallbackVideos = [
   {
     id: "macao-beach",
-    src: getStoragePublicUrl("videos/lateral-izquierdo.mp4"),
+    src: "/images/videos/lateral-izquierdo.mp4",
     name: "Macao Beach",
     description: "Vive la experiencia en los caminos de Macao",
     poster: "/images/gallery-section/gallery (1).webp",
   },
   {
     id: "horseback-riding",
-    src: getStoragePublicUrl("videos/lateral-derecho.mp4"),
+    src: "/images/videos/lateral-derecho.mp4",
     name: "Horseback Riding",
     description: "Descubre los mejores paisajes en buggy",
     poster: "/images/productos/horseback-full-main.webp",

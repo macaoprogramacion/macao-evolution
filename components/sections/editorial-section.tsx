@@ -16,12 +16,12 @@ function getStoragePublicUrl(storagePath: string) {
   return data.publicUrl;
 }
 
-function handleVideoError(event: SyntheticEvent<HTMLVideoElement>) {
+function handleVideoError(event: SyntheticEvent<HTMLVideoElement>, fallbackSrc: string) {
   const video = event.currentTarget;
   if (video.dataset.fallbackApplied === "true") return;
 
   video.dataset.fallbackApplied = "true";
-  video.src = LOCAL_FALLBACK_VIDEO;
+  video.src = fallbackSrc;
   video.load();
 }
 
@@ -37,7 +37,7 @@ export function EditorialSection() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [shouldLoad, setShouldLoad] = useState(false);
-  const bucketVideoSrc = getStoragePublicUrl("videos/video-grande.mp4");
+  const bucketVideoFallbackSrc = getStoragePublicUrl("videos/video-grande.mp4");
 
   useEffect(() => {
     const target = wrapperRef.current;
@@ -103,8 +103,8 @@ export function EditorialSection() {
           preload="metadata"
           poster="/images/foto-con-dimecion-arreglada/imagen-cuadrada-alta-calidad.webp"
           className="absolute inset-0 h-full w-full object-cover"
-          src={shouldLoad ? bucketVideoSrc : undefined}
-          onError={handleVideoError}
+          src={shouldLoad ? LOCAL_FALLBACK_VIDEO : undefined}
+          onError={(event) => handleVideoError(event, bucketVideoFallbackSrc)}
           onEnded={() => setPlaying(false)}
         />
         {/* Play / Pause overlay */}
