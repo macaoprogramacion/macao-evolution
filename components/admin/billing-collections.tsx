@@ -37,6 +37,7 @@ interface BillingRecord {
   phone: string
   currency: "USD" | "DOP" | "EUR" | "GBP"
   amount: number
+  customerAmount?: number | null
   paymentMethod: "tarjeta" | "paypal" | "efectivo"
   courtesy: boolean
   serviceType: string
@@ -258,6 +259,7 @@ export function BillingCollections() {
   const [clientName, setClientName] = useState("")
   const [phone, setPhone] = useState("")
   const [vendorName, setVendorName] = useState("")
+  const [customerAmount, setCustomerAmount] = useState("")
   const [currency, setCurrency] = useState<"USD" | "DOP" | "EUR" | "GBP">("USD")
   const [amount, setAmount] = useState("")
   const [paymentMethod, setPaymentMethod] = useState<"tarjeta" | "paypal" | "efectivo">("efectivo")
@@ -289,6 +291,7 @@ export function BillingCollections() {
           phone: r.phone || "",
           currency: r.currency,
           amount: r.amount,
+          customerAmount: r.customer_amount != null ? Number(r.customer_amount) : null,
           paymentMethod: r.payment_method,
           courtesy: r.courtesy,
           serviceType: r.service_type,
@@ -485,6 +488,10 @@ export function BillingCollections() {
   const printBillingInvoice = (record: BillingRecord) => {
     const generatedAt = new Date().toLocaleString("es-DO")
     const total = formatMoney(record.currency, record.amount)
+    const customerAmountLine =
+      record.type === "credito_vendedor" && record.customerAmount != null && record.customerAmount > 0
+        ? `<div class="row"><span class="label">Monto a pagar por cliente</span><span class="value">${formatMoney("USD", record.customerAmount)}</span></div>`
+        : ""
     const logoUrl = "/Logo%20PNG/MACAO%20LOGO_Mesa%20de%20trabajo%201.png"
     const html = `<!DOCTYPE html>
 <html lang="es">
@@ -526,6 +533,7 @@ export function BillingCollections() {
       <div class="row"><span class="label">Teléfono</span><span class="value">${record.phone || "—"}</span></div>
       <div class="row"><span class="label">Tipo</span><span class="value">${TYPE_LABELS[record.type]}</span></div>
       <div class="row"><span class="label">Servicio</span><span class="value">${record.serviceType}</span></div>
+      ${customerAmountLine}
       <div class="row"><span class="label">Método de pago</span><span class="value">${PAYMENT_METHOD_LABELS[record.paymentMethod]}</span></div>
       <div class="row"><span class="label">Estado</span><span class="value">${record.status}</span></div>
       <div class="total">Total: ${total}</div>
@@ -586,6 +594,8 @@ export function BillingCollections() {
     setIsSaving(true)
     try {
       const recordCurrency = supportsMultiCurrency ? currency : "USD"
+      const parsedCustomerAmount = Number(customerAmount || "0")
+      const hasCustomerAmount = type === "credito_vendedor" && Number.isFinite(parsedCustomerAmount) && parsedCustomerAmount > 0
       const totalAmount = normalizedLines.reduce(
         (sum, line) => sum + Number(line.unitAmount) * line.quantity,
         0,
@@ -607,6 +617,7 @@ export function BillingCollections() {
         phone: phone || null,
         currency: recordCurrency,
         amount: totalAmount,
+        customer_amount: hasCustomerAmount ? parsedCustomerAmount : null,
         payment_method: paymentMethod,
         courtesy,
         service_type: serviceSummary,
@@ -654,6 +665,7 @@ export function BillingCollections() {
             phone: r.phone || "",
             currency: r.currency,
             amount: r.amount,
+            customerAmount: r.customer_amount != null ? Number(r.customer_amount) : null,
             paymentMethod: r.payment_method,
             courtesy: r.courtesy,
             serviceType: r.service_type,
@@ -674,6 +686,7 @@ export function BillingCollections() {
           phone: inserted.phone || "",
           currency: inserted.currency,
           amount: inserted.amount,
+          customerAmount: inserted.customer_amount != null ? Number(inserted.customer_amount) : null,
           paymentMethod: inserted.payment_method,
           courtesy: inserted.courtesy,
           serviceType: inserted.service_type,
@@ -704,6 +717,7 @@ export function BillingCollections() {
     setClientName("")
     setPhone("")
     setVendorName("")
+    setCustomerAmount("")
     setCurrency("USD")
     setAmount("")
     setPaymentMethod("efectivo")
@@ -1158,6 +1172,23 @@ export function BillingCollections() {
               </div>
             )}
 
+            {type === "credito_vendedor" && (
+              <div className="space-y-1.5">
+                <Label>Monto a pagar por cliente (USD) (Opcional)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={customerAmount}
+                  onChange={(e) => setCustomerAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-gray-500">
+                  Este monto es independiente del costo por maquina al vendedor y puede ser mayor.
+                </p>
+              </div>
+            )}
+
             {/* Currency (only for pago_al_llegar and venta_directa) */}
             {supportsMultiCurrency && (
               <div className="space-y-1.5">
@@ -1354,6 +1385,7 @@ export function BillingCollections() {
                     <th className="text-left py-3 px-2 font-semibold">Cliente</th>
                     <th className="text-left py-3 px-2 font-semibold">Teléfono</th>
                     <th className="text-left py-3 px-2 font-semibold">Vendedor</th>
+                    <th className="text-right py-3 px-2 font-semibold">Monto cliente</th>
                     <th className="text-left py-3 px-2 font-semibold">Pago</th>
                     <th className="text-left py-3 px-2 font-semibold">Cortesia</th>
                     <th className="text-right py-3 px-2 font-semibold">Monto</th>
@@ -1385,6 +1417,11 @@ export function BillingCollections() {
                       </td>
                       <td className="py-3 px-2">{record.phone || "—"}</td>
                       <td className="py-3 px-2">{record.vendorName || "—"}</td>
+                      <td className="py-3 px-2 text-right font-medium">
+                        {record.type === "credito_vendedor" && record.customerAmount != null && record.customerAmount > 0
+                          ? formatMoney("USD", record.customerAmount)
+                          : "—"}
+                      </td>
                       <td className="py-3 px-2">{PAYMENT_METHOD_LABELS[record.paymentMethod]}</td>
                       <td className="py-3 px-2">
                         {record.courtesy ? (

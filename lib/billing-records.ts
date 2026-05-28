@@ -6,6 +6,7 @@ export interface BillingRecord {
   client_name: string;
   phone?: string;
   vendor_name?: string;
+  customer_amount?: number | null;
   currency: 'USD' | 'DOP' | 'EUR' | 'GBP';
   amount: number;
   payment_method: 'tarjeta' | 'paypal' | 'efectivo';
@@ -70,6 +71,7 @@ export async function insertBillingRecord(record: Omit<BillingRecord, 'id' | 'cr
         client_name: record.client_name,
         phone: record.phone || null,
         vendor_name: record.vendor_name || null,
+        customer_amount: record.customer_amount ?? null,
         currency: record.currency,
         amount: record.amount,
         payment_method: record.payment_method,
