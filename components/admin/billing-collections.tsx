@@ -834,11 +834,47 @@ export function BillingCollections() {
     }
   }
 
+  const calculateVendorReceivables = () => {
+    const CREDIT_VENDORS = ["ANDY PERDOMO", "ANDY VALDEZ", "DAVID FELIX (BUEY TOUR)", "ALE HUERTA"]
+    const byVendor = new Map<string, { owed: number; inFavor: number }>()
+
+    for (const vendor of CREDIT_VENDORS) {
+      byVendor.set(vendor, { owed: 0, inFavor: 0 })
+    }
+
+    const creditRecords = records.filter(
+      (r) => r.type === "credito_vendedor" && r.status !== "cancelado" && r.vendorName
+    )
+
+    for (const record of creditRecords) {
+      const vendor = record.vendorName || ""
+      if (!CREDIT_VENDORS.includes(vendor)) continue
+
+      const operativeCost = record.amount
+      const clientPayment = record.customerAmount || 0
+      const current = byVendor.get(vendor) || { owed: 0, inFavor: 0 }
+
+      if (clientPayment === 0) {
+        current.owed += operativeCost
+      } else if (clientPayment > operativeCost) {
+        current.inFavor += clientPayment - operativeCost
+      } else {
+        current.owed += operativeCost - clientPayment
+      }
+
+      byVendor.set(vendor, current)
+    }
+
+    return Object.fromEntries(byVendor)
+  }
+
   const handleSendOperationsClosure = () => {
     if (records.length === 0) {
       alert("No hay registros para enviar en el cierre de operaciones")
       return
     }
+
+    const vendorReceivables = calculateVendorReceivables()
 
     const summary = {
       id: `ops-${Date.now()}`,
@@ -853,6 +889,7 @@ export function BillingCollections() {
         EUR: records.filter((r) => r.currency === "EUR").reduce((sum, r) => sum + r.amount, 0),
         GBP: records.filter((r) => r.currency === "GBP").reduce((sum, r) => sum + r.amount, 0),
       },
+      vendorReceivables,
     }
 
     try {
@@ -861,7 +898,7 @@ export function BillingCollections() {
       const next = Array.isArray(current) ? [summary, ...current].slice(0, 50) : [summary]
       localStorage.setItem("macao_operation_closures", JSON.stringify(next))
       window.dispatchEvent(new CustomEvent("macao-operation-closure-sent", { detail: summary }))
-      setClosureFeedback("Cierre de operaciones enviado a contabilidad.")
+      setClosureFeedback("Cierre de operaciones enviado a contabilidad (incluye cuentas por cobrar).")
       window.setTimeout(() => setClosureFeedback(""), 5000)
     } catch {
       alert("No se pudo enviar el cierre de operaciones")
