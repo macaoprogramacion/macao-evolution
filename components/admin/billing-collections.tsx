@@ -15,6 +15,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { insertBillingRecord, getTodayBillingRecords, updateBillingRecord, deleteBillingRecord } from "@/lib/billing-records"
 import type { BillingRecord as DBBillingRecord } from "@/lib/billing-records"
 import { supabase } from "@/lib/supabase"
@@ -47,6 +55,13 @@ interface BillingRecord {
   vendorName?: string
   serviceItems?: ServiceLine[]
   pickupCode?: string
+}
+
+interface UpgradeDraft {
+  serviceType: string
+  extraAmount: string
+  paymentMethod: "tarjeta" | "paypal" | "efectivo"
+  notes: string
 }
 
 interface ServiceLine {
@@ -281,36 +296,49 @@ export function BillingCollections() {
   const [notes, setNotes] = useState("")
   const [cancelRequests, setCancelRequests] = useState<CancellationRequest[]>([])
   const [canManageAccountingRequests, setCanManageAccountingRequests] = useState(false)
+  const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
+  const [upgradeSourceRecord, setUpgradeSourceRecord] = useState<BillingRecord | null>(null)
+  const [upgradeDraft, setUpgradeDraft] = useState<UpgradeDraft>({
+    serviceType: "",
+    extraAmount: "",
+    paymentMethod: "efectivo",
+    notes: "",
+  })
+
+  const mapDbRecord = (r: DBBillingRecord): BillingRecord => {
+    const { cleanNotes, serviceItems } = parseServiceItemsFromNotes(r.notes || "")
+    const noteWithoutCode = removePickupCodeTag(cleanNotes)
+    return {
+      id: r.id,
+      type: r.type,
+      clientName: r.client_name,
+      phone: r.phone || "",
+      currency: r.currency,
+      amount: r.amount,
+      customerAmount: r.customer_amount != null ? Number(r.customer_amount) : null,
+      paymentMethod: r.payment_method,
+      courtesy: r.courtesy,
+      serviceType: r.service_type,
+      status: r.status,
+      date: r.date,
+      notes: noteWithoutCode,
+      vendorName: r.vendor_name,
+      serviceItems,
+      pickupCode: extractPickupCodeFromNotes(r.notes || ""),
+    }
+  }
+
+  const reloadRecords = async () => {
+    const dbRecords = await getTodayBillingRecords()
+    setRecords(dbRecords.map((r: DBBillingRecord) => mapDbRecord(r)))
+  }
 
   // Load records from Supabase on mount
   useEffect(() => {
     const loadRecords = async () => {
       setIsLoading(true)
       try {
-        const dbRecords = await getTodayBillingRecords()
-        const mapped = dbRecords.map((r: DBBillingRecord) => {
-          const { cleanNotes, serviceItems } = parseServiceItemsFromNotes(r.notes || "")
-          const noteWithoutCode = removePickupCodeTag(cleanNotes)
-          return {
-          id: r.id,
-          type: r.type,
-          clientName: r.client_name,
-          phone: r.phone || "",
-          currency: r.currency,
-          amount: r.amount,
-          customerAmount: r.customer_amount != null ? Number(r.customer_amount) : null,
-          paymentMethod: r.payment_method,
-          courtesy: r.courtesy,
-          serviceType: r.service_type,
-          status: r.status,
-          date: r.date,
-          notes: noteWithoutCode,
-          vendorName: r.vendor_name,
-          serviceItems,
-          pickupCode: extractPickupCodeFromNotes(r.notes || ""),
-        }
-        })
-        setRecords(mapped)
+        await reloadRecords()
       } catch (err) {
         console.error("Error loading billing records:", err)
       } finally {
@@ -661,30 +689,7 @@ export function BillingCollections() {
         }
 
         // Reload records from DB after optional code update
-        const updatedRecords = await getTodayBillingRecords()
-        const mapped = updatedRecords.map((r: DBBillingRecord) => {
-          const { cleanNotes, serviceItems } = parseServiceItemsFromNotes(r.notes || "")
-          const noteWithoutCode = removePickupCodeTag(cleanNotes)
-          return {
-            id: r.id,
-            type: r.type,
-            clientName: r.client_name,
-            phone: r.phone || "",
-            currency: r.currency,
-            amount: r.amount,
-            customerAmount: r.customer_amount != null ? Number(r.customer_amount) : null,
-            paymentMethod: r.payment_method,
-            courtesy: r.courtesy,
-            serviceType: r.service_type,
-            status: r.status,
-            date: r.date,
-            notes: noteWithoutCode,
-            vendorName: r.vendor_name,
-            serviceItems,
-            pickupCode: extractPickupCodeFromNotes(r.notes || ""),
-          }
-        })
-        setRecords(mapped)
+        await reloadRecords()
 
         const createdRecord: BillingRecord = {
           id: inserted.id,
@@ -801,6 +806,66 @@ export function BillingCollections() {
     } catch (err) {
       console.error("Error deleting record:", err)
       alert("No se pudo eliminar el registro")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const openUpgradeDialog = (record: BillingRecord) => {
+    setUpgradeSourceRecord(record)
+    setUpgradeDraft({
+      serviceType: "",
+      extraAmount: "",
+      paymentMethod: record.paymentMethod,
+      notes: `Upgrade sobre ${record.serviceType}`,
+    })
+    setUpgradeDialogOpen(true)
+  }
+
+  const handleCreateUpgrade = async () => {
+    if (!upgradeSourceRecord) return
+
+    const nextService = upgradeDraft.serviceType.trim()
+    const extraAmount = Number(upgradeDraft.extraAmount || "0")
+    if (!nextService || !Number.isFinite(extraAmount) || extraAmount <= 0) {
+      alert("Debes seleccionar el servicio de upgrade y un monto extra mayor a 0.")
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      const upgradeNotes = [
+        upgradeDraft.notes.trim(),
+        `Upgrade desde: ${upgradeSourceRecord.serviceType}`,
+        `Upgrade origen facturacion: ${upgradeSourceRecord.id}`,
+      ]
+        .filter(Boolean)
+        .join("\n")
+
+      await insertBillingRecord({
+        type: "venta_directa",
+        client_name: upgradeSourceRecord.clientName,
+        phone: upgradeSourceRecord.phone || null,
+        vendor_name: null,
+        currency: upgradeSourceRecord.currency,
+        amount: extraAmount,
+        customer_amount: null,
+        payment_method: upgradeDraft.paymentMethod,
+        courtesy: false,
+        service_type: `Upgrade a ${nextService}`,
+        status: "pendiente",
+        date: today,
+        notes: upgradeNotes,
+      })
+
+      await reloadRecords()
+      setUpgradeDialogOpen(false)
+      setUpgradeSourceRecord(null)
+      alert("Upgrade registrado en Facturación correctamente.")
+    } catch (err) {
+      console.error("Error creating upgrade:", err)
+      alert("No se pudo registrar el upgrade")
     } finally {
       setIsSaving(false)
     }
@@ -1520,6 +1585,13 @@ export function BillingCollections() {
                             <Printer className="w-4 h-4" />
                           </button>
                           <button
+                            onClick={() => openUpgradeDialog(record)}
+                            className="text-amber-600 hover:text-amber-700 inline-flex"
+                            title="Registrar upgrade"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                          <button
                             onClick={() => handleDelete(record.id)}
                             className="text-red-600 hover:text-red-700 inline-flex"
                           >
@@ -1535,6 +1607,105 @@ export function BillingCollections() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={upgradeDialogOpen}
+        onOpenChange={(open) => {
+          setUpgradeDialogOpen(open)
+          if (!open) setUpgradeSourceRecord(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Registrar Upgrade</DialogTitle>
+            <DialogDescription>
+              Registra el cobro extra por upgrade y se enviará directamente a Facturación.
+            </DialogDescription>
+          </DialogHeader>
+
+          {upgradeSourceRecord ? (
+            <div className="space-y-3">
+              <div className="rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-3 text-sm">
+                <p className="font-medium">{upgradeSourceRecord.clientName}</p>
+                <p className="text-gray-600 dark:text-gray-300">Reserva base: {upgradeSourceRecord.serviceType}</p>
+                <p className="text-gray-600 dark:text-gray-300">Origen: {upgradeSourceRecord.id}</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Servicio de upgrade *</Label>
+                <Select
+                  value={upgradeDraft.serviceType}
+                  onValueChange={(value) => setUpgradeDraft((prev) => ({ ...prev, serviceType: value }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Selecciona servicio" /></SelectTrigger>
+                  <SelectContent>
+                    {SERVICE_OPTIONS.map((service) => (
+                      <SelectItem key={service} value={service}>{service}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Precio extra ({upgradeSourceRecord.currency}) *</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={upgradeDraft.extraAmount}
+                  onChange={(e) => setUpgradeDraft((prev) => ({ ...prev, extraAmount: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Método de pago *</Label>
+                <Select
+                  value={upgradeDraft.paymentMethod}
+                  onValueChange={(value: "tarjeta" | "paypal" | "efectivo") =>
+                    setUpgradeDraft((prev) => ({ ...prev, paymentMethod: value }))
+                  }
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tarjeta">Pago con Tarjeta</SelectItem>
+                    <SelectItem value="paypal">PayPal</SelectItem>
+                    <SelectItem value="efectivo">Efectivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Notas (opcional)</Label>
+                <Textarea
+                  value={upgradeDraft.notes}
+                  onChange={(e) => setUpgradeDraft((prev) => ({ ...prev, notes: e.target.value }))}
+                  rows={3}
+                  placeholder="Detalle del motivo del upgrade"
+                />
+              </div>
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUpgradeDialogOpen(false)} disabled={isSaving}>Cancelar</Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleCreateUpgrade}
+              disabled={isSaving || !upgradeDraft.serviceType || Number(upgradeDraft.extraAmount || 0) <= 0}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                "Registrar Upgrade"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

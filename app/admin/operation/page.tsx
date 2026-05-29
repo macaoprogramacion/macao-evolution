@@ -65,6 +65,7 @@ import {
   type CancellationRequest,
 } from "@/lib/cancellation-requests"
 import { Label } from "@/components/ui/label"
+import { insertBillingRecord } from "@/lib/billing-records"
 
 function inferTimeslotFromPickup(pickupValue: string) {
   const firstTimeMatch = pickupValue.match(/(\d{1,2}):\d{2}\s*([AP]M)/i)
@@ -107,6 +108,8 @@ const SERVICE_RULES: ServiceRule[] = [
   { id: "full_ride", label: "Full Ride", minPeople: 1, maxPeople: 12, horseRule: "equal_people" },
 ]
 
+const UPGRADE_SERVICE_OPTIONS = SERVICE_RULES.map((rule) => rule.label)
+
 function getServiceRule(experience: string) {
   return SERVICE_RULES.find((rule) => rule.label === experience) || null
 }
@@ -146,6 +149,13 @@ type Reservation = {
   isEdited: boolean
   editedAt: string | null
   editReason: string
+}
+
+type UpgradeDraft = {
+  targetService: string
+  extraAmount: string
+  paymentMethod: "tarjeta" | "paypal" | "efectivo"
+  notes: string
 }
 
 const EDIT_REASON_TAG = "[EDIT_REASON]:"
@@ -546,6 +556,15 @@ export default function OperationPage() {
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null)
   const [editing, setEditing] = useState(false)
   const [editReason, setEditReason] = useState("")
+  const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
+  const [upgradeReservation, setUpgradeReservation] = useState<Reservation | null>(null)
+  const [savingUpgrade, setSavingUpgrade] = useState(false)
+  const [upgradeDraft, setUpgradeDraft] = useState<UpgradeDraft>({
+    targetService: "",
+    extraAmount: "",
+    paymentMethod: "efectivo",
+    notes: "",
+  })
   const [editRes, setEditRes] = useState({
     customer_name: "",
     phone: "",
@@ -1162,6 +1181,65 @@ export default function OperationPage() {
       console.error(e)
     } finally {
       setEditing(false)
+    }
+  }
+
+  const openUpgradeDialog = (reservation: Reservation) => {
+    setUpgradeReservation(reservation)
+    setUpgradeDraft({
+      targetService: "",
+      extraAmount: "",
+      paymentMethod: "efectivo",
+      notes: `Upgrade sobre reserva ${reservation.id}`,
+    })
+    setUpgradeDialogOpen(true)
+  }
+
+  const handleCreateUpgrade = async () => {
+    if (!upgradeReservation) return
+
+    const targetService = upgradeDraft.targetService.trim()
+    const extraAmount = Number(upgradeDraft.extraAmount || "0")
+    if (!targetService || !Number.isFinite(extraAmount) || extraAmount <= 0) {
+      alert("Debes seleccionar el servicio de upgrade y un monto extra mayor a 0.")
+      return
+    }
+
+    setSavingUpgrade(true)
+    try {
+      const cleanPhone = upgradeReservation.phone === "—" ? undefined : (upgradeReservation.phone || undefined)
+      const billingNotes = [
+        upgradeDraft.notes.trim(),
+        `Upgrade desde: ${upgradeReservation.experience || "Servicio base"}`,
+        `Upgrade origen reserva: ${upgradeReservation.id}`,
+      ]
+        .filter(Boolean)
+        .join("\n")
+
+      await insertBillingRecord({
+        type: "venta_directa",
+        client_name: upgradeReservation.customerName,
+        phone: cleanPhone,
+        vendor_name: undefined,
+        currency: "USD",
+        amount: extraAmount,
+        customer_amount: null,
+        payment_method: upgradeDraft.paymentMethod,
+        courtesy: false,
+        service_type: `Upgrade a ${targetService}`,
+        status: "pendiente",
+        date: new Date().toISOString().slice(0, 10),
+        notes: billingNotes,
+      })
+
+      setUpgradeDialogOpen(false)
+      setUpgradeReservation(null)
+      alert("Upgrade registrado en Facturación correctamente.")
+    } catch (error) {
+      console.error("Error creating reservation upgrade:", error)
+      alert("No se pudo registrar el upgrade en facturación")
+    } finally {
+      setSavingUpgrade(false)
     }
   }
 
@@ -1814,6 +1892,16 @@ export default function OperationPage() {
                     <Button
                       size="sm"
                       variant="outline"
+                      className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                      onClick={() => openUpgradeDialog(reservation)}
+                    >
+                      <Plus className="w-3 h-3 mr-1" />
+                      Upgrade
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
                       className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
                       onClick={() => downloadTicket(reservation)}
                     >
@@ -2283,6 +2371,105 @@ export default function OperationPage() {
                   Guardando...
                 </>
               ) : "Guardar cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={upgradeDialogOpen}
+        onOpenChange={(open) => {
+          setUpgradeDialogOpen(open)
+          if (!open) setUpgradeReservation(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Registrar Upgrade</DialogTitle>
+            <DialogDescription>
+              Registra servicio destino, precio extra y método de pago. Este cobro se envía a Facturación.
+            </DialogDescription>
+          </DialogHeader>
+
+          {upgradeReservation ? (
+            <div className="space-y-3">
+              <div className="rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-3 text-sm">
+                <p className="font-medium">{upgradeReservation.customerName}</p>
+                <p className="text-gray-600 dark:text-gray-300">Reserva: {upgradeReservation.id}</p>
+                <p className="text-gray-600 dark:text-gray-300">Servicio actual: {upgradeReservation.experience || "No definido"}</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Servicio al que sube (Upgrade) *</Label>
+                <Select
+                  value={upgradeDraft.targetService}
+                  onValueChange={(value) => setUpgradeDraft((prev) => ({ ...prev, targetService: value }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Selecciona servicio" /></SelectTrigger>
+                  <SelectContent>
+                    {UPGRADE_SERVICE_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>{option}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Precio extra (USD) *</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={upgradeDraft.extraAmount}
+                  onChange={(e) => setUpgradeDraft((prev) => ({ ...prev, extraAmount: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Método de pago *</Label>
+                <Select
+                  value={upgradeDraft.paymentMethod}
+                  onValueChange={(value: "tarjeta" | "paypal" | "efectivo") =>
+                    setUpgradeDraft((prev) => ({ ...prev, paymentMethod: value }))
+                  }
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tarjeta">Pago con Tarjeta</SelectItem>
+                    <SelectItem value="paypal">PayPal</SelectItem>
+                    <SelectItem value="efectivo">Efectivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Notas (opcional)</Label>
+                <Textarea
+                  value={upgradeDraft.notes}
+                  onChange={(e) => setUpgradeDraft((prev) => ({ ...prev, notes: e.target.value }))}
+                  rows={3}
+                  placeholder="Motivo o detalle del upgrade"
+                />
+              </div>
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUpgradeDialogOpen(false)} disabled={savingUpgrade}>Cancelar</Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleCreateUpgrade}
+              disabled={savingUpgrade || !upgradeDraft.targetService || Number(upgradeDraft.extraAmount || 0) <= 0}
+            >
+              {savingUpgrade ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                "Registrar Upgrade"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
