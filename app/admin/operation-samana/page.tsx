@@ -94,6 +94,8 @@ type SamanaReservation = {
 
 const EDIT_REASON_TAG = "[EDIT_REASON]:"
 const EDITED_AT_TAG = "[EDITED_AT]:"
+const EDIT_AMOUNT_BEFORE_TAG = "[EDIT_AMOUNT_BEFORE]:"
+const EDIT_AMOUNT_AFTER_TAG = "[EDIT_AMOUNT_AFTER]:"
 
 function getEditAuditFromNotes(notes: string) {
   const lines = notes.split("\n")
@@ -109,15 +111,38 @@ function getEditAuditFromNotes(notes: string) {
 function stripEditAuditFromNotes(notes: string) {
   return notes
     .split("\n")
-    .filter((line) => !line.startsWith(EDIT_REASON_TAG) && !line.startsWith(EDITED_AT_TAG))
+    .filter(
+      (line) =>
+        !line.startsWith(EDIT_REASON_TAG)
+        && !line.startsWith(EDITED_AT_TAG)
+        && !line.startsWith(EDIT_AMOUNT_BEFORE_TAG)
+        && !line.startsWith(EDIT_AMOUNT_AFTER_TAG),
+    )
     .join("\n")
     .trim()
 }
 
-function buildNotesWithEditAudit(notes: string, reason: string, editedAt: string) {
+function buildNotesWithEditAudit(
+  notes: string,
+  reason: string,
+  editedAt: string,
+  previousAmount?: number | null,
+  nextAmount?: number | null,
+) {
   const cleanNotes = stripEditAuditFromNotes(notes)
+  const lines = [`${EDITED_AT_TAG} ${editedAt}`, `${EDIT_REASON_TAG} ${reason}`]
+
+  if (
+    Number.isFinite(previousAmount)
+    && Number.isFinite(nextAmount)
+    && Number(previousAmount) !== Number(nextAmount)
+  ) {
+    lines.push(`${EDIT_AMOUNT_BEFORE_TAG} ${Number(previousAmount)}`)
+    lines.push(`${EDIT_AMOUNT_AFTER_TAG} ${Number(nextAmount)}`)
+  }
+
   const base = cleanNotes ? `${cleanNotes}\n` : ""
-  return `${base}${EDITED_AT_TAG} ${editedAt}\n${EDIT_REASON_TAG} ${reason}`
+  return `${base}${lines.join("\n")}`
 }
 
 type AvailabilityDayRow = {
@@ -610,7 +635,15 @@ export default function OperationSamanaPage() {
     setSavingEdit(true)
     try {
       const editedAt = new Date().toISOString()
-      const notesWithAudit = buildNotesWithEditAudit(editRes.notes || "", normalizedEditReason, editedAt)
+      const previousAmount = editingReservation.amount ?? 0
+      const nextAmount = editRes.amount ?? 0
+      const notesWithAudit = buildNotesWithEditAudit(
+        editRes.notes || "",
+        normalizedEditReason,
+        editedAt,
+        previousAmount,
+        nextAmount,
+      )
 
       const updatePayloadBase = {
         customer_name: editRes.customer_name,

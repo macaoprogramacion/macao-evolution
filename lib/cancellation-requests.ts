@@ -71,16 +71,21 @@ export async function listCancellationRequests() {
 }
 
 export async function upsertCancellationRequest(request: CancellationRequest) {
-  const { data: existing, error: existingError } = await supabase
+  const { data: existingRows, error: existingError } = await supabase
     .from("reservation_cancellation_requests")
     .select("id")
     .eq("operation_type", request.operationType)
     .eq("reservation_id", request.reservationId)
-    .maybeSingle<{ id: string }>()
+    .order("requested_at", { ascending: false })
+    .limit(1)
 
   if (existingError) {
     throw formatCancellationDbError(existingError, "No se pudo verificar la solicitud de cancelación existente")
   }
+
+  const existing = Array.isArray(existingRows) && existingRows.length > 0
+    ? (existingRows[0] as { id: string })
+    : null
 
   const payload = {
     id: existing?.id || request.id,

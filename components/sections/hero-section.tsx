@@ -4,16 +4,18 @@ import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 const STORAGE_BUCKET = "portfolio-media";
-const HERO_VIDEO_SRC = "/images/videos/macao-rancho.mp4";
+const HERO_VIDEO_SRC = "/images/videos/Macao-Rancho-index.mp4";
 const HERO_CANDIDATE_SOURCES_MOBILE = [
+  HERO_VIDEO_SRC,
   "/images/videos/macao-rancho-mobile.mp4",
   "/images/videos/macao-rancho-720.mp4",
-  HERO_VIDEO_SRC,
+  "/images/videos/macao-rancho.mp4",
 ];
 const HERO_CANDIDATE_SOURCES_DESKTOP = [
+  HERO_VIDEO_SRC,
   "/images/videos/macao-rancho-1080.mp4",
   "/images/videos/macao-rancho-720.mp4",
-  HERO_VIDEO_SRC,
+  "/images/videos/macao-rancho.mp4",
 ];
 
 function getStoragePublicUrl(storagePath: string) {
@@ -51,7 +53,7 @@ export function HeroSection() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [resolvedSrc, setResolvedSrc] = useState<string>(HERO_VIDEO_SRC);
   const [shouldLoad, setShouldLoad] = useState(false);
-  const bucketVideoFallbackSrc = getStoragePublicUrl("videos/macao-rancho.mp4");
+  const bucketVideoFallbackSrc = getStoragePublicUrl("videos/Macao-Rancho-index.mp4");
 
   useEffect(() => {
     const mobile = window.matchMedia("(max-width: 767px)").matches;

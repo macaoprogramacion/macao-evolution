@@ -35,6 +35,7 @@ type BuggyOpsReservation = {
   guests: number
   children: number
   notes: string
+  amount: number | null
 }
 
 type TourOpsReservation = {
@@ -43,6 +44,18 @@ type TourOpsReservation = {
   status: string
   guests: number
   children: number
+  notes: string
+  amount: number | null
+}
+
+type EditedReservationEntry = {
+  id: string
+  operation: "buggy" | "saona" | "samana"
+  date: string
+  editedAt: string
+  reason: string
+  amountBefore: number | null
+  amountAfter: number | null
 }
 
 type OpsPeriodStats = {
@@ -84,6 +97,29 @@ function inRange(date: string, from: string, to: string) {
 function parseCountFromNotes(notes: string, label: "maquinas" | "caballos") {
   const match = (notes || "").match(new RegExp(`${label}\\s*:\\s*(\\d+)`, "i"))
   return match ? Number(match[1] || 0) : 0
+}
+
+const EDIT_REASON_TAG = "[EDIT_REASON]:"
+const EDITED_AT_TAG = "[EDITED_AT]:"
+const EDIT_AMOUNT_BEFORE_TAG = "[EDIT_AMOUNT_BEFORE]:"
+const EDIT_AMOUNT_AFTER_TAG = "[EDIT_AMOUNT_AFTER]:"
+
+function getEditAuditFromNotes(notes: string) {
+  const lines = (notes || "").split("\n")
+  const reasonLine = lines.find((line) => line.startsWith(EDIT_REASON_TAG))
+  const editedAtLine = lines.find((line) => line.startsWith(EDITED_AT_TAG))
+  const amountBeforeLine = lines.find((line) => line.startsWith(EDIT_AMOUNT_BEFORE_TAG))
+  const amountAfterLine = lines.find((line) => line.startsWith(EDIT_AMOUNT_AFTER_TAG))
+
+  const amountBefore = Number((amountBeforeLine || "").slice(EDIT_AMOUNT_BEFORE_TAG.length).trim())
+  const amountAfter = Number((amountAfterLine || "").slice(EDIT_AMOUNT_AFTER_TAG.length).trim())
+
+  return {
+    reason: reasonLine ? reasonLine.slice(EDIT_REASON_TAG.length).trim() : "",
+    editedAt: editedAtLine ? editedAtLine.slice(EDITED_AT_TAG.length).trim() : "",
+    amountBefore: Number.isFinite(amountBefore) ? amountBefore : null,
+    amountAfter: Number.isFinite(amountAfter) ? amountAfter : null,
+  }
 }
 
 function isSoldStatus(status: string) {
@@ -180,17 +216,17 @@ export default function AccountingRequestsPage() {
       const [buggyRes, saonaRes, samanaRes] = await Promise.all([
         supabase
           .from("reservations")
-          .select("id, date, status, guests, children, notes")
+          .select("id, date, status, guests, children, notes, amount")
           .order("date", { ascending: false })
           .limit(4000),
         supabase
           .from("saona_reservations")
-          .select("id, date, status, guests, children")
+          .select("id, date, status, guests, children, notes, amount")
           .order("date", { ascending: false })
           .limit(4000),
         supabase
           .from("samana_reservations")
-          .select("id, date, status, guests, children")
+          .select("id, date, status, guests, children, notes, amount")
           .order("date", { ascending: false })
           .limit(4000),
       ])
@@ -207,6 +243,7 @@ export default function AccountingRequestsPage() {
           guests: Number(row.guests || 0),
           children: Number(row.children || 0),
           notes: row.notes || "",
+          amount: row.amount != null ? Number(row.amount) : null,
         })),
       )
 
@@ -217,6 +254,8 @@ export default function AccountingRequestsPage() {
           status: row.status || "pending",
           guests: Number(row.guests || 0),
           children: Number(row.children || 0),
+          notes: row.notes || "",
+          amount: row.amount != null ? Number(row.amount) : null,
         }))
 
       setSaonaOps(mapTourRows(saonaRes.data || []))
@@ -287,6 +326,51 @@ export default function AccountingRequestsPage() {
       month: buildPeriodStats(monthStart),
     }
   }, [buggyOps, saonaOps, samanaOps])
+
+  const editedReservations = useMemo<EditedReservationEntry[]>(() => {
+    const fromRows = <T extends { id: string; date: string; notes: string }>(
+      rows: T[],
+      operation: EditedReservationEntry["operation"],
+    ) =>
+      rows
+        .map((row) => {
+          const audit = getEditAuditFromNotes(row.notes)
+          if (!audit.reason && !audit.editedAt) return null
+          return {
+            id: row.id,
+            operation,
+            date: row.date,
+            editedAt: audit.editedAt,
+            reason: audit.reason,
+            amountBefore: audit.amountBefore,
+            amountAfter: audit.amountAfter,
+          } as EditedReservationEntry
+        })
+        .filter((row): row is EditedReservationEntry => Boolean(row))
+
+    return [
+      ...fromRows(buggyOps, "buggy"),
+      ...fromRows(saonaOps, "saona"),
+      ...fromRows(samanaOps, "samana"),
+    ].sort((a, b) => (b.editedAt || b.date).localeCompare(a.editedAt || a.date))
+  }, [buggyOps, saonaOps, samanaOps])
+
+  const editedPriceDelta = useMemo(
+    () =>
+      editedReservations.reduce((sum, row) => {
+        if (row.amountBefore == null || row.amountAfter == null) return sum
+        return sum + (row.amountAfter - row.amountBefore)
+      }, 0),
+    [editedReservations],
+  )
+
+  const editedWithPriceChange = useMemo(
+    () =>
+      editedReservations.filter(
+        (row) => row.amountBefore != null && row.amountAfter != null && row.amountBefore !== row.amountAfter,
+      ).length,
+    [editedReservations],
+  )
 
   const handleCancellationDecision = async (
     request: CancellationRequest,
@@ -427,6 +511,36 @@ export default function AccountingRequestsPage() {
           </Card>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Reservas editadas</CardTitle>
+              <CardDescription>Total auditado en operaciones</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold">{editedReservations.length}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Ediciones con cambio de precio</CardTitle>
+              <CardDescription>Con monto anterior y nuevo</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold">{editedWithPriceChange}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Impacto neto por edición</CardTitle>
+              <CardDescription>Ajuste acumulado en precios editados</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold">{fmtMoney(editedPriceDelta)}</p>
+            </CardContent>
+          </Card>
+        </div>
+
         <Card>
           <CardHeader>
             <CardTitle>Analíticas operativas para contabilidad</CardTitle>
@@ -467,6 +581,40 @@ export default function AccountingRequestsPage() {
         <VendorReceivables />
 
         <GygProfitability />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Reservas editadas (auditoría)</CardTitle>
+            <CardDescription>
+              Motivos de edición y cambio de precio para análisis contable.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {editedReservations.length === 0 ? (
+              <p className="text-sm text-gray-500">No hay reservas editadas registradas.</p>
+            ) : (
+              editedReservations.slice(0, 30).map((item) => {
+                const hasPrice = item.amountBefore != null && item.amountAfter != null
+                return (
+                  <div key={`${item.operation}-${item.id}-${item.editedAt || item.date}`} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold uppercase">{item.operation} · Reserva {item.id}</p>
+                        <p className="text-xs text-gray-500">{item.editedAt || item.date}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">{item.reason || "Sin motivo"}</p>
+                    <p className="text-xs text-gray-500">
+                      {hasPrice
+                        ? `Precio: ${fmtMoney(item.amountBefore || 0)} → ${fmtMoney(item.amountAfter || 0)}`
+                        : "Precio: sin cambio registrado"}
+                    </p>
+                  </div>
+                )
+              })
+            )}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

@@ -160,6 +160,8 @@ type UpgradeDraft = {
 
 const EDIT_REASON_TAG = "[EDIT_REASON]:"
 const EDITED_AT_TAG = "[EDITED_AT]:"
+const EDIT_AMOUNT_BEFORE_TAG = "[EDIT_AMOUNT_BEFORE]:"
+const EDIT_AMOUNT_AFTER_TAG = "[EDIT_AMOUNT_AFTER]:"
 
 function getEditAuditFromNotes(notes: string) {
   const lines = notes.split("\n")
@@ -175,15 +177,38 @@ function getEditAuditFromNotes(notes: string) {
 function stripEditAuditFromNotes(notes: string) {
   return notes
     .split("\n")
-    .filter((line) => !line.startsWith(EDIT_REASON_TAG) && !line.startsWith(EDITED_AT_TAG))
+    .filter(
+      (line) =>
+        !line.startsWith(EDIT_REASON_TAG)
+        && !line.startsWith(EDITED_AT_TAG)
+        && !line.startsWith(EDIT_AMOUNT_BEFORE_TAG)
+        && !line.startsWith(EDIT_AMOUNT_AFTER_TAG),
+    )
     .join("\n")
     .trim()
 }
 
-function buildNotesWithEditAudit(notes: string, reason: string, editedAt: string) {
+function buildNotesWithEditAudit(
+  notes: string,
+  reason: string,
+  editedAt: string,
+  previousAmount?: number | null,
+  nextAmount?: number | null,
+) {
   const cleanNotes = stripEditAuditFromNotes(notes)
+  const lines = [`${EDITED_AT_TAG} ${editedAt}`, `${EDIT_REASON_TAG} ${reason}`]
+
+  if (
+    Number.isFinite(previousAmount)
+    && Number.isFinite(nextAmount)
+    && Number(previousAmount) !== Number(nextAmount)
+  ) {
+    lines.push(`${EDIT_AMOUNT_BEFORE_TAG} ${Number(previousAmount)}`)
+    lines.push(`${EDIT_AMOUNT_AFTER_TAG} ${Number(nextAmount)}`)
+  }
+
   const base = cleanNotes ? `${cleanNotes}\n` : ""
-  return `${base}${EDITED_AT_TAG} ${editedAt}\n${EDIT_REASON_TAG} ${reason}`
+  return `${base}${lines.join("\n")}`
 }
 
 type Chofer = {
@@ -1121,10 +1146,14 @@ export default function OperationPage() {
     setEditing(true)
     try {
       const editedAt = new Date().toISOString()
+      const previousAmount = editingReservation.amount ?? 0
+      const nextAmount = editRes.amount ?? 0
       const notesWithAudit = buildNotesWithEditAudit(
         upsertReservationCountsInNotes(editRes.notes, editRes.horses, editRes.machine_count) || "",
         normalizedEditReason,
         editedAt,
+        previousAmount,
+        nextAmount,
       )
 
       const payloadBase = {
@@ -1632,6 +1661,7 @@ export default function OperationPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los canales</SelectItem>
+                  <SelectItem value="website">Website</SelectItem>
                   <SelectItem value="Macao Off Road">Macao Off Road</SelectItem>
                   <SelectItem value="Caribe Buggy">Caribe Buggy</SelectItem>
                   <SelectItem value="Saona Island">Saona Island</SelectItem>
@@ -1736,9 +1766,15 @@ export default function OperationPage() {
               <CardContent>
                 <div className="space-y-3">
                   {filteredReservations.map((reservation) => (
-                    <div key={reservation.id} className={`border rounded-lg p-4 space-y-3 transition-colors ${reservation.status === "no_show" ? "bg-red-50 border-red-300 dark:bg-red-900/20 dark:border-red-700" : "hover:border-red-200"}`}>
+                    <div key={reservation.id} className={`border rounded-lg p-4 space-y-3 transition-colors ${reservation.status === "no_show" ? "bg-red-50 border-red-300 dark:bg-red-900/20 dark:border-red-700" : reservation.channel === "website" ? "bg-amber-50 border-amber-300 dark:bg-amber-900/20 dark:border-amber-700" : "hover:border-red-200"}`}>
                       <div className="flex items-center gap-2 flex-wrap">
                         {getStatusButton(reservation)}
+                            {reservation.channel === "website" && (
+                              <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100">
+                                <AlertCircle className="w-3 h-3 mr-1" />
+                                Atención Web
+                              </Badge>
+                            )}
                             {reservation.isEdited && (
                               <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
                                 <AlertCircle className="w-3 h-3 mr-1" />
@@ -1765,6 +1801,12 @@ export default function OperationPage() {
                       <span className="ml-auto text-sm font-bold text-green-700">${reservation.amount.toFixed(2)} USD</span>
                     )}
                   </div>
+
+                  {reservation.channel === "website" && (
+                    <div className="rounded-md border border-amber-300 bg-amber-100/70 px-3 py-2 text-xs font-medium text-amber-900">
+                      Nueva reserva recibida desde la web. Requiere atención del operador.
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>

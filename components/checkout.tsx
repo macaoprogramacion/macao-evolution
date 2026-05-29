@@ -6,6 +6,7 @@ import Image from "next/image";
 import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 import { useCart } from "@/context/cart-context";
 import { products } from "@/lib/products";
+import { supabase } from "@/lib/supabase";
 import { getCustomerProfile, getCustomerById, upsertCustomerProfile } from "@/lib/customer-accounts";
 import { saveCustomerReservation } from "@/lib/customer-reservations";
 import { getCustomerSession } from "@/lib/customer-session";
@@ -69,6 +70,13 @@ const DEFAULT_TIMES = [
 
 const RANCHO_LOCATION_URL = "https://maps.app.goo.gl/nmR4UFPbrDSDA1FF6";
 const SELF_PICKUP_LABEL = "Llegar por mi cuenta";
+const WEB_BOOKING_TAG = "[WEB_BOOKING]";
+
+function getOperationTurnFromSlot(slotId: number | null) {
+  if (slotId === 1) return "11 AM";
+  if (slotId === 2) return "3 PM";
+  return "8 AM";
+}
 
 interface HotelSchedule {
   turns: { id: number; label: string; time: string; hour: number; minute: number }[];
@@ -479,6 +487,55 @@ export function CheckoutModal({
             notificationsSent: {},
           },
         });
+      }
+
+      const primaryItem = items.find((item) => item.id !== "private-transport") || items[0];
+      const operationPickupTime =
+        pickupTimeSlot !== null
+          ? `${activeTimes[pickupTimeSlot].time} (${activeTimes[pickupTimeSlot].label})`
+          : "";
+      const operationTimeslot = getOperationTurnFromSlot(pickupTimeSlot);
+      const operationHotel = pickupHotel || (pickupMode === "self" ? "Llegada por cuenta propia" : "");
+      const operationLocation =
+        pickupMode === "self"
+          ? RANCHO_LOCATION_URL
+          : pickupMode === "custom"
+          ? pickupCustomForStorage
+          : "";
+
+      try {
+        const { error: operationInsertError } = await supabase.from("reservations").insert({
+          customer_name: customer.name,
+          phone: customer.phone || null,
+          email: ownerEmail || null,
+          hotel: operationHotel || null,
+          location: operationLocation || null,
+          timeslot: operationTimeslot,
+          guests: Math.max(
+            1,
+            items
+              .filter((item) => item.id !== "private-transport")
+              .reduce((sum, item) => sum + Math.max(1, Number(item.quantity || 1)), 0),
+          ),
+          children: 0,
+          pickup_time: operationPickupTime || null,
+          pickup_point: activePickupPoint || "lobby",
+          transport_type: hasPrivateTransport ? "self" : "included",
+          experience: primaryItem?.name || "Reserva Web",
+          channel: "website",
+          channel_url: "web-checkout",
+          channel_color: "#dc2626",
+          date: pickupDate || new Date().toISOString().slice(0, 10),
+          amount: totalPrice,
+          status: "pending",
+          notes: `${WEB_BOOKING_TAG} Reserva creada desde checkout web`,
+        });
+
+        if (operationInsertError) {
+          console.error("Error creando reserva en operación:", operationInsertError);
+        }
+      } catch (operationInsertCrash) {
+        console.error("Error inesperado insertando reserva en operación:", operationInsertCrash);
       }
 
       setStep(4);

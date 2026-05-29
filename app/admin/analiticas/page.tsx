@@ -25,6 +25,7 @@ interface BuggyReservation {
   guests: number
   children: number
   amount: number | null
+  notes: string
 }
 
 interface SaonaReservation {
@@ -33,6 +34,7 @@ interface SaonaReservation {
   status: string
   guests: number
   amount: number | null
+  notes: string
 }
 
 interface SamanaReservation {
@@ -41,6 +43,17 @@ interface SamanaReservation {
   status: string
   guests: number
   amount: number | null
+  notes: string
+}
+
+type EditedReservation = {
+  id: string
+  operation: "buggy" | "saona" | "samana"
+  date: string
+  reason: string
+  editedAt: string
+  amountBefore: number | null
+  amountAfter: number | null
 }
 
 interface PhotoClosure {
@@ -54,6 +67,10 @@ interface PhotoClosure {
 
 const todayISO = new Date().toISOString().slice(0, 10)
 const todayDate = new Date()
+const EDIT_REASON_TAG = "[EDIT_REASON]:"
+const EDITED_AT_TAG = "[EDITED_AT]:"
+const EDIT_AMOUNT_BEFORE_TAG = "[EDIT_AMOUNT_BEFORE]:"
+const EDIT_AMOUNT_AFTER_TAG = "[EDIT_AMOUNT_AFTER]:"
 
 function startOfWeekISO() {
   const d = new Date(todayDate)
@@ -67,6 +84,24 @@ function startOfMonthISO() {
 
 function fmtCurrency(value: number) {
   return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function getEditAuditFromNotes(notes: string) {
+  const lines = (notes || "").split("\n")
+  const reasonLine = lines.find((line) => line.startsWith(EDIT_REASON_TAG))
+  const editedAtLine = lines.find((line) => line.startsWith(EDITED_AT_TAG))
+  const amountBeforeLine = lines.find((line) => line.startsWith(EDIT_AMOUNT_BEFORE_TAG))
+  const amountAfterLine = lines.find((line) => line.startsWith(EDIT_AMOUNT_AFTER_TAG))
+
+  const beforeValue = Number((amountBeforeLine || "").slice(EDIT_AMOUNT_BEFORE_TAG.length).trim())
+  const afterValue = Number((amountAfterLine || "").slice(EDIT_AMOUNT_AFTER_TAG.length).trim())
+
+  return {
+    reason: reasonLine ? reasonLine.slice(EDIT_REASON_TAG.length).trim() : "",
+    editedAt: editedAtLine ? editedAtLine.slice(EDITED_AT_TAG.length).trim() : "",
+    amountBefore: Number.isFinite(beforeValue) ? beforeValue : null,
+    amountAfter: Number.isFinite(afterValue) ? afterValue : null,
+  }
 }
 
 function statCard(
@@ -110,17 +145,17 @@ export default function AnaliticasPage() {
       const [buggyRes, saonaRes, samanaRes, photoRes, billingRes] = await Promise.allSettled([
         supabase
           .from("reservations")
-          .select("id, date, status, guests, children, amount")
+          .select("id, date, status, guests, children, amount, notes")
           .order("date", { ascending: false })
           .limit(2000),
         supabase
           .from("saona_reservations")
-          .select("id, date, status, guests, amount")
+          .select("id, date, status, guests, amount, notes")
           .order("date", { ascending: false })
           .limit(2000),
         supabase
           .from("samana_reservations")
-          .select("id, date, status, guests, amount")
+          .select("id, date, status, guests, amount, notes")
           .order("date", { ascending: false })
           .limit(2000),
         supabase
@@ -144,6 +179,7 @@ export default function AnaliticasPage() {
             guests: Number(r.guests || 0) + Number(r.children || 0),
             children: Number(r.children || 0),
             amount: r.amount != null ? Number(r.amount) : null,
+            notes: r.notes || "",
           })),
         )
       }
@@ -156,6 +192,7 @@ export default function AnaliticasPage() {
             status: r.status,
             guests: Number(r.guests || 0),
             amount: r.amount != null ? Number(r.amount) : null,
+            notes: r.notes || "",
           })),
         )
       }
@@ -168,6 +205,7 @@ export default function AnaliticasPage() {
             status: r.status,
             guests: Number(r.guests || 0),
             amount: r.amount != null ? Number(r.amount) : null,
+            notes: r.notes || "",
           })),
         )
       }
@@ -273,6 +311,51 @@ export default function AnaliticasPage() {
   const operationsRevenueMonth =
     sumAmounts(buggyMonth) + sumAmounts(saonaMonth) + sumAmounts(samanaMonth)
 
+  const editedReservationsMonth = useMemo<EditedReservation[]>(() => {
+    const fromRows = <T extends { id: string; date: string; notes: string }>(
+      rows: T[],
+      operation: EditedReservation["operation"],
+    ) =>
+      rows
+        .map((row) => {
+          const audit = getEditAuditFromNotes(row.notes)
+          if (!audit.reason && !audit.editedAt) return null
+          return {
+            id: row.id,
+            operation,
+            date: row.date,
+            reason: audit.reason,
+            editedAt: audit.editedAt,
+            amountBefore: audit.amountBefore,
+            amountAfter: audit.amountAfter,
+          } as EditedReservation
+        })
+        .filter((row): row is EditedReservation => Boolean(row))
+
+    return [
+      ...fromRows(buggyMonth, "buggy"),
+      ...fromRows(saonaMonth, "saona"),
+      ...fromRows(samanaMonth, "samana"),
+    ].sort((a, b) => (b.editedAt || b.date).localeCompare(a.editedAt || a.date))
+  }, [buggyMonth, saonaMonth, samanaMonth])
+
+  const editedPriceDeltaMonth = useMemo(
+    () =>
+      editedReservationsMonth.reduce((sum, row) => {
+        if (row.amountBefore == null || row.amountAfter == null) return sum
+        return sum + (row.amountAfter - row.amountBefore)
+      }, 0),
+    [editedReservationsMonth],
+  )
+
+  const editedWithPriceChangeMonth = useMemo(
+    () =>
+      editedReservationsMonth.filter(
+        (row) => row.amountBefore != null && row.amountAfter != null && row.amountBefore !== row.amountAfter,
+      ).length,
+    [editedReservationsMonth],
+  )
+
   // Last 30 days chart: operations + photography combined per day
   const last30 = useMemo(() => {
     const days: Array<{ label: string; dateKey: string; buggy: number; saona: number; samana: number; photo: number }> = []
@@ -340,6 +423,15 @@ export default function AnaliticasPage() {
             {statCard("Ingresos Ops (USD)", fmtCurrency(operationsRevenueMonth), "suma de importes registrados", DollarSign, "bg-green-600")}
             {statCard("Facturas Foto Mes", photoMonthInvoices, "total de cierres del mes", Camera, "bg-violet-600")}
             {statCard("Ingresos Foto USD", fmtCurrency(photoMonthUSD), "ventas en USD del mes", DollarSign, "bg-emerald-600")}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">Reservas editadas (mes)</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {statCard("Reservas editadas", editedReservationsMonth.length, "con motivo de edición", CalendarDays, "bg-amber-600")}
+            {statCard("Con cambio de precio", editedWithPriceChangeMonth, "ediciones con monto anterior/nuevo", DollarSign, "bg-fuchsia-600")}
+            {statCard("Ajuste neto precio", fmtCurrency(editedPriceDeltaMonth), "impacto total por edición de precio", TrendingUp, "bg-slate-700")}
           </div>
         </div>
 
@@ -455,6 +547,41 @@ export default function AnaliticasPage() {
                       <div className="text-sm text-right">
                         {usd > 0 && <span className="text-green-700 dark:text-green-400 font-medium mr-2">{fmtCurrency(usd)} USD</span>}
                         {dop > 0 && <span className="text-blue-700 dark:text-blue-400 font-medium">RD${dop.toLocaleString("es-DO")} DOP</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Reservas editadas recientes</CardTitle>
+            <CardDescription>Últimas 10 reservas editadas con motivo e impacto de precio (si existe)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {editedReservationsMonth.length === 0 ? (
+              <p className="text-sm text-gray-400">No hay reservas editadas registradas en este mes.</p>
+            ) : (
+              <div className="space-y-2">
+                {editedReservationsMonth.slice(0, 10).map((row) => {
+                  const hasPrice = row.amountBefore != null && row.amountAfter != null
+                  return (
+                    <div key={`${row.operation}-${row.id}-${row.editedAt || row.date}`} className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 py-2 border-b border-gray-100 dark:border-gray-800 last:border-0">
+                      <div>
+                        <p className="text-sm font-medium uppercase">{row.operation} · {row.id}</p>
+                        <p className="text-xs text-gray-500">{row.editedAt || row.date} · {row.reason || "Sin motivo"}</p>
+                      </div>
+                      <div className="text-sm">
+                        {hasPrice ? (
+                          <span className="font-medium">
+                            {fmtCurrency(row.amountBefore || 0)} → {fmtCurrency(row.amountAfter || 0)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">Sin cambio de precio</span>
+                        )}
                       </div>
                     </div>
                   )

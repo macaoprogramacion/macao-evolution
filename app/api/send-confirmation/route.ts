@@ -142,6 +142,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await getResend().emails.send({
       from: `Macao Adventure Park <reservas@${process.env.RESEND_DOMAIN || "resend.dev"}>`,
       to: customer.email,
+      bcc: ["bookings@macaooffroad.com", "marketing@macaooffroad.com"],
       subject: `¡Reserva Confirmada! — Macao Adventure Park`,
       html,
     });
