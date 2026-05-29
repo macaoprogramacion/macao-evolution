@@ -87,6 +87,37 @@ type SamanaReservation = {
   gygBookingReference: string
   language: string
   createdAt: string | null
+  isEdited: boolean
+  editedAt: string | null
+  editReason: string
+}
+
+const EDIT_REASON_TAG = "[EDIT_REASON]:"
+const EDITED_AT_TAG = "[EDITED_AT]:"
+
+function getEditAuditFromNotes(notes: string) {
+  const lines = notes.split("\n")
+  const reasonLine = lines.find((line) => line.startsWith(EDIT_REASON_TAG))
+  const editedAtLine = lines.find((line) => line.startsWith(EDITED_AT_TAG))
+
+  return {
+    reason: reasonLine ? reasonLine.slice(EDIT_REASON_TAG.length).trim() : "",
+    editedAt: editedAtLine ? editedAtLine.slice(EDITED_AT_TAG.length).trim() : "",
+  }
+}
+
+function stripEditAuditFromNotes(notes: string) {
+  return notes
+    .split("\n")
+    .filter((line) => !line.startsWith(EDIT_REASON_TAG) && !line.startsWith(EDITED_AT_TAG))
+    .join("\n")
+    .trim()
+}
+
+function buildNotesWithEditAudit(notes: string, reason: string, editedAt: string) {
+  const cleanNotes = stripEditAuditFromNotes(notes)
+  const base = cleanNotes ? `${cleanNotes}\n` : ""
+  return `${base}${EDITED_AT_TAG} ${editedAt}\n${EDIT_REASON_TAG} ${reason}`
 }
 
 type AvailabilityDayRow = {
@@ -347,6 +378,13 @@ function getPickupDeadline(dateValue: string, pickupValue: string) {
 }
 
 function mapRow(r: any): SamanaReservation {
+  const rawNotes = r.notes || ""
+  const notesAudit = getEditAuditFromNotes(rawNotes)
+  const dbEditReason = r.edit_reason || ""
+  const dbEditedAt = r.edited_at || null
+  const resolvedEditReason = dbEditReason || notesAudit.reason
+  const resolvedEditedAt = dbEditedAt || notesAudit.editedAt || null
+
   return {
     id: r.id,
     customerName: r.customer_name,
@@ -364,13 +402,16 @@ function mapRow(r: any): SamanaReservation {
     date: r.date,
     status: r.status,
     amount: r.amount != null ? Number(r.amount) : null,
-    notes: r.notes || "",
+    notes: stripEditAuditFromNotes(rawNotes),
     lunchIncluded: r.lunch_included ?? true,
     whaleWatching: r.whale_watching ?? false,
     gygBookingRef: r.gyg_booking_ref || "",
     gygBookingReference: r.gyg_booking_reference || "",
     language: r.language || "en",
     createdAt: r.created_at || null,
+    isEdited: Boolean(r.is_edited || resolvedEditReason || resolvedEditedAt),
+    editedAt: resolvedEditedAt,
+    editReason: resolvedEditReason,
   }
 }
 
@@ -400,6 +441,7 @@ export default function OperationSamanaPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingReservation, setEditingReservation] = useState<SamanaReservation | null>(null)
   const [editRes, setEditRes] = useState<NewReservationForm>(createEmptyNewReservation())
+  const [editReason, setEditReason] = useState("")
   const [savingEdit, setSavingEdit] = useState(false)
   const [checkingSelectedDateBlocked, setCheckingSelectedDateBlocked] = useState(false)
   const [selectedDateBlocked, setSelectedDateBlocked] = useState(false)
@@ -533,6 +575,7 @@ export default function OperationSamanaPage() {
 
   const openEditDialog = (res: SamanaReservation) => {
     setEditingReservation(res)
+    setEditReason(res.editReason || "")
     setEditRes({
       customer_name: res.customerName,
       phone: res.phone === "—" ? "" : res.phone,
@@ -558,9 +601,18 @@ export default function OperationSamanaPage() {
 
   const saveEditReservation = async () => {
     if (!editingReservation || !editRes.customer_name || !editRes.date) return
+    const normalizedEditReason = editReason.trim()
+    if (!normalizedEditReason) {
+      alert("Debes indicar un motivo de edición antes de guardar.")
+      return
+    }
+
     setSavingEdit(true)
     try {
-      const updatePayload = {
+      const editedAt = new Date().toISOString()
+      const notesWithAudit = buildNotesWithEditAudit(editRes.notes || "", normalizedEditReason, editedAt)
+
+      const updatePayloadBase = {
         customer_name: editRes.customer_name,
         phone: editRes.phone || null,
         email: editRes.email || null,
@@ -575,17 +627,32 @@ export default function OperationSamanaPage() {
         channel_color: channelColors[editRes.channel] || editRes.channel_color || "#6b7280",
         date: editRes.date,
         amount: editRes.amount,
-        notes: editRes.notes,
+        notes: notesWithAudit,
         lunch_included: editRes.lunch_included,
         whale_watching: editRes.whale_watching,
         language: editRes.language,
         updated_at: new Date().toISOString(),
       }
 
-      const { error } = await supabase
+      const updatePayloadWithAudit = {
+        ...updatePayloadBase,
+        is_edited: true,
+        edited_at: editedAt,
+        edit_reason: normalizedEditReason,
+      }
+
+      let { error } = await supabase
         .from("samana_reservations")
-        .update(updatePayload)
+        .update(updatePayloadWithAudit)
         .eq("id", editingReservation.id)
+
+      if (error && /column .* does not exist/i.test(error.message || "")) {
+        const fallback = await supabase
+          .from("samana_reservations")
+          .update(updatePayloadBase)
+          .eq("id", editingReservation.id)
+        error = fallback.error
+      }
 
       if (error) {
         console.error("Error updating reservation:", error)
@@ -594,6 +661,7 @@ export default function OperationSamanaPage() {
         await fetchReservations()
         setEditDialogOpen(false)
         setEditingReservation(null)
+        setEditReason("")
       }
     } catch (e) {
       console.error("Error updating reservation:", e)
@@ -1598,6 +1666,12 @@ ${t.getReady} 🐋⚓
                   {/* Row 1: Status + Channel + Ref + Language */}
                   <div className="flex items-center gap-2 flex-wrap">
                     {getStatusButton(reservation)}
+                    {reservation.isEdited && (
+                      <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
+                        <AlertCircle className="w-3 h-3 mr-1" />
+                        Editada
+                      </Badge>
+                    )}
                     <Badge
                       className="flex items-center gap-1"
                       style={{
@@ -1643,6 +1717,11 @@ ${t.getReady} 🐋⚓
                       {reservation.createdAt && (
                         <div className="text-xs text-gray-500 mt-1 sm:text-right">
                           Agregada: {new Date(reservation.createdAt).toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" })}, {new Date(reservation.createdAt).toLocaleTimeString("es-DO", { hour: "numeric", minute: "2-digit" })}
+                        </div>
+                      )}
+                      {reservation.isEdited && reservation.editedAt && (
+                        <div className="text-xs text-amber-700 mt-1 sm:text-right">
+                          Editada: {new Date(reservation.editedAt).toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" })}, {new Date(reservation.editedAt).toLocaleTimeString("es-DO", { hour: "numeric", minute: "2-digit" })}
                         </div>
                       )}
                     </div>
@@ -2042,7 +2121,13 @@ ${t.getReady} 🐋⚓
       </Dialog>
 
       {/* Modal: Editar reserva */}
-      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setEditingReservation(null) }}>
+      <Dialog open={editDialogOpen} onOpenChange={(open) => {
+        setEditDialogOpen(open)
+        if (!open) {
+          setEditingReservation(null)
+          setEditReason("")
+        }
+      }}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Reserva — Samaná</DialogTitle>
@@ -2170,6 +2255,20 @@ ${t.getReady} 🐋⚓
               <Label>Notas</Label>
               <Input value={editRes.notes} onChange={(e) => setEditRes({ ...editRes, notes: e.target.value })} placeholder="Información adicional..." />
             </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Motivo de edición *</Label>
+              <Textarea
+                value={editReason}
+                onChange={(e) => setEditReason(e.target.value)}
+                placeholder="Ejemplo: ajuste de precio por cambio de tour"
+                className="min-h-[90px]"
+              />
+              {editingReservation?.isEdited && editingReservation.editReason && (
+                <p className="text-xs text-muted-foreground">
+                  Último motivo guardado: {editingReservation.editReason}
+                </p>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
@@ -2179,7 +2278,7 @@ ${t.getReady} 🐋⚓
             <Button
               className="bg-green-600 hover:bg-green-700 text-white"
               onClick={saveEditReservation}
-              disabled={!editRes.customer_name || !editRes.date || savingEdit}
+              disabled={!editRes.customer_name || !editRes.date || savingEdit || !editReason.trim()}
             >
               {savingEdit ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Guardando...</>

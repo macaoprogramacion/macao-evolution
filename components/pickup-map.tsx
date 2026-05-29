@@ -177,6 +177,10 @@ export default function PickupMap({ onLocationSelect, selectedAddress }: PickupM
       <p className="text-xs text-muted-foreground text-center">
         Toca el mapa para seleccionar tu ubicación o usa el botón de ubicación actual
       </p>
+
+      <p className="text-xs text-amber-600 dark:text-amber-400 text-center font-medium">
+        No ofrecemos transporte gratis a ubicaciones fuera de la zona de Punta Cana/Bavaro.
+      </p>
     </div>
   );
 }

@@ -67,6 +67,9 @@ const DEFAULT_TIMES = [
   { id: 2, label: "Tarde", time: "2:00 PM", hour: 14, minute: 0 },
 ];
 
+const RANCHO_LOCATION_URL = "https://maps.app.goo.gl/nmR4UFPbrDSDA1FF6";
+const SELF_PICKUP_LABEL = "Llegar por mi cuenta";
+
 interface HotelSchedule {
   turns: { id: number; label: string; time: string; hour: number; minute: number }[];
   pickup: string;
@@ -252,13 +255,52 @@ export function CheckoutModal({
   const [customerAccountId, setCustomerAccountId] = useState<string | null>(null);
 
   // Pickup location state
-  const [pickupMode, setPickupMode] = useState<"hotel" | "custom">("hotel");
+  const [pickupMode, setPickupMode] = useState<"hotel" | "custom" | "self">("hotel");
   const [pickupHotel, setPickupHotel] = useState("");
   const [pickupCustom, setPickupCustom] = useState("");
   const [pickupSearch, setPickupSearch] = useState("");
   const [isPickupDropdownOpen, setIsPickupDropdownOpen] = useState(false);
   const [pickupTimeSlot, setPickupTimeSlot] = useState<number | null>(null);
   const [pickupDate, setPickupDate] = useState("");
+
+  async function copyToClipboard(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const success = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        return success;
+      } catch {
+        return false;
+      }
+    }
+  }
+
+  async function handleSelfPickupClick() {
+    setPickupMode("self");
+    setPickupHotel("");
+    setPickupSearch("");
+    setPickupCustom(RANCHO_LOCATION_URL);
+    setPickupDate("");
+    setPickupTimeSlot(null);
+    setErrors({});
+
+    const copied = await copyToClipboard(RANCHO_LOCATION_URL);
+    if (copied) {
+      setErrors({ pickup: "Ubicación del rancho copiada al portapapeles." });
+    } else {
+      setErrors({ pickup: "No se pudo copiar automáticamente. Copia este enlace: https://maps.app.goo.gl/nmR4UFPbrDSDA1FF6" });
+    }
+  }
   const [blockedSlots, setBlockedSlots] = useState<number[]>([]);
   const pickupDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -322,6 +364,10 @@ export function CheckoutModal({
       if (profile?.pickup_mode) setPickupMode(profile.pickup_mode);
       if (profile?.pickup_hotel) setPickupHotel(profile.pickup_hotel);
       if (profile?.pickup_custom) setPickupCustom(profile.pickup_custom);
+
+      if (profile?.pickup_mode === "custom" && profile?.pickup_custom === RANCHO_LOCATION_URL) {
+        setPickupMode("self");
+      }
     }
 
     preloadFromAccount();
@@ -333,6 +379,8 @@ export function CheckoutModal({
   const depositAmount = Math.min(20, totalPrice);
   const remainingAmount = Math.max(totalPrice - depositAmount, 0);
   const amountToPay = paymentOption === "full" ? totalPrice : depositAmount;
+  const pickupModeForStorage: "hotel" | "custom" = pickupMode === "hotel" ? "hotel" : "custom";
+  const pickupCustomForStorage = pickupMode === "self" ? RANCHO_LOCATION_URL : pickupCustom;
 
   // --- Validation ---
   function validateStep1() {
@@ -383,9 +431,9 @@ export function CheckoutModal({
           phone: customer.phone,
           paymentOption,
           paymentMethod: finalPaymentMethod,
-          pickupMode,
+          pickupMode: pickupModeForStorage,
           pickupHotel,
-          pickupCustom,
+          pickupCustom: pickupCustomForStorage,
         });
       }
 
@@ -414,9 +462,9 @@ export function CheckoutModal({
           },
           pickup: !hasPrivateTransport
             ? {
-                mode: pickupMode,
+                mode: pickupModeForStorage,
                 hotel: pickupHotel || undefined,
-                custom: pickupCustom || undefined,
+                custom: pickupCustomForStorage || undefined,
                 date: pickupDate || undefined,
                 time:
                   pickupTimeSlot !== null
@@ -452,7 +500,7 @@ export function CheckoutModal({
             pickup: !hasPrivateTransport
               ? {
                   hotel: pickupHotel || undefined,
-                  custom: pickupCustom || undefined,
+                  custom: pickupCustomForStorage || undefined,
                   date: pickupDate ? formatDateDisplay(pickupDate) : undefined,
                   time: pickupTimeSlot !== null ? `${activeTimes[pickupTimeSlot].time} (${activeTimes[pickupTimeSlot].label})` : undefined,
                   point: activePickupPoint || undefined,
@@ -759,7 +807,7 @@ export function CheckoutModal({
               </p>
 
               {/* Toggle hotel / custom */}
-              <div className="flex gap-2 mb-5">
+              <div className="grid grid-cols-3 gap-2 mb-5">
                 <button
                   type="button"
                   onClick={() => {
@@ -796,6 +844,20 @@ export function CheckoutModal({
                 >
                   <PenLine size={16} />
                   Otra ubicación
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleSelfPickupClick();
+                  }}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium transition-colors ${
+                    pickupMode === "self"
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border text-foreground hover:bg-secondary"
+                  }`}
+                >
+                  <Navigation size={16} />
+                  Llegar por mi cuenta
                 </button>
               </div>
 
@@ -895,11 +957,11 @@ export function CheckoutModal({
               )}
 
               {errors.pickup && (
-                <p className="mb-4 text-xs text-red-500 text-center">{errors.pickup}</p>
+                <p className={`mb-4 text-xs text-center ${pickupMode === "self" ? "text-green-600" : "text-red-500"}`}>{errors.pickup}</p>
               )}
 
               {/* === PROGRESSIVE: Date picker (appears after location selected) === */}
-              {(pickupHotel || pickupCustom) && (
+              {(pickupHotel || pickupCustom || pickupMode === "self") && (
                 <div className="mb-4 animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="h-px bg-border mb-4" />
                   <label className="mb-3 flex items-center gap-1.5 text-sm font-medium text-foreground">
@@ -942,7 +1004,7 @@ export function CheckoutModal({
               )}
 
               {/* === PROGRESSIVE: Time slot (appears after date selected) === */}
-              {(pickupHotel || pickupCustom) && pickupDate && (
+              {(pickupHotel || pickupCustom || pickupMode === "self") && pickupDate && (
                 <div className="mb-5 animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="h-px bg-border mb-4" />
                   <label className="mb-2 flex items-center gap-1.5 text-sm font-medium text-foreground">
@@ -1246,12 +1308,12 @@ export function CheckoutModal({
                     <span className="text-muted-foreground">Artículos</span>
                     <span className="text-foreground">{items.length}</span>
                   </div>
-                  {!hasPrivateTransport && (pickupHotel || pickupCustom) && (
+                  {!hasPrivateTransport && (pickupHotel || pickupCustom || pickupMode === "self") && (
                     <>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Recogida</span>
                         <span className="text-foreground text-right max-w-[60%]">
-                          {pickupHotel || pickupCustom}
+                          {pickupMode === "self" ? SELF_PICKUP_LABEL : (pickupHotel || pickupCustom)}
                         </span>
                       </div>
                       {pickupDate && (

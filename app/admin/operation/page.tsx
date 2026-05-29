@@ -143,6 +143,37 @@ type Reservation = {
   amount: number | null
   notes: string
   createdAt: string | null
+  isEdited: boolean
+  editedAt: string | null
+  editReason: string
+}
+
+const EDIT_REASON_TAG = "[EDIT_REASON]:"
+const EDITED_AT_TAG = "[EDITED_AT]:"
+
+function getEditAuditFromNotes(notes: string) {
+  const lines = notes.split("\n")
+  const reasonLine = lines.find((line) => line.startsWith(EDIT_REASON_TAG))
+  const editedAtLine = lines.find((line) => line.startsWith(EDITED_AT_TAG))
+
+  return {
+    reason: reasonLine ? reasonLine.slice(EDIT_REASON_TAG.length).trim() : "",
+    editedAt: editedAtLine ? editedAtLine.slice(EDITED_AT_TAG.length).trim() : "",
+  }
+}
+
+function stripEditAuditFromNotes(notes: string) {
+  return notes
+    .split("\n")
+    .filter((line) => !line.startsWith(EDIT_REASON_TAG) && !line.startsWith(EDITED_AT_TAG))
+    .join("\n")
+    .trim()
+}
+
+function buildNotesWithEditAudit(notes: string, reason: string, editedAt: string) {
+  const cleanNotes = stripEditAuditFromNotes(notes)
+  const base = cleanNotes ? `${cleanNotes}\n` : ""
+  return `${base}${EDITED_AT_TAG} ${editedAt}\n${EDIT_REASON_TAG} ${reason}`
 }
 
 type Chofer = {
@@ -239,6 +270,13 @@ function getLocalISODate() {
 
 /** Mapear fila de Supabase a formato del componente */
 function mapRow(r: any): Reservation {
+  const rawNotes = r.notes || ""
+  const notesAudit = getEditAuditFromNotes(rawNotes)
+  const dbEditReason = r.edit_reason || ""
+  const dbEditedAt = r.edited_at || null
+  const resolvedEditReason = dbEditReason || notesAudit.reason
+  const resolvedEditedAt = dbEditedAt || notesAudit.editedAt || null
+
   return {
     id: r.id,
     customerName: r.customer_name,
@@ -262,8 +300,11 @@ function mapRow(r: any): Reservation {
     assignedChoferName: r.assigned_chofer_name,
     choferStatus: r.chofer_status || "none",
     amount: r.amount != null ? Number(r.amount) : null,
-    notes: r.notes || "",
+    notes: stripEditAuditFromNotes(rawNotes),
     createdAt: r.created_at || null,
+    isEdited: Boolean(r.is_edited || resolvedEditReason || resolvedEditedAt),
+    editedAt: resolvedEditedAt,
+    editReason: resolvedEditReason,
   }
 }
 
@@ -504,6 +545,7 @@ export default function OperationPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null)
   const [editing, setEditing] = useState(false)
+  const [editReason, setEditReason] = useState("")
   const [editRes, setEditRes] = useState({
     customer_name: "",
     phone: "",
@@ -673,6 +715,8 @@ export default function OperationPage() {
     setExternalParseSummary(
       `Autocompletado: ${parsed.source.toUpperCase()}${parsed.bookingReference ? ` | Ref: ${parsed.bookingReference}` : ""}${parsed.customerName ? ` | Cliente: ${parsed.customerName}` : ""}${parsed.machineCount ? ` | Maquinas: ${parsed.machineCount}` : ""}${parsed.machineLabel ? ` (${parsed.machineLabel})` : ""}`
     )
+
+    setExternalReservationText("")
   }
 
   // Guardar nueva reserva
@@ -1012,6 +1056,7 @@ export default function OperationPage() {
 
   const openEditDialog = (reservation: Reservation) => {
     setEditingReservation(reservation)
+    setEditReason(reservation.editReason || "")
     setEditRes({
       customer_name: reservation.customerName || "",
       phone: reservation.phone === "—" ? "" : reservation.phone,
@@ -1042,6 +1087,11 @@ export default function OperationPage() {
       alert("Nombre y fecha son obligatorios")
       return
     }
+    const normalizedEditReason = editReason.trim()
+    if (!normalizedEditReason) {
+      alert("Debes indicar un motivo de edición antes de guardar.")
+      return
+    }
 
     const validationError = validateServiceCapacity(editRes)
     if (validationError) {
@@ -1051,7 +1101,14 @@ export default function OperationPage() {
 
     setEditing(true)
     try {
-      const payload = {
+      const editedAt = new Date().toISOString()
+      const notesWithAudit = buildNotesWithEditAudit(
+        upsertReservationCountsInNotes(editRes.notes, editRes.horses, editRes.machine_count) || "",
+        normalizedEditReason,
+        editedAt,
+      )
+
+      const payloadBase = {
         customer_name: editRes.customer_name,
         phone: editRes.phone || null,
         email: editRes.email || null,
@@ -1069,13 +1126,28 @@ export default function OperationPage() {
         channel_color: channelColors[editRes.channel] || "#6b7280",
         date: editRes.date,
         amount: editRes.amount || 0,
-        notes: upsertReservationCountsInNotes(editRes.notes, editRes.horses, editRes.machine_count) || null,
+        notes: notesWithAudit || null,
       }
 
-      const { error } = await supabase
+      const payloadWithAudit = {
+        ...payloadBase,
+        is_edited: true,
+        edited_at: editedAt,
+        edit_reason: normalizedEditReason,
+      }
+
+      let { error } = await supabase
         .from("reservations")
-        .update(payload)
+        .update(payloadWithAudit)
         .eq("id", editingReservation.id)
+
+      if (error && /column .* does not exist/i.test(error.message || "")) {
+        const fallback = await supabase
+          .from("reservations")
+          .update(payloadBase)
+          .eq("id", editingReservation.id)
+        error = fallback.error
+      }
 
       if (error) {
         alert("No se pudo actualizar la reserva: " + error.message)
@@ -1083,6 +1155,7 @@ export default function OperationPage() {
         await fetchReservations()
         setEditDialogOpen(false)
         setEditingReservation(null)
+        setEditReason("")
       }
     } catch (e) {
       alert("Error inesperado al actualizar reserva")
@@ -1588,6 +1661,12 @@ export default function OperationPage() {
                     <div key={reservation.id} className={`border rounded-lg p-4 space-y-3 transition-colors ${reservation.status === "no_show" ? "bg-red-50 border-red-300 dark:bg-red-900/20 dark:border-red-700" : "hover:border-red-200"}`}>
                       <div className="flex items-center gap-2 flex-wrap">
                         {getStatusButton(reservation)}
+                            {reservation.isEdited && (
+                              <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
+                                <AlertCircle className="w-3 h-3 mr-1" />
+                                Editada
+                              </Badge>
+                            )}
                         <Badge
                           className="flex items-center gap-1"
                       style={{
@@ -1630,6 +1709,11 @@ export default function OperationPage() {
                       {reservation.createdAt && (
                         <div className="text-xs text-gray-500 mt-1 sm:text-right">
                           Agregada: {new Date(reservation.createdAt).toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" })}, {new Date(reservation.createdAt).toLocaleTimeString("es-DO", { hour: "numeric", minute: "2-digit" })}
+                        </div>
+                      )}
+                      {reservation.isEdited && reservation.editedAt && (
+                        <div className="text-xs text-amber-700 mt-1 sm:text-right">
+                          Editada: {new Date(reservation.editedAt).toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" })}, {new Date(reservation.editedAt).toLocaleTimeString("es-DO", { hour: "numeric", minute: "2-digit" })}
                         </div>
                       )}
                     </div>
@@ -2011,7 +2095,13 @@ export default function OperationPage() {
       </Dialog>
 
       {/* Modal: Agregar reserva manual */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+      <Dialog open={editDialogOpen} onOpenChange={(open) => {
+        setEditDialogOpen(open)
+        if (!open) {
+          setEditingReservation(null)
+          setEditReason("")
+        }
+      }}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Reserva</DialogTitle>
@@ -2168,11 +2258,25 @@ export default function OperationPage() {
               <Label>Notas</Label>
               <Input value={editRes.notes} onChange={(e) => setEditRes({ ...editRes, notes: e.target.value })} />
             </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Motivo de edición *</Label>
+              <Textarea
+                value={editReason}
+                onChange={(e) => setEditReason(e.target.value)}
+                placeholder="Ejemplo: corrección de monto por descuento aplicado"
+                className="min-h-[90px]"
+              />
+              {editingReservation?.isEdited && editingReservation.editReason && (
+                <p className="text-xs text-muted-foreground">
+                  Último motivo guardado: {editingReservation.editReason}
+                </p>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={editing}>Cancelar</Button>
-            <Button className="bg-orange-600 hover:bg-orange-700 text-white" onClick={saveEditedReservation} disabled={editing || !editRes.customer_name || !editRes.date}>
+            <Button className="bg-orange-600 hover:bg-orange-700 text-white" onClick={saveEditedReservation} disabled={editing || !editRes.customer_name || !editRes.date || !editReason.trim()}>
               {editing ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />

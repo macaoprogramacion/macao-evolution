@@ -23,7 +23,7 @@ import { addPickupSheetRows, getOrCreateDraftPickupSheet } from "@/lib/pickup-sh
 import { getDashboardSession } from "@/lib/dashboard-session"
 import { hotelDirectory } from "@/lib/hotel-locations"
 import { getBuggyPickupSuggestion } from "@/lib/hotel-pickup-schedules"
-import type { TurnSlot } from "@/lib/hotel-pickup-schedules"
+import type { TurnSlot as HotelTurnSlot } from "@/lib/hotel-pickup-schedules"
 import {
   listCancellationRequests,
   updateCancellationRequestDecision,
@@ -231,11 +231,18 @@ const HOTEL_OPTIONS = Array.from(new Set(Object.values(hotelDirectory).map((hote
   a.localeCompare(b),
 )
 
-const TURN_OPTIONS: TurnSlot[] = ["8 AM", "11 AM", "3 PM"]
-const UNKNOWN_PICKUP_TIME_BY_TURN: Record<TurnSlot, string> = {
+type BillingTurnSlot = "8 AM" | "11 AM" | "2 PM"
+
+const TURN_OPTIONS: BillingTurnSlot[] = ["8 AM", "11 AM", "2 PM"]
+const UNKNOWN_PICKUP_TIME_BY_TURN: Record<BillingTurnSlot, string> = {
   "8 AM": "8:00 AM",
   "11 AM": "11:00 AM",
-  "3 PM": "2:00 PM",
+  "2 PM": "2:00 PM",
+}
+
+function toHotelTurnSlot(turn: BillingTurnSlot): HotelTurnSlot {
+  if (turn === "2 PM") return "3 PM"
+  return turn
 }
 
 function normalizeLooseText(value: string) {
@@ -267,7 +274,7 @@ export function BillingCollections() {
   const [serviceLines, setServiceLines] = useState<ServiceLine[]>([{ serviceType: "", quantity: 1, unitAmount: "" }])
   const [pickupHotel, setPickupHotel] = useState("")
   const [showHotelSuggestions, setShowHotelSuggestions] = useState(false)
-  const [pickupTurn, setPickupTurn] = useState<TurnSlot>("8 AM")
+  const [pickupTurn, setPickupTurn] = useState<BillingTurnSlot>("8 AM")
   const [pickupTime, setPickupTime] = useState("")
   const [pickupRoom, setPickupRoom] = useState("")
   const [pickupPax, setPickupPax] = useState("1")
@@ -392,7 +399,7 @@ export function BillingCollections() {
 
   const pickupScheduleSuggestion = useMemo(() => {
     if (!pickupHotel.trim()) return null
-    const suggestion = getBuggyPickupSuggestion(pickupHotel, pickupTurn)
+    const suggestion = getBuggyPickupSuggestion(pickupHotel, toHotelTurnSlot(pickupTurn))
     if (!suggestion || suggestion.score < 0.6) return null
     return suggestion
   }, [pickupHotel, pickupTurn])
@@ -413,7 +420,7 @@ export function BillingCollections() {
     setShowHotelSuggestions(false)
   }
 
-  const handleSelectPickupTurn = (turn: TurnSlot) => {
+  const handleSelectPickupTurn = (turn: BillingTurnSlot) => {
     setPickupTurn(turn)
     if (pickupScheduleSuggestion?.pickupTime) {
       setPickupTime(pickupScheduleSuggestion.pickupTime)

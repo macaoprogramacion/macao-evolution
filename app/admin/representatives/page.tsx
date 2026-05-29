@@ -1,485 +1,570 @@
 "use client"
 
-import { useMemo } from "react"
-import {
-  Handshake,
-  TrendingUp,
-  DollarSign,
-  Users,
-  Hotel,
-  Sparkles,
-  Crown,
-  ArrowUpRight,
-  ArrowDownRight,
-} from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-  LineChart,
-  Line,
-} from "recharts"
+import { useEffect, useMemo, useState } from "react"
+import { DollarSign, Handshake, Loader2, Users } from "lucide-react"
 import { DashboardLayout } from "@/components/admin/dashboard-layout"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { supabase } from "@/lib/supabase"
 
-// ─── Mock analytics data ─────────────────────────────────────────
-const representatives = [
-  {
-    id: "REP-001",
-    name: "Carlos Méndez",
-    company: "Excursiones Punta Cana",
-    type: "Tour Operador",
-    initials: "CM",
-    color: "bg-gray-200 text-gray-900 dark:text-gray-900",
-    totalBookings: 87,
-    totalRevenue: 12480,
-    avgTicket: 143,
-    conversionRate: 92,
-    pendingBalance: 320,
-    trend: "up" as const,
-    trendPercent: 12,
-  },
-  {
-    id: "REP-002",
-    name: "Ana Rodríguez",
-    company: "Viajes Dominicanos",
-    type: "Agencia",
-    initials: "AR",
-    color: "bg-green-100 text-green-700",
-    totalBookings: 54,
-    totalRevenue: 8750,
-    avgTicket: 162,
-    conversionRate: 88,
-    pendingBalance: 0,
-    trend: "up" as const,
-    trendPercent: 8,
-  },
-  {
-    id: "REP-003",
-    name: "Miguel Torres",
-    company: "Barceló Concierge",
-    type: "Concierge",
-    initials: "MT",
-    color: "bg-red-100 text-red-700",
-    totalBookings: 42,
-    totalRevenue: 6320,
-    avgTicket: 150,
-    conversionRate: 95,
-    pendingBalance: 560,
-    trend: "up" as const,
-    trendPercent: 15,
-  },
-  {
-    id: "REP-004",
-    name: "Laura Peña",
-    company: "Independiente",
-    type: "Vendedor Local",
-    initials: "LP",
-    color: "bg-red-100 text-red-700",
-    totalBookings: 23,
-    totalRevenue: 3150,
-    avgTicket: 137,
-    conversionRate: 78,
-    pendingBalance: 180,
-    trend: "down" as const,
-    trendPercent: 5,
-  },
-  {
-    id: "REP-005",
-    name: "Fernando Rosario",
-    company: "Dreams Concierge",
-    type: "Concierge",
-    initials: "FR",
-    color: "bg-red-100 text-red-700",
-    totalBookings: 15,
-    totalRevenue: 2100,
-    avgTicket: 140,
-    conversionRate: 70,
-    pendingBalance: 0,
-    trend: "down" as const,
-    trendPercent: 20,
-  },
+type BookingStatus = "confirmed" | "pending" | "completed" | "cancelled"
+
+type BookingRow = {
+  id: string
+  rep_id: string | null
+  rep_name: string | null
+  traveler_name: string
+  guest_count: number
+  experience: string | null
+  sale_price: number
+  amount_paid: number
+  amount_pending: number
+  date: string
+  status: BookingStatus
+  notes: string | null
+}
+
+type RepresentativeRow = {
+  id: string
+  name: string
+  commission_percent: number
+}
+
+type MachineRule = {
+  type: string
+  capacity: number
+  aliases: string[]
+}
+
+type DetailedReservation = {
+  id: string
+  repId: string
+  repName: string
+  travelerName: string
+  date: string
+  status: BookingStatus
+  experience: string
+  machineType: string
+  machineCount: number
+  totalPeople: number
+  reservationAmount: number
+  pendingCredit: number
+  clientPayment: number
+  totalCreditToPay: number
+  totalGain: number
+}
+
+type VendorSummary = {
+  repId: string
+  repName: string
+  reservations: number
+  machines: number
+  people: number
+  amount: number
+  pendingCredit: number
+  clientPayment: number
+  totalCreditToPay: number
+  totalGain: number
+  byMachineType: Record<string, number>
+}
+
+const MACHINE_RULES: MachineRule[] = [
+  { type: "Shared ATV", capacity: 2, aliases: ["shared atv", "atv", "quad"] },
+  { type: "Shared Buggy", capacity: 2, aliases: ["elite couple", "shared buggy", "buggy doble", "doble buggy"] },
+  { type: "Shared VIP Predator", capacity: 2, aliases: ["apex predator", "shared vip predator", "vip shared"] },
+  { type: "Familiar Predator", capacity: 4, aliases: ["predator family", "familiar predator", "vip family predator"] },
+  { type: "Family Buggy", capacity: 4, aliases: ["elite family", "flintstone family", "family buggy"] },
+  { type: "Single Buggy", capacity: 1, aliases: ["single buggy", "buggy single"] },
 ]
 
-// Experiences sold by reps
-const experiencesByReps = [
-  { name: "Elite Couple", bookings: 38, revenue: 6080 },
-  { name: "Elite Family", bookings: 27, revenue: 5400 },
-  { name: "Apex Predator", bookings: 25, revenue: 3250 },
-  { name: "Flintstone Era", bookings: 22, revenue: 1870 },
-  { name: "ATV Quad", bookings: 20, revenue: 1800 },
-  { name: "Party Boat", bookings: 18, revenue: 2160 },
-  { name: "Saona Island", bookings: 16, revenue: 1520 },
-  { name: "Predator Family", bookings: 14, revenue: 2030 },
-  { name: "Full Ride", bookings: 12, revenue: 900 },
-  { name: "The Combined", bookings: 10, revenue: 900 },
-  { name: "Flintstone Family", bookings: 9, revenue: 900 },
-]
+function normalize(value: string) {
+  return (value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+}
 
-// Hotels where rep bookings come from
-const hotelsByReps = [
-  { name: "Hard Rock", bookings: 32, revenue: 4800 },
-  { name: "Barceló Bávaro", bookings: 28, revenue: 4200 },
-  { name: "Dreams Macao", bookings: 18, revenue: 2520 },
-  { name: "Iberostar Grand", bookings: 15, revenue: 2250 },
-  { name: "Secrets Royal", bookings: 14, revenue: 2100 },
-  { name: "Majestic Elegance", bookings: 12, revenue: 1680 },
-  { name: "Hyatt Zilara", bookings: 10, revenue: 1500 },
-  { name: "Grand Palladium", bookings: 9, revenue: 1260 },
-  { name: "Otros", bookings: 23, revenue: 2490 },
-]
+function formatMoney(value: number) {
+  return `US$ ${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
 
-// Monthly trend
-const monthlyTrend = [
-  { month: "Sep", bookings: 18, revenue: 2520 },
-  { month: "Oct", bookings: 24, revenue: 3480 },
-  { month: "Nov", bookings: 31, revenue: 4650 },
-  { month: "Dic", bookings: 42, revenue: 6300 },
-  { month: "Ene", bookings: 48, revenue: 7200 },
-  { month: "Feb", bookings: 58, revenue: 8650 },
-]
+function getLocalISODate() {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, "0")
+  const d = String(now.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
+}
 
-const COLORS = ["#dc2626", "#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899", "#6b7280"]
+function startOfMonthISO(dateISO: string) {
+  return `${dateISO.slice(0, 7)}-01`
+}
+
+function getMachineRule(experience: string, notes: string) {
+  const source = `${normalize(experience)} ${normalize(notes)}`
+  if (!source) return null
+
+  return (
+    MACHINE_RULES.find((rule) => rule.aliases.some((alias) => source.includes(normalize(alias)))) || null
+  )
+}
+
+function statusBadge(status: BookingStatus) {
+  if (status === "pending") return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">Pendiente</Badge>
+  if (status === "confirmed") return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Confirmada</Badge>
+  if (status === "completed") return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Completada</Badge>
+  return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Cancelada</Badge>
+}
+
+function toDetailedReservation(row: BookingRow, commissionByRep: Map<string, number>): DetailedReservation {
+  const totalPeople = Math.max(0, Number(row.guest_count || 0))
+  const experience = row.experience || "Sin experiencia"
+  const notes = row.notes || ""
+  const machine = getMachineRule(experience, notes)
+  const machineCount = machine ? Math.max(1, Math.ceil(totalPeople / machine.capacity)) : 0
+  const machineType = machine?.type || "Sin maquina"
+
+  const reservationAmount = Math.max(0, Number(row.sale_price || 0))
+  const pendingCredit = Math.max(0, Number(row.amount_pending || 0))
+  const clientPayment = Math.max(0, Number(row.amount_paid || 0))
+  const totalCreditToPay = pendingCredit > 0 ? clientPayment + pendingCredit : 0
+
+  const commissionPercent = commissionByRep.get(row.rep_id || "") || 0
+  const totalGain = reservationAmount * (commissionPercent / 100)
+
+  return {
+    id: row.id,
+    repId: row.rep_id || "sin-id",
+    repName: row.rep_name || "Sin vendedor",
+    travelerName: row.traveler_name || "Sin cliente",
+    date: row.date || "",
+    status: row.status,
+    experience,
+    machineType,
+    machineCount,
+    totalPeople,
+    reservationAmount,
+    pendingCredit,
+    clientPayment,
+    totalCreditToPay,
+    totalGain,
+  }
+}
 
 export default function RepresentativesAnalyticsPage() {
-  const totals = useMemo(() => {
-    const totalBookings = representatives.reduce((sum, r) => sum + r.totalBookings, 0)
-    const totalRevenue = representatives.reduce((sum, r) => sum + r.totalRevenue, 0)
-    const totalPending = representatives.reduce((sum, r) => sum + r.pendingBalance, 0)
-    const activeReps = representatives.length
-    return { totalBookings, totalRevenue, totalPending, activeReps }
+  const today = getLocalISODate()
+
+  const [loading, setLoading] = useState(true)
+  const [rows, setRows] = useState<DetailedReservation[]>([])
+  const [fromDate, setFromDate] = useState(startOfMonthISO(today))
+  const [toDate, setToDate] = useState(today)
+  const [repFilter, setRepFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState<"all" | BookingStatus>("all")
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      try {
+        const [bookingsRes, repsRes] = await Promise.all([
+          supabase
+            .from("bookings")
+            .select("id, rep_id, rep_name, traveler_name, guest_count, experience, sale_price, amount_paid, amount_pending, date, status, notes")
+            .order("date", { ascending: false })
+            .limit(8000),
+          supabase
+            .from("representatives")
+            .select("id, name, commission_percent")
+            .limit(2000),
+        ])
+
+        if (bookingsRes.error) throw bookingsRes.error
+        if (repsRes.error) throw repsRes.error
+
+        const reps: RepresentativeRow[] = (repsRes.data || []).map((r: any) => ({
+          id: String(r.id || ""),
+          name: String(r.name || ""),
+          commission_percent: Number(r.commission_percent || 0),
+        }))
+        const commissionByRep = new Map<string, number>(reps.map((r) => [r.id, r.commission_percent]))
+
+        const bookings: BookingRow[] = (bookingsRes.data || []).map((b: any) => ({
+          id: String(b.id || ""),
+          rep_id: b.rep_id || null,
+          rep_name: b.rep_name || null,
+          traveler_name: String(b.traveler_name || ""),
+          guest_count: Number(b.guest_count || 0),
+          experience: b.experience || null,
+          sale_price: Number(b.sale_price || 0),
+          amount_paid: Number(b.amount_paid || 0),
+          amount_pending: Number(b.amount_pending || 0),
+          date: String(b.date || ""),
+          status: (b.status || "pending") as BookingStatus,
+          notes: b.notes || null,
+        }))
+
+        setRows(bookings.map((row) => toDetailedReservation(row, commissionByRep)))
+      } catch (error) {
+        console.error("Error loading representatives analytics:", error)
+        setRows([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    void load()
+    const interval = window.setInterval(() => void load(), 20000)
+    return () => window.clearInterval(interval)
   }, [])
+
+  const representativeOptions = useMemo(() => {
+    const unique = new Map<string, string>()
+    for (const row of rows) unique.set(row.repId, row.repName)
+    return Array.from(unique.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [rows])
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((row) => {
+      if (fromDate && row.date < fromDate) return false
+      if (toDate && row.date > toDate) return false
+      if (repFilter !== "all" && row.repId !== repFilter) return false
+      if (statusFilter !== "all" && row.status !== statusFilter) return false
+      return true
+    })
+  }, [rows, fromDate, toDate, repFilter, statusFilter])
+
+  const machineTotals = useMemo(() => {
+    const byType = new Map<string, number>()
+    for (const row of filteredRows) {
+      byType.set(row.machineType, (byType.get(row.machineType) || 0) + row.machineCount)
+    }
+    return Array.from(byType.entries())
+      .map(([type, total]) => ({ type, total }))
+      .sort((a, b) => b.total - a.total)
+  }, [filteredRows])
+
+  const vendorSummaries = useMemo(() => {
+    const byVendor = new Map<string, VendorSummary>()
+
+    for (const row of filteredRows) {
+      if (!byVendor.has(row.repId)) {
+        byVendor.set(row.repId, {
+          repId: row.repId,
+          repName: row.repName,
+          reservations: 0,
+          machines: 0,
+          people: 0,
+          amount: 0,
+          pendingCredit: 0,
+          clientPayment: 0,
+          totalCreditToPay: 0,
+          totalGain: 0,
+          byMachineType: {},
+        })
+      }
+
+      const current = byVendor.get(row.repId)!
+      current.reservations += 1
+      current.machines += row.machineCount
+      current.people += row.totalPeople
+      current.amount += row.reservationAmount
+      current.pendingCredit += row.pendingCredit
+      current.clientPayment += row.clientPayment
+      current.totalCreditToPay += row.totalCreditToPay
+      current.totalGain += row.totalGain
+      current.byMachineType[row.machineType] = (current.byMachineType[row.machineType] || 0) + row.machineCount
+    }
+
+    return Array.from(byVendor.values()).sort((a, b) => b.amount - a.amount)
+  }, [filteredRows])
+
+  const totals = useMemo(() => {
+    return {
+      reservations: filteredRows.length,
+      machines: filteredRows.reduce((sum, row) => sum + row.machineCount, 0),
+      people: filteredRows.reduce((sum, row) => sum + row.totalPeople, 0),
+      amount: filteredRows.reduce((sum, row) => sum + row.reservationAmount, 0),
+      pendingCredit: filteredRows.reduce((sum, row) => sum + row.pendingCredit, 0),
+      clientPayment: filteredRows.reduce((sum, row) => sum + row.clientPayment, 0),
+      totalCreditToPay: filteredRows.reduce((sum, row) => sum + row.totalCreditToPay, 0),
+      totalGain: filteredRows.reduce((sum, row) => sum + row.totalGain, 0),
+    }
+  }, [filteredRows])
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <Card>
+          <CardContent className="pt-6 flex items-center justify-center">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            Cargando dashboard de representantes...
+          </CardContent>
+        </Card>
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>
-      <div className="space-y-4 md:space-y-6">
-        {/* Header */}
+      <div className="space-y-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-title text-gray-900 dark:text-gray-100">Representantes — Analytics</h1>
-          <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">
-            Rendimiento de ventas por representantes. Gestión de reservas en{" "}
-            <a
-              href="/sellers"
-              className="text-red-600 underline hover:text-red-700"
-            >
-              Sellers Portal
-            </a>
+          <h1 className="text-2xl md:text-3xl font-title text-gray-900 dark:text-gray-100">Representantes - Reservas detalladas</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Detalle por reserva y totales generales de maquinas, personas, montos, credito, abonos y ganancias.
           </p>
         </div>
 
-        {/* Demo data notice */}
-        <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center mt-0.5">
-            <span className="text-amber-600 dark:text-amber-400 text-base font-bold">!</span>
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Datos de demostración</p>
-            <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-              Las métricas y rankings mostrados en esta página son datos de ejemplo. Aún no están vinculados con las reservas reales de los dashboards de operación. La integración con datos reales está en desarrollo.
-            </p>
-          </div>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Filtros</CardTitle>
+            <CardDescription>Filtra por fecha, vendedor y estado.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="reps-from-date">Desde</Label>
+                <Input id="reps-from-date" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reps-to-date">Hasta</Label>
+                <Input id="reps-to-date" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Vendedor</Label>
+                <Select value={repFilter} onValueChange={setRepFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {representativeOptions.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Estado</Label>
+                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as "all" | BookingStatus)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="pending">Pendiente</SelectItem>
+                    <SelectItem value="confirmed">Confirmada</SelectItem>
+                    <SelectItem value="completed">Completada</SelectItem>
+                    <SelectItem value="cancelled">Cancelada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-gray-200">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <Card>
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">Total Reservas (Reps)</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{totals.totalBookings}</p>
-                </div>
-                <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                  <Handshake className="w-6 h-6 text-red-600" />
-                </div>
-              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Reservas</p>
+              <p className="text-2xl font-bold">{totals.reservations}</p>
             </CardContent>
           </Card>
-
-          <Card className="border-gray-200">
+          <Card>
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">Ingresos por Reps</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">${totals.totalRevenue.toLocaleString()}</p>
-                </div>
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <DollarSign className="w-6 h-6 text-green-600" />
-                </div>
-              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Maquinas totales</p>
+              <p className="text-2xl font-bold">{totals.machines}</p>
             </CardContent>
           </Card>
-
-          <Card className="border-gray-200">
+          <Card>
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">Saldo Pendiente</p>
-                  <p className="text-2xl font-bold text-red-600">${totals.totalPending.toLocaleString()}</p>
-                </div>
-                <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="w-6 h-6 text-red-600" />
-                </div>
-              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Personas totales</p>
+              <p className="text-2xl font-bold">{totals.people}</p>
             </CardContent>
           </Card>
-
-          <Card className="border-gray-200">
+          <Card>
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">Representantes</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{totals.activeReps}</p>
-                </div>
-                <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                  <Users className="w-6 h-6 text-gray-800 dark:text-gray-800" />
-                </div>
-              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Monto total reservas</p>
+              <p className="text-2xl font-bold">{formatMoney(totals.amount)}</p>
             </CardContent>
           </Card>
-        </div>
-
-        {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Monthly Trend */}
-          <Card className="border-gray-200">
-            <CardHeader>
-              <CardTitle className="text-base">Tendencia Mensual — Reservas por Reps</CardTitle>
-              <CardDescription>Evolución de reservas y ventas de representantes</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-48 sm:h-56 lg:h-[280px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthlyTrend}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="month" fontSize={12} />
-                    <YAxis yAxisId="left" fontSize={12} />
-                    <YAxis yAxisId="right" orientation="right" fontSize={12} />
-                    <Tooltip
-                      formatter={(value: number, name: string) =>
-                        name === "revenue" ? [`$${value}`, "Ingresos"] : [value, "Reservas"]
-                      }
-                    />
-                    <Line
-                      yAxisId="left"
-                      type="monotone"
-                      dataKey="bookings"
-                      stroke="#dc2626"
-                      strokeWidth={2}
-                      dot={{ fill: "#dc2626", r: 4 }}
-                      name="bookings"
-                    />
-                    <Line
-                      yAxisId="right"
-                      type="monotone"
-                      dataKey="revenue"
-                      stroke="#10b981"
-                      strokeWidth={2}
-                      dot={{ fill: "#10b981", r: 4 }}
-                      name="revenue"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-gray-600 dark:text-gray-400">Credito pendiente</p>
+              <p className="text-2xl font-bold text-amber-600">{formatMoney(totals.pendingCredit)}</p>
             </CardContent>
           </Card>
-
-          {/* Experiences Distribution */}
-          <Card className="border-gray-200">
-            <CardHeader>
-              <CardTitle className="text-base">Experiencias Más Vendidas por Reps</CardTitle>
-              <CardDescription>Distribución de reservas por experiencia (canal reps)</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-48 sm:h-56 lg:h-[280px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={experiencesByReps.slice(0, 6)}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={3}
-                      dataKey="bookings"
-                      nameKey="name"
-                    >
-                      {experiencesByReps.slice(0, 6).map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value: number) => [value, "Reservas"]} />
-                    <Legend
-                      layout="vertical"
-                      align="right"
-                      verticalAlign="middle"
-                      iconType="circle"
-                      iconSize={8}
-                      wrapperStyle={{ fontSize: "12px" }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-gray-600 dark:text-gray-400">Abono cliente</p>
+              <p className="text-2xl font-bold text-green-600">{formatMoney(totals.clientPayment)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-gray-600 dark:text-gray-400">Total credito a pagar</p>
+              <p className="text-2xl font-bold text-orange-600">{formatMoney(totals.totalCreditToPay)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-gray-600 dark:text-gray-400">Ganancia total (comision)</p>
+              <p className="text-2xl font-bold text-blue-600">{formatMoney(totals.totalGain)}</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Top Reps Ranking & Hotels */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Top Representatives */}
-          <Card className="border-gray-200 dark:border-gray-800 lg:col-span-2">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <Card className="xl:col-span-2">
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Crown className="w-4 h-4 text-red-500" />
-                Ranking de Representantes
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                Resumen por vendedor
               </CardTitle>
-              <CardDescription>Ordenado por ingresos generados</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>Representante</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead className="text-right">Reservas</TableHead>
-                    <TableHead className="text-right">Ingresos</TableHead>
-                    <TableHead className="text-right">Ticket Prom.</TableHead>
-                    <TableHead className="text-right">Conversión</TableHead>
-                    <TableHead>Tendencia</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {representatives.map((rep, index) => (
-                    <TableRow key={rep.id}>
-                      <TableCell>
-                        {index === 0 ? (
-                          <span className="text-lg">🥇</span>
-                        ) : index === 1 ? (
-                          <span className="text-lg">🥈</span>
-                        ) : index === 2 ? (
-                          <span className="text-lg">🥉</span>
-                        ) : (
-                          <span className="text-gray-400 font-mono text-sm">{index + 1}</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="w-8 h-8">
-                            <AvatarFallback className={`text-xs ${rep.color}`}>
-                              {rep.initials}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium text-sm">{rep.name}</p>
-                            <p className="text-xs text-gray-500">{rep.company}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-xs">
-                          {rep.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-medium">{rep.totalBookings}</TableCell>
-                      <TableCell className="text-right font-medium">${rep.totalRevenue.toLocaleString()}</TableCell>
-                      <TableCell className="text-right text-sm">${rep.avgTicket}</TableCell>
-                      <TableCell className="text-right text-sm">{rep.conversionRate}%</TableCell>
-                      <TableCell>
-                        <div className={`flex items-center gap-1 text-sm ${rep.trend === "up" ? "text-green-600" : "text-red-500"}`}>
-                          {rep.trend === "up" ? (
-                            <ArrowUpRight className="w-3 h-3" />
-                          ) : (
-                            <ArrowDownRight className="w-3 h-3" />
-                          )}
-                          {rep.trendPercent}%
-                        </div>
-                      </TableCell>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Vendedor</TableHead>
+                      <TableHead className="text-right">Reservas</TableHead>
+                      <TableHead className="text-right">Maquinas</TableHead>
+                      <TableHead className="text-right">Personas</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
+                      <TableHead className="text-right">Credito pendiente</TableHead>
+                      <TableHead className="text-right">Abono</TableHead>
+                      <TableHead className="text-right">Credito total</TableHead>
+                      <TableHead className="text-right">Ganancia</TableHead>
+                      <TableHead>Tipos de maquina</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {vendorSummaries.length > 0 ? (
+                      vendorSummaries.map((summary) => (
+                        <TableRow key={summary.repId}>
+                          <TableCell className="font-medium">{summary.repName}</TableCell>
+                          <TableCell className="text-right">{summary.reservations}</TableCell>
+                          <TableCell className="text-right">{summary.machines}</TableCell>
+                          <TableCell className="text-right">{summary.people}</TableCell>
+                          <TableCell className="text-right">{formatMoney(summary.amount)}</TableCell>
+                          <TableCell className="text-right">{formatMoney(summary.pendingCredit)}</TableCell>
+                          <TableCell className="text-right">{formatMoney(summary.clientPayment)}</TableCell>
+                          <TableCell className="text-right">{formatMoney(summary.totalCreditToPay)}</TableCell>
+                          <TableCell className="text-right">{formatMoney(summary.totalGain)}</TableCell>
+                          <TableCell className="text-xs text-gray-600 dark:text-gray-300">
+                            {Object.entries(summary.byMachineType)
+                              .sort((a, b) => b[1] - a[1])
+                              .map(([type, total]) => `${type}: ${total}`)
+                              .join(" | ") || "-"}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={10} className="text-center text-gray-500 py-6">
+                          No hay datos para los filtros seleccionados.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </div>
             </CardContent>
           </Card>
 
-          {/* Top Hotels */}
-          <Card className="border-gray-200">
+          <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Hotel className="w-4 h-4 text-gray-900 dark:text-gray-100" />
-                Hoteles Top (Reps)
+              <CardTitle className="flex items-center gap-2">
+                <Handshake className="w-4 h-4" />
+                Maquinas por tipo
               </CardTitle>
-              <CardDescription>Hoteles con más reservas de reps</CardDescription>
+              <CardDescription>Total general por tipo de maquina.</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {hotelsByReps.map((hotel, index) => {
-                  const maxBookings = hotelsByReps[0].bookings
-                  const widthPercent = (hotel.bookings / maxBookings) * 100
-                  return (
-                    <div key={hotel.name} className="space-y-1">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium text-gray-700 dark:text-gray-300 truncate max-w-[160px]">
-                          {index + 1}. {hotel.name}
-                        </span>
-                        <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap ml-2">
-                          {hotel.bookings} — ${hotel.revenue.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-red-500 to-red-600 rounded-full transition-all"
-                          style={{ width: `${widthPercent}%` }}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+            <CardContent className="space-y-3">
+              {machineTotals.length > 0 ? (
+                machineTotals.map((machine) => (
+                  <div key={machine.type} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-700 dark:text-gray-300">{machine.type}</span>
+                    <Badge variant="secondary">{machine.total}</Badge>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500">No hay maquinas para mostrar.</p>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Top Experiences bar chart */}
-        <Card className="border-gray-200">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-red-500" />
-              Ingresos por Experiencia (Canal Representantes)
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="w-4 h-4" />
+              Detalle por reserva
             </CardTitle>
-            <CardDescription>Comparación de ingresos generados por cada experiencia a través de representantes</CardDescription>
+            <CardDescription>
+              Incluye fecha, monto, credito pendiente, abono del cliente, credito total a pagar y ganancia.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-52 sm:h-64 lg:h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={experiencesByReps} layout="vertical" margin={{ left: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis type="number" fontSize={12} tickFormatter={(v) => `$${v}`} />
-                  <YAxis type="category" dataKey="name" width={120} fontSize={11} />
-                  <Tooltip formatter={(value: number) => [`$${value}`, "Ingresos"]} />
-                  <Bar dataKey="revenue" fill="#dc2626" radius={[0, 4, 4, 0]} barSize={18} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Vendedor</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Experiencia</TableHead>
+                    <TableHead>Tipo maquina</TableHead>
+                    <TableHead className="text-right">Maquinas</TableHead>
+                    <TableHead className="text-right">Personas</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="text-right">Credito pendiente</TableHead>
+                    <TableHead className="text-right">Abono cliente</TableHead>
+                    <TableHead className="text-right">Credito total</TableHead>
+                    <TableHead className="text-right">Ganancia</TableHead>
+                    <TableHead>Estado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredRows.length > 0 ? (
+                    filteredRows.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell>{row.date}</TableCell>
+                        <TableCell>{row.repName}</TableCell>
+                        <TableCell>{row.travelerName}</TableCell>
+                        <TableCell>{row.experience}</TableCell>
+                        <TableCell>{row.machineType}</TableCell>
+                        <TableCell className="text-right">{row.machineCount}</TableCell>
+                        <TableCell className="text-right">{row.totalPeople}</TableCell>
+                        <TableCell className="text-right">{formatMoney(row.reservationAmount)}</TableCell>
+                        <TableCell className="text-right">{formatMoney(row.pendingCredit)}</TableCell>
+                        <TableCell className="text-right">{formatMoney(row.clientPayment)}</TableCell>
+                        <TableCell className="text-right">{formatMoney(row.totalCreditToPay)}</TableCell>
+                        <TableCell className="text-right">{formatMoney(row.totalGain)}</TableCell>
+                        <TableCell>{statusBadge(row.status)}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={13} className="text-center text-gray-500 py-6">
+                        No hay reservas para los filtros seleccionados.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </CardContent>
         </Card>

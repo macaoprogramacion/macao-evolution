@@ -1,10 +1,20 @@
 ﻿"use client";
 
-import { type SyntheticEvent, useEffect, useRef } from "react";
+import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 const STORAGE_BUCKET = "portfolio-media";
 const HERO_VIDEO_SRC = "/images/videos/macao-rancho.mp4";
+const HERO_CANDIDATE_SOURCES_MOBILE = [
+  "/images/videos/macao-rancho-mobile.mp4",
+  "/images/videos/macao-rancho-720.mp4",
+  HERO_VIDEO_SRC,
+];
+const HERO_CANDIDATE_SOURCES_DESKTOP = [
+  "/images/videos/macao-rancho-1080.mp4",
+  "/images/videos/macao-rancho-720.mp4",
+  HERO_VIDEO_SRC,
+];
 
 function getStoragePublicUrl(storagePath: string) {
   const withoutLeadingSlash = storagePath.replace(/^\/+/, "");
@@ -14,6 +24,18 @@ function getStoragePublicUrl(storagePath: string) {
 
   const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(normalizedPath);
   return data.publicUrl;
+}
+
+async function pickFirstExistingSource(candidates: string[]) {
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(candidate, { method: "HEAD", cache: "no-store" });
+      if (response.ok) return candidate;
+    } catch {
+      // Ignore and continue with next candidate.
+    }
+  }
+  return HERO_VIDEO_SRC;
 }
 
 function handleVideoError(event: SyntheticEvent<HTMLVideoElement>, fallbackSrc: string) {
@@ -27,7 +49,31 @@ function handleVideoError(event: SyntheticEvent<HTMLVideoElement>, fallbackSrc: 
 
 export function HeroSection() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [resolvedSrc, setResolvedSrc] = useState<string>(HERO_VIDEO_SRC);
+  const [shouldLoad, setShouldLoad] = useState(false);
   const bucketVideoFallbackSrc = getStoragePublicUrl("videos/macao-rancho.mp4");
+
+  useEffect(() => {
+    const mobile = window.matchMedia("(max-width: 767px)").matches;
+    const candidates = mobile ? HERO_CANDIDATE_SOURCES_MOBILE : HERO_CANDIDATE_SOURCES_DESKTOP;
+
+    let active = true;
+    pickFirstExistingSource(candidates).then((src) => {
+      if (!active) return;
+      setResolvedSrc(src);
+    });
+
+    // Defer actual loading to improve first paint.
+    const timeoutId = window.setTimeout(() => {
+      if (!active) return;
+      setShouldLoad(true);
+    }, 100);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -47,7 +93,7 @@ export function HeroSection() {
     tryPlay();
     video.addEventListener("canplay", tryPlay);
     return () => video.removeEventListener("canplay", tryPlay);
-  }, []);
+  }, [shouldLoad, resolvedSrc]);
 
   return (
     <section className="relative h-screen overflow-hidden bg-black">
@@ -58,9 +104,10 @@ export function HeroSection() {
         muted
         defaultMuted
         playsInline
-        preload="metadata"
+        preload="none"
+        poster="/images/foto-con-dimecion-arreglada/imagen-cuadrada-alta-calidad.webp"
         className="absolute inset-0 h-full w-full object-cover"
-        src={HERO_VIDEO_SRC}
+        src={shouldLoad ? resolvedSrc : undefined}
         onError={(event) => handleVideoError(event, bucketVideoFallbackSrc)}
       />
       <div className="absolute inset-0 bg-black/20" />
